@@ -232,7 +232,7 @@ export default function SectorsPage() {
                       onClick={() => setSelected(selected?.id === s.id ? null : s)}
                     >
                       <td style={{ padding: '10px 8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
                           <div style={{ width: 10, height: 10, borderRadius: 3, background: s.color, flexShrink: 0 }} />
                           {s.label}
                         </div>
