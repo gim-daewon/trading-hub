@@ -9,6 +9,7 @@ const INT = new Set([
   'ES=F', 'YM=F', 'RTY=F', 'NQ=F',
   '^NDX', '^GSPC', '^KS11', '^KQ11',
   'GC=F', 'BTC-USD', 'ETH-USD', 'KRW=X',
+  'FGI',  // 공탐지수 (가상)
 ])
 
 export function fmtAssetPrice(symbol: string, price: number): string {
