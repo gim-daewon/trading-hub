@@ -1,6 +1,6 @@
 // 자산 유형별 가격 포맷 — 여기에 symbol 추가하면 전체 적용
 const FIXED2 = new Set([
-  'CL=F', 'SI=F', '^VIX', 'DX=F',
+  'CL=F', 'SI=F', '^VIX', 'DX=F', 'DX-Y.NYB',
   '^TNX', '^TYX', '^FVX', '^IRX',
   'DGS2',  // FRED 2Y (가상 symbol)
 ])

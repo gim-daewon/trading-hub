@@ -8,11 +8,18 @@ const RATING_KO: Record<string, string> = {
   'Extreme Greed':'극단 탐욕',
 }
 
+const CNN_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'application/json, text/plain, */*',
+  'Referer': 'https://www.cnn.com/markets/fear-and-greed',
+  'Origin': 'https://www.cnn.com',
+}
+
 export async function GET() {
   try {
     const res = await fetch(
       'https://production.dataviz.cnn.io/index/fearandgreed/graphdata',
-      { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 3600 } }
+      { headers: CNN_HEADERS, cache: 'no-store' }
     )
     if (!res.ok) throw new Error(`CNN FGI ${res.status}`)
 

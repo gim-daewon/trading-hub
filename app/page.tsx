@@ -26,12 +26,12 @@ const CRYPTO = [
 const RATES_FX = [
   { id: '^TNX',  label: '미국 10Y' },
   { id: 'DGS2',  label: '미국 2Y' },
-  { id: 'DX=F',  label: '달러 인덱스' },
+  { id: 'DX-Y.NYB', label: '달러 인덱스' },
   { id: 'KRW=X', label: '달러/원' },
 ]
 
 const ALL_YAHOO_GROUPS = [...US_FUTURES, ...KR, ...COMMODITIES, ...CRYPTO,
-  { id: '^VIX', label: '' }, { id: '^TNX', label: '' }, { id: 'DX=F', label: '' }, { id: 'KRW=X', label: '' }]
+  { id: '^VIX', label: '' }, { id: '^TNX', label: '' }, { id: 'DX-Y.NYB', label: '' }, { id: 'KRW=X', label: '' }]
 
 interface Q { price: number; changePct: number }
 type QuoteMap = Record<string, Q>
