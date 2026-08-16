@@ -207,14 +207,13 @@ export default function SectorsPage() {
                 <th style={{ textAlign: 'right', padding: '6px 8px' }}>ETF</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px' }}>가격</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px' }}>1D</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>vs SPY</th>
               </tr>
             </thead>
             <tbody>
               {loading
                 ? Array.from({ length: 30 }).map((_, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                      {Array.from({ length: 5 }).map((_, j) => (
+                      {Array.from({ length: 4 }).map((_, j) => (
                         <td key={j} style={{ padding: '10px 8px' }}>
                           <div style={{ height: 14, borderRadius: 4, background: 'var(--bg-card)' }} />
                         </td>
@@ -245,9 +244,6 @@ export default function SectorsPage() {
                       </td>
                       <td style={{ textAlign: 'right', padding: '10px 8px' }}>
                         <PctBadge v={s.changePct} />
-                      </td>
-                      <td style={{ textAlign: 'right', padding: '10px 8px' }}>
-                        <RsBadge v={s.rs1d} />
                       </td>
                     </tr>
                   ))
