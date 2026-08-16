@@ -9,19 +9,20 @@ export interface SectorMeta {
 }
 
 export const SECTORS: SectorMeta[] = [
-  { id: 'tech',          label: '기술',      etf: 'XLK',  color: '#6366f1' },
-  { id: 'semiconductor', label: '반도체',    etf: 'SMH',  color: '#8b5cf6' },
-  { id: 'ai',            label: 'AI ETF',    etf: 'XLK',  color: '#a78bfa' },
+  { id: 'tech',          label: '기술',        etf: 'XLK',  color: '#6366f1' },
+  { id: 'semiconductor', label: '반도체',      etf: 'SMH',  color: '#8b5cf6' },
+  { id: 'software',      label: '소프트웨어',  etf: 'IGV',  color: '#a78bfa' },
   { id: 'communication', label: '커뮤니케이션', etf: 'XLC', color: '#3b82f6' },
-  { id: 'finance',       label: '금융',      etf: 'XLF',  color: '#10b981' },
-  { id: 'health',        label: '헬스케어',  etf: 'XLV',  color: '#06b6d4' },
-  { id: 'consumer',      label: '소비재',    etf: 'XLY',  color: '#f59e0b' },
-  { id: 'staples',       label: '필수소비',  etf: 'XLP',  color: '#84cc16' },
-  { id: 'industrial',    label: '산업재',    etf: 'XLI',  color: '#64748b' },
-  { id: 'energy',        label: '에너지',    etf: 'XLE',  color: '#f97316' },
-  { id: 'materials',     label: '소재',      etf: 'XLB',  color: '#78716c' },
-  { id: 'utilities',     label: '유틸리티',  etf: 'XLU',  color: '#94a3b8' },
-  { id: 'realestate',    label: '부동산',    etf: 'XLRE', color: '#ec4899' },
+  { id: 'finance',       label: '금융',        etf: 'XLF',  color: '#10b981' },
+  { id: 'health',        label: '헬스케어',    etf: 'XLV',  color: '#06b6d4' },
+  { id: 'consumer',      label: '소비재',      etf: 'XLY',  color: '#f59e0b' },
+  { id: 'staples',       label: '필수소비',    etf: 'XLP',  color: '#84cc16' },
+  { id: 'industrial',    label: '산업재',      etf: 'XLI',  color: '#64748b' },
+  { id: 'space',         label: '우주항공',    etf: 'ROKT', color: '#0ea5e9' },
+  { id: 'energy',        label: '에너지',      etf: 'XLE',  color: '#f97316' },
+  { id: 'materials',     label: '소재',        etf: 'XLB',  color: '#78716c' },
+  { id: 'utilities',     label: '유틸리티',    etf: 'XLU',  color: '#94a3b8' },
+  { id: 'realestate',    label: '부동산',      etf: 'XLRE', color: '#ec4899' },
 ]
 
 // ── 워치리스트 (여기에 한 줄 추가 = 앱 전체 자동 반영) ─────────────────
@@ -39,6 +40,8 @@ export const ASSETS: Asset[] = [
   // 섹터 ETF (SPDR 11개 + 특수)
   { id: 'XLK',  label: '기술 ETF',      type: 'etf', source: 'finnhub', sector: 'tech' },
   { id: 'SMH',  label: '반도체 ETF',    type: 'etf', source: 'finnhub', sector: 'semiconductor' },
+  { id: 'IGV',  label: '소프트웨어 ETF', type: 'etf', source: 'finnhub', sector: 'software' },
+  { id: 'ROKT', label: '우주항공 ETF',  type: 'etf', source: 'finnhub', sector: 'space' },
   { id: 'XLC',  label: '커뮤니케이션',  type: 'etf', source: 'finnhub', sector: 'communication' },
   { id: 'XLF',  label: '금융 ETF',      type: 'etf', source: 'finnhub', sector: 'finance' },
   { id: 'XLV',  label: '헬스케어 ETF',  type: 'etf', source: 'finnhub', sector: 'health' },
