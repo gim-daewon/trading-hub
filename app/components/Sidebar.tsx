@@ -53,10 +53,10 @@ export default function Sidebar() {
     <>
       {/* 데스크톱 사이드바 */}
       <aside style={{
-        position: 'fixed', top: 0, left: 0, bottom: 0,
+        position: 'fixed', top: 0, right: 0, bottom: 0,
         width: 200,
         background: '#0d1420',
-        borderRight: '1px solid var(--border)',
+        borderLeft: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 40,
@@ -83,7 +83,7 @@ export default function Sidebar() {
         className="mobile-menu-btn"
         aria-label="메뉴"
         style={{
-          position: 'fixed', top: 12, left: 12, zIndex: 60,
+          position: 'fixed', top: 12, right: 12, zIndex: 60,
           width: 36, height: 36, borderRadius: 8,
           background: 'var(--bg-card)', border: '1px solid var(--border)',
           color: 'var(--text-primary)', cursor: 'pointer',
@@ -109,12 +109,12 @@ export default function Sidebar() {
       <aside
         className="mobile-sidebar"
         style={{
-          position: 'fixed', top: 0, left: 0, bottom: 0,
+          position: 'fixed', top: 0, right: 0, bottom: 0,
           width: 220,
           background: '#0d1420',
-          borderRight: '1px solid var(--border)',
+          borderLeft: '1px solid var(--border)',
           zIndex: 55,
-          transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transform: mobileOpen ? 'translateX(0)' : 'translateX(100%)',
           transition: 'transform 220ms var(--ease)',
           display: 'flex',
           flexDirection: 'column',

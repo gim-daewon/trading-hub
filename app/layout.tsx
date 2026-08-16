@@ -20,7 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <Sidebar />
         {/* 데스크톱: 사이드바 너비만큼 밀기, 모바일: 그대로 */}
-        <main style={{ marginLeft: 'var(--sidebar-w, 0)', minHeight: '100dvh', padding: '0' }}>
+        <main style={{ marginRight: 'var(--sidebar-w, 0)', minHeight: '100dvh', padding: '0' }}>
           {children}
         </main>
         <style>{`
