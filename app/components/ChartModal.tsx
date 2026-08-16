@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { fmtAssetPrice } from '@/lib/format'
 
 interface Candle { date: string; open: number; high: number; low: number; close: number }
 
@@ -181,8 +182,7 @@ export default function ChartModal({ symbol, label, price, changePct, onClose }:
     return () => document.removeEventListener('keydown', h)
   }, [onClose])
 
-  const fmtPrice = (p: number) =>
-    symbol === '^VIX' ? p.toFixed(2) : p.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  const fmtPrice = (p: number) => fmtAssetPrice(symbol, p)
 
   return (
     <>

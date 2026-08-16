@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import ChartModal from './ChartModal'
+import { fmtAssetPrice } from '@/lib/format'
 
 interface Props {
   symbol: string
@@ -15,10 +16,7 @@ export default function IndexCard({ symbol, label, price, changePct }: Props) {
   const isUp = changePct > 0
   const cls  = isUp ? 'up' : changePct < 0 ? 'down' : 'flat'
 
-  const fmtPrice = (p: number) =>
-    symbol === '^VIX'
-      ? p.toFixed(2)
-      : p.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  const fmtPrice = (p: number) => fmtAssetPrice(symbol, p)
 
   return (
     <>
