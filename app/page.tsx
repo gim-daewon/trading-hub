@@ -20,8 +20,8 @@ const COMMODITIES = [
   { id: 'SI=F', label: '은' },
 ]
 const CRYPTO = [
-  { id: 'BTC-USD', label: '비트코인' },
-  { id: 'ETH-USD', label: '이더리움' },
+  { id: 'BTC=F', label: '비트코인 선물' },
+  { id: 'ETH=F', label: '이더리움 선물' },
 ]
 const RATES_FX = [
   { id: '^TNX',  label: '미국 10Y' },
@@ -169,7 +169,7 @@ export default function HomePage() {
 
       {/* 크립토 */}
       <section style={{ marginBottom: 20 }}>
-        <Head title="크립토" />
+        <Head title="크립토 선물" />
         <Cards assets={CRYPTO} cols={2} />
       </section>
 

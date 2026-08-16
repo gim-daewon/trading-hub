@@ -8,7 +8,7 @@ const FIXED2 = new Set([
 const INT = new Set([
   'ES=F', 'YM=F', 'RTY=F', 'NQ=F',
   '^NDX', '^GSPC', '^KS11', '^KQ11',
-  'GC=F', 'BTC-USD', 'ETH-USD', 'KRW=X',
+  'GC=F', 'BTC-USD', 'ETH-USD', 'BTC=F', 'ETH=F', 'KRW=X',
   'FGI',  // 공탐지수 (가상)
 ])
 
