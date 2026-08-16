@@ -165,29 +165,29 @@ export default function SectorsPage() {
       {view === 'heatmap' && (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
           gap: 8,
         }}>
           {loading
             ? Array.from({ length: 30 }).map((_, i) => (
-                <div key={i} style={{ height: 90, borderRadius: 8, background: 'var(--bg-card)', animation: 'pulse 1.5s infinite' }} />
+                <div key={i} style={{ height: 100, borderRadius: 8, background: 'var(--bg-card)', animation: 'pulse 1.5s infinite' }} />
               ))
             : sorted.map(s => (
                 <div
                   key={s.id}
                   className="heat-cell"
-                  style={{ background: heatColor(s.changePct), minHeight: 88 }}
+                  style={{ background: heatColor(s.changePct), minHeight: 100 }}
                   onClick={() => setSelected(selected?.id === s.id ? null : s)}
                 >
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.02em' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: '0.02em' }}>
                     {s.etf}
                   </span>
-                  <span style={{ fontSize: 10, color: '#ffffffaa' }}>{s.label}</span>
-                  <span className="num" style={{ fontSize: 15, fontWeight: 800, color: '#fff', marginTop: 4 }}>
+                  <span style={{ fontSize: 12, color: '#ffffffbb' }}>{s.label}</span>
+                  <span className="num" style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginTop: 4 }}>
                     {pctLabel(s.changePct, 1)}
                   </span>
                   {s.rs1d !== null && (
-                    <span style={{ fontSize: 9, color: '#ffffff88' }}>
+                    <span style={{ fontSize: 11, color: '#ffffff88' }}>
                       vs SPY {s.rs1d >= 0 ? '+' : ''}{s.rs1d.toFixed(1)}pp
                     </span>
                   )}
@@ -200,9 +200,9 @@ export default function SectorsPage() {
       {/* ── 테이블 뷰 ── */}
       {view === 'table' && (
         <div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11 }}>
+              <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 12 }}>
                 <th style={{ textAlign: 'left',  padding: '6px 8px' }}>섹터</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px' }}>ETF</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px' }}>가격</th>
