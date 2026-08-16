@@ -1,10 +1,26 @@
 export type AssetType = 'index' | 'etf' | 'stock' | 'macro' | 'bond'
 export type DataSource = 'finnhub' | 'yahoo' | 'fred' | 'manual'
 export type SectorId =
-  | 'tech' | 'finance' | 'energy' | 'health' | 'materials'
-  | 'industrial' | 'staples' | 'consumer' | 'utilities' | 'realestate'
-  | 'communication' | 'semiconductor' | 'software' | 'space'
-  | 'biotech' | 'defense' | 'cybersecurity' | 'ep_energy' | 'cleanenergy' | 'banks' | 'ecommerce'
+  // 에너지
+  | 'energy' | 'cleanenergy' | 'nuclear'
+  // 소재·자원
+  | 'materials' | 'rareearth'
+  // 산업·운송
+  | 'industrial' | 'defense' | 'transport' | 'automotive'
+  // 소비재
+  | 'consumer' | 'leisure' | 'ecommerce' | 'staples' | 'food'
+  // 헬스케어
+  | 'health_device' | 'biotech'
+  // 금융
+  | 'banks' | 'fintech' | 'insurance'
+  // 테크
+  | 'fabless' | 'semiconductor' | 'cloud' | 'software' | 'cybersecurity'
+  // 커뮤니케이션
+  | 'communication' | 'telecom' | 'media'
+  // 유틸리티·부동산
+  | 'utilities' | 'dc_utilities' | 'realestate'
+  // 레거시 (개별 주식 태깅용, ETF 없음)
+  | 'tech' | 'health' | 'finance' | 'space' | 'ep_energy'
   | 'all'
 
 export interface Asset {

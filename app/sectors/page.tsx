@@ -169,7 +169,7 @@ export default function SectorsPage() {
           gap: 8,
         }}>
           {loading
-            ? Array.from({ length: 13 }).map((_, i) => (
+            ? Array.from({ length: 30 }).map((_, i) => (
                 <div key={i} style={{ height: 90, borderRadius: 8, background: 'var(--bg-card)', animation: 'pulse 1.5s infinite' }} />
               ))
             : sorted.map(s => (
@@ -212,7 +212,7 @@ export default function SectorsPage() {
             </thead>
             <tbody>
               {loading
-                ? Array.from({ length: 13 }).map((_, i) => (
+                ? Array.from({ length: 30 }).map((_, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                       {Array.from({ length: 5 }).map((_, j) => (
                         <td key={j} style={{ padding: '10px 8px' }}>
