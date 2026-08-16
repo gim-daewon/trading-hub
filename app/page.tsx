@@ -1,69 +1,183 @@
-import Image from "next/image";
+'use client'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
 
-export default function Home() {
+interface IndexQuote {
+  id: string
+  label: string
+  price: number
+  changePct: number
+}
+
+interface SectorTop {
+  label: string
+  etf: string
+  changePct: number
+}
+
+const MAIN_INDICES = [
+  { id: 'SPY',   label: 'S&P 500',  source: 'finnhub' },
+  { id: 'QQQ',   label: 'NASDAQ',   source: 'finnhub' },
+  { id: '^VIX',  label: 'VIX',      source: 'yahoo'   },
+  { id: '^KS11', label: 'KOSPI',    source: 'yahoo'   },
+]
+
+function Pct({ v, size = 14 }: { v: number; size?: number }) {
+  const cls = v > 0 ? 'up' : v < 0 ? 'down' : 'flat'
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <span className={`num ${cls}`} style={{ fontSize: size }}>
+      {v >= 0 ? '+' : ''}{v.toFixed(2)}%
+    </span>
+  )
+}
+
+export default function HomePage() {
+  const [indices, setIndices]     = useState<IndexQuote[]>([])
+  const [topSector, setTopSector] = useState<SectorTop | null>(null)
+  const [botSector, setBotSector] = useState<SectorTop | null>(null)
+  const [loading, setLoading]     = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        // 지수와 섹터 병렬 요청
+        const [finnhubRes, yahooRes, sectorRes] = await Promise.allSettled([
+          fetch('/api/quotes?symbols=SPY,QQQ&source=finnhub'),
+          fetch('/api/quotes?symbols=%5EVIX,%5EKS11&source=yahoo'),
+          fetch('/api/sectors'),
+        ])
+
+        const quotes: IndexQuote[] = []
+
+        if (finnhubRes.status === 'fulfilled' && finnhubRes.value.ok) {
+          const j = await finnhubRes.value.json()
+          for (const [id, q] of Object.entries(j.data as Record<string, { price: number; changePct: number }>)) {
+            const meta = MAIN_INDICES.find(m => m.id === id)
+            if (meta) quotes.push({ id, label: meta.label, price: q.price, changePct: q.changePct })
+          }
+        }
+        if (yahooRes.status === 'fulfilled' && yahooRes.value.ok) {
+          const j = await yahooRes.value.json()
+          for (const [id, q] of Object.entries(j.data as Record<string, { price: number; changePct: number }>)) {
+            const meta = MAIN_INDICES.find(m => m.id === id)
+            if (meta) quotes.push({ id, label: meta.label, price: q.price, changePct: q.changePct })
+          }
+        }
+
+        // 원래 순서대로 정렬
+        const ordered = MAIN_INDICES.map(m => quotes.find(q => q.id === m.id)).filter(Boolean) as IndexQuote[]
+        setIndices(ordered)
+
+        if (sectorRes.status === 'fulfilled' && sectorRes.value.ok) {
+          const j = await sectorRes.value.json()
+          const s: SectorTop[] = j.sectors ?? []
+          if (s.length > 0) {
+            setTopSector(s[0])
+            setBotSector(s[s.length - 1])
+          }
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  const now = new Date().toLocaleString('ko-KR', {
+    month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  })
+
+  return (
+    <div style={{ padding: '16px', maxWidth: 600, margin: '0 auto' }}>
+      {/* 헤더 */}
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
+          Trading Hub
+        </h1>
+        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>{now}</p>
+      </div>
+
+      {/* 주요 지수 */}
+      <section style={{ marginBottom: 20 }}>
+        <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>주요 지수</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+          {loading
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} style={{ height: 72, borderRadius: 12, background: 'var(--bg-card)' }} />
+              ))
+            : indices.map(idx => (
+                <div key={idx.id} className="card" style={{ padding: '12px 14px' }}>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>{idx.label}</p>
+                  <p className="num" style={{ margin: '4px 0 2px', fontSize: 20, fontWeight: 700 }}>
+                    {idx.id === '^VIX' ? idx.price.toFixed(2)
+                      : idx.id === '^KS11' ? idx.price.toLocaleString('ko-KR', { maximumFractionDigits: 0 })
+                      : `$${idx.price.toFixed(2)}`}
+                  </p>
+                  <Pct v={idx.changePct} size={13} />
+                </div>
+              ))
+          }
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      {/* 섹터 빠른 요약 */}
+      <section style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>섹터 자금 흐름</p>
+          <Link href="/sectors" style={{ fontSize: 11, color: 'var(--info)', textDecoration: 'none' }}>전체 보기 →</Link>
         </div>
-      </main>
+        <div className="card card-interactive" style={{ padding: '12px 14px' }}>
+          {loading ? (
+            <div style={{ height: 48 }} />
+          ) : topSector && botSector ? (
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)' }}>강세 섹터</p>
+                <p style={{ margin: '2px 0', fontSize: 14, fontWeight: 700 }}>{topSector.label}</p>
+                <Pct v={topSector.changePct} size={13} />
+              </div>
+              <div style={{ width: 1, background: 'var(--border)' }} />
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)' }}>약세 섹터</p>
+                <p style={{ margin: '2px 0', fontSize: 14, fontWeight: 700 }}>{botSector.label}</p>
+                <Pct v={botSector.changePct} size={13} />
+              </div>
+            </div>
+          ) : (
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>섹터 데이터 없음</p>
+          )}
+        </div>
+      </section>
+
+      {/* 빠른 탐색 */}
+      <section>
+        <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>바로 가기</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {[
+            { href: '/market',   icon: '📈', label: '시장' },
+            { href: '/sectors',  icon: '🔥', label: '섹터' },
+            { href: '/earnings', icon: '📅', label: '실적' },
+            { href: '/journal',  icon: '📒', label: '매매일지' },
+            { href: '/credit',   icon: '⚠',  label: 'AI크레딧' },
+            { href: '/desk',     icon: '💼', label: '데스크' },
+          ].map(item => (
+            <Link
+              key={item.href}
+              href={item.href}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                padding: '14px 8px', borderRadius: 12, textDecoration: 'none',
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                color: 'var(--text-secondary)', fontSize: 12,
+                transition: 'background 150ms, color 150ms',
+              }}
+            >
+              <span style={{ fontSize: 22 }}>{item.icon}</span>
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
     </div>
-  );
+  )
 }
