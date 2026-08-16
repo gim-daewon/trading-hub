@@ -199,8 +199,8 @@ export default function SectorsPage() {
 
       {/* ── 테이블 뷰 ── */}
       {view === 'table' && (
-        <div className="overflow-x-table">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11 }}>
                 <th style={{ textAlign: 'left',  padding: '6px 8px' }}>섹터</th>
@@ -232,8 +232,8 @@ export default function SectorsPage() {
                       onClick={() => setSelected(selected?.id === s.id ? null : s)}
                     >
                       <td style={{ padding: '10px 8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
-                          <div style={{ width: 10, height: 10, borderRadius: 3, background: s.color, flexShrink: 0 }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color, flexShrink: 0 }} />
                           {s.label}
                         </div>
                       </td>

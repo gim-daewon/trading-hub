@@ -10,44 +10,44 @@ export interface SectorMeta {
 
 export const SECTORS: SectorMeta[] = [
   // ── 에너지 ───────────────────────────────────────────────────────────
-  { id: 'energy',        label: '에너지 전통',      etf: 'XLE',  color: '#f97316' },
-  { id: 'cleanenergy',   label: '신재생에너지',     etf: 'ICLN', color: '#16a34a' },
-  { id: 'nuclear',       label: '원자력',           etf: 'URNM', color: '#fbbf24' },
+  { id: 'energy',        label: '에너지',    etf: 'XLE',  color: '#f97316' },
+  { id: 'cleanenergy',   label: '신재생',    etf: 'ICLN', color: '#16a34a' },
+  { id: 'nuclear',       label: '원자력',    etf: 'URNM', color: '#fbbf24' },
   // ── 소재·자원 ────────────────────────────────────────────────────────
-  { id: 'materials',     label: '소재 일반',        etf: 'XLB',  color: '#78716c' },
-  { id: 'rareearth',     label: '희토류',           etf: 'REMX', color: '#84cc16' },
+  { id: 'materials',     label: '소재',      etf: 'XLB',  color: '#78716c' },
+  { id: 'rareearth',     label: '희토류',    etf: 'REMX', color: '#84cc16' },
   // ── 산업·운송 ────────────────────────────────────────────────────────
-  { id: 'industrial',    label: '산업재',           etf: 'XLI',  color: '#64748b' },
-  { id: 'defense',       label: '자본재/방산',      etf: 'ITA',  color: '#475569' },
-  { id: 'transport',     label: '운송',             etf: 'IYT',  color: '#0891b2' },
-  { id: 'automotive',    label: '자동차 & EV',      etf: 'DRIV', color: '#14b8a6' },
+  { id: 'industrial',    label: '산업재',    etf: 'XLI',  color: '#64748b' },
+  { id: 'defense',       label: '방산',      etf: 'ITA',  color: '#475569' },
+  { id: 'transport',     label: '운송',      etf: 'IYT',  color: '#0891b2' },
+  { id: 'automotive',    label: '자동차·EV', etf: 'DRIV', color: '#14b8a6' },
   // ── 소비재 ───────────────────────────────────────────────────────────
-  { id: 'consumer',      label: '경기소비재',       etf: 'XLY',  color: '#f59e0b' },
-  { id: 'leisure',       label: '소비자서비스/레저', etf: 'PEJ',  color: '#fb923c' },
-  { id: 'ecommerce',     label: '이커머스/유통',    etf: 'IBUY', color: '#7c3aed' },
-  { id: 'staples',       label: '필수소비',         etf: 'XLP',  color: '#65a30d' },
-  { id: 'food',          label: '식품·음료·담배',   etf: 'PBJ',  color: '#86efac' },
+  { id: 'consumer',      label: '소비재',    etf: 'XLY',  color: '#f59e0b' },
+  { id: 'leisure',       label: '레저',      etf: 'PEJ',  color: '#fb923c' },
+  { id: 'ecommerce',     label: '이커머스',  etf: 'IBUY', color: '#7c3aed' },
+  { id: 'staples',       label: '필수소비',  etf: 'XLP',  color: '#65a30d' },
+  { id: 'food',          label: '식품·음료', etf: 'PBJ',  color: '#86efac' },
   // ── 헬스케어 ─────────────────────────────────────────────────────────
-  { id: 'health_device', label: '헬스케어 장비',    etf: 'IHI',  color: '#06b6d4' },
-  { id: 'biotech',       label: '제약·바이오',      etf: 'XBI',  color: '#d946ef' },
+  { id: 'health_device', label: '의료장비',  etf: 'IHI',  color: '#06b6d4' },
+  { id: 'biotech',       label: '바이오',    etf: 'XBI',  color: '#d946ef' },
   // ── 금융 ─────────────────────────────────────────────────────────────
-  { id: 'banks',         label: '은행',             etf: 'KBE',  color: '#065f46' },
-  { id: 'fintech',       label: '핀테크/금융서비스', etf: 'FINX', color: '#0d9488' },
-  { id: 'insurance',     label: '보험',             etf: 'KIE',  color: '#155e75' },
+  { id: 'banks',         label: '은행',      etf: 'KBE',  color: '#065f46' },
+  { id: 'fintech',       label: '핀테크',    etf: 'FINX', color: '#0d9488' },
+  { id: 'insurance',     label: '보험',      etf: 'KIE',  color: '#155e75' },
   // ── 테크 ─────────────────────────────────────────────────────────────
-  { id: 'fabless',       label: '반도체 팹리스/설계', etf: 'SMHX', color: '#4f46e5' },
-  { id: 'semiconductor', label: '반도체 장비/제조', etf: 'SMH',  color: '#8b5cf6' },
-  { id: 'cloud',         label: 'SW 인프라/클라우드', etf: 'WCLD', color: '#818cf8' },
-  { id: 'software',      label: 'SW 앱/SaaS',       etf: 'IGV',  color: '#a78bfa' },
-  { id: 'cybersecurity', label: '사이버보안',        etf: 'HACK', color: '#dc2626' },
+  { id: 'fabless',       label: '팹리스',    etf: 'SMHX', color: '#4f46e5' },
+  { id: 'semiconductor', label: '반도체',    etf: 'SMH',  color: '#8b5cf6' },
+  { id: 'cloud',         label: '클라우드',  etf: 'WCLD', color: '#818cf8' },
+  { id: 'software',      label: 'SaaS',      etf: 'IGV',  color: '#a78bfa' },
+  { id: 'cybersecurity', label: '사이버보안',etf: 'HACK', color: '#dc2626' },
   // ── 커뮤니케이션 ─────────────────────────────────────────────────────
-  { id: 'communication', label: '인터랙티브 미디어', etf: 'XLC',  color: '#3b82f6' },
-  { id: 'telecom',       label: '통신 서비스/텔코', etf: 'IYZ',  color: '#0284c7' },
-  { id: 'media',         label: '전통 미디어·엔터', etf: 'PBS',  color: '#7dd3fc' },
+  { id: 'communication', label: '플랫폼',    etf: 'XLC',  color: '#3b82f6' },
+  { id: 'telecom',       label: '통신',      etf: 'IYZ',  color: '#0284c7' },
+  { id: 'media',         label: '미디어',    etf: 'PBS',  color: '#7dd3fc' },
   // ── 유틸리티·부동산 ──────────────────────────────────────────────────
-  { id: 'utilities',     label: '유틸리티 일반',    etf: 'XLU',  color: '#94a3b8' },
-  { id: 'dc_utilities',  label: '데이터센터 전력',  etf: 'UTES', color: '#334155' },
-  { id: 'realestate',    label: '부동산·리츠',      etf: 'XLRE', color: '#ec4899' },
+  { id: 'utilities',     label: '유틸리티',  etf: 'XLU',  color: '#94a3b8' },
+  { id: 'dc_utilities',  label: 'DC전력',    etf: 'UTES', color: '#334155' },
+  { id: 'realestate',    label: '리츠',      etf: 'XLRE', color: '#ec4899' },
 ]
 
 // ── 워치리스트 (여기에 한 줄 추가 = 앱 전체 자동 반영) ─────────────────
