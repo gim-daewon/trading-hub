@@ -15,7 +15,7 @@ interface SectorData {
 
 interface SpyData { price: number; changePct: number }
 
-type SortKey = 'changePct' | 'rs1d' | 'label'
+type SortKey = 'changePct'
 type ViewMode = 'heatmap' | 'table'
 type Period   = '1D' | '1W' | '1M'
 
@@ -137,20 +137,6 @@ export default function SectorsPage() {
             }}
           >
             {v === 'heatmap' ? '히트맵' : '테이블'}
-          </button>
-        ))}
-        <div style={{ flex: 1 }} />
-        {(['changePct', 'rs1d', 'label'] as SortKey[]).map(k => (
-          <button
-            key={k}
-            onClick={() => setSort(k)}
-            style={{
-              padding: '4px 12px', borderRadius: 20, fontSize: 11, border: '1px solid var(--border)',
-              background: sort === k ? 'var(--bg-hover)' : 'var(--bg-card)',
-              color: sort === k ? 'var(--text-primary)' : 'var(--text-muted)', cursor: 'pointer',
-            }}
-          >
-            {k === 'changePct' ? '등락률' : k === 'rs1d' ? 'vs SPY' : '이름'}
           </button>
         ))}
       </div>
