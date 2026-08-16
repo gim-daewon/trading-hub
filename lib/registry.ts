@@ -30,6 +30,8 @@ export const SECTORS: SectorMeta[] = [
   // ── 헬스케어 ─────────────────────────────────────────────────────────
   { id: 'health_device', label: '의료장비',  etf: 'IHI',  color: '#06b6d4' },
   { id: 'biotech',       label: '바이오',    etf: 'XBI',  color: '#d946ef' },
+  // ── 테마 ─────────────────────────────────────────────────────────────
+  { id: 'quantum',       label: '양자컴퓨팅', etf: 'QTUM', color: '#e879f9' },
   // ── 금융 ─────────────────────────────────────────────────────────────
   { id: 'banks',         label: '은행',      etf: 'KBE',  color: '#065f46' },
   { id: 'fintech',       label: '핀테크',    etf: 'FINX', color: '#0d9488' },
@@ -84,6 +86,7 @@ export const ASSETS: Asset[] = [
   // 헬스케어
   { id: 'IHI',  label: '헬스케어 장비',     type: 'etf', source: 'finnhub', sector: 'health_device' },
   { id: 'XBI',  label: '제약·바이오',       type: 'etf', source: 'finnhub', sector: 'biotech' },
+  { id: 'QTUM', label: '양자컴퓨팅',        type: 'etf', source: 'finnhub', sector: 'quantum' },
   // 금융
   { id: 'KBE',  label: '은행',              type: 'etf', source: 'finnhub', sector: 'banks' },
   { id: 'FINX', label: '핀테크/금융서비스', type: 'etf', source: 'finnhub', sector: 'fintech' },

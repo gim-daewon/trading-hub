@@ -19,6 +19,8 @@ export type SectorId =
   | 'communication' | 'telecom' | 'media'
   // 유틸리티·부동산
   | 'utilities' | 'dc_utilities' | 'realestate'
+  // 테마
+  | 'quantum'
   // 레거시 (개별 주식 태깅용, ETF 없음)
   | 'tech' | 'health' | 'finance' | 'space' | 'ep_energy'
   | 'all'

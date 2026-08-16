@@ -1,6 +1,12 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 
+interface Holding {
+  symbol: string
+  name: string
+  pct: number
+}
+
 interface SectorData {
   id: string
   label: string
@@ -58,7 +64,9 @@ export default function SectorsPage() {
   const [view, setView]         = useState<ViewMode>('heatmap')
   const [sort, setSort]         = useState<SortKey>('changePct')
   const [period, setPeriod]     = useState<Period>('1D')
-  const [selected, setSelected] = useState<SectorData | null>(null)
+  const [selected, setSelected]     = useState<SectorData | null>(null)
+  const [holdings, setHoldings]     = useState<Holding[]>([])
+  const [holdLoading, setHoldLoad]  = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -85,12 +93,18 @@ export default function SectorsPage() {
     return () => clearInterval(t)
   }, [load])
 
-  const sorted = [...sectors].sort((a, b) => {
-    if (sort === 'label') return a.label.localeCompare(b.label, 'ko')
-    const aVal = sort === 'rs1d' ? (a.rs1d ?? -999) : (a.changePct ?? -999)
-    const bVal = sort === 'rs1d' ? (b.rs1d ?? -999) : (b.changePct ?? -999)
-    return bVal - aVal
-  })
+  // 섹터 클릭 시 ETF 구성종목 조회
+  useEffect(() => {
+    if (!selected) { setHoldings([]); return }
+    setHoldLoad(true)
+    fetch(`/api/etf-holdings?etf=${selected.etf}`)
+      .then(r => r.json())
+      .then(j => setHoldings(j.holdings ?? []))
+      .catch(() => setHoldings([]))
+      .finally(() => setHoldLoad(false))
+  }, [selected])
+
+  const sorted = [...sectors].sort((a, b) => (b.changePct ?? -999) - (a.changePct ?? -999))
 
   const timeStr = fetchedAt
     ? new Date(fetchedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
@@ -251,15 +265,50 @@ export default function SectorsPage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
             {[
-              { label: '현재가',    v: selected.price ? `$${selected.price.toFixed(2)}` : '—' },
-              { label: '1D 등락',  v: <PctBadge v={selected.changePct} /> },
-              { label: 'vs SPY',   v: <RsBadge v={selected.rs1d} /> },
+              { label: '현재가',   v: selected.price ? `$${selected.price.toFixed(2)}` : '—' },
+              { label: '1D 등락', v: <PctBadge v={selected.changePct} /> },
+              { label: 'vs SPY',  v: <RsBadge v={selected.rs1d} /> },
             ].map(item => (
               <div key={item.label} style={{ background: 'var(--bg-surface)', borderRadius: 8, padding: '10px 12px' }}>
                 <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)' }}>{item.label}</p>
                 <p className="num" style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700 }}>{item.v}</p>
               </div>
             ))}
+          </div>
+
+          {/* 구성종목 */}
+          <div style={{ marginTop: 14 }}>
+            <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              주요 구성종목
+            </p>
+            {holdLoading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} style={{ height: 28, borderRadius: 6, background: 'var(--bg-surface)', opacity: 0.6 }} />
+                ))}
+              </div>
+            ) : holdings.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>데이터 없음</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {holdings.slice(0, 10).map(h => (
+                  <div key={h.symbol} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 10px', borderRadius: 8, background: 'var(--bg-surface)',
+                  }}>
+                    <span className="num" style={{ fontSize: 13, fontWeight: 700, minWidth: 52 }}>{h.symbol}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name}</span>
+                    <span className="num" style={{ fontSize: 12, color: 'var(--text-secondary)', flexShrink: 0 }}>
+                      {(h.pct * 100).toFixed(1)}%
+                    </span>
+                    <div style={{
+                      width: Math.max(h.pct * 100 * 2, 2), height: 4, borderRadius: 2,
+                      background: 'var(--info)', flexShrink: 0,
+                    }} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
