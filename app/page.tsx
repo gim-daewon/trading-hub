@@ -16,10 +16,10 @@ interface SectorTop {
 }
 
 const MAIN_INDICES = [
-  { id: '^GSPC', label: 'S&P 500', source: 'yahoo' },
-  { id: '^IXIC', label: 'NASDAQ',  source: 'yahoo' },
-  { id: '^VIX',  label: 'VIX',     source: 'yahoo' },
-  { id: '^KS11', label: 'KOSPI',   source: 'yahoo' },
+  { id: 'ES=F',  label: 'ES 선물',   source: 'yahoo' },
+  { id: '^NDX',  label: 'NASDAQ 100', source: 'yahoo' },
+  { id: '^VIX',  label: 'VIX',        source: 'yahoo' },
+  { id: '^KS11', label: 'KOSPI',      source: 'yahoo' },
 ]
 
 function Pct({ v, size = 14 }: { v: number; size?: number }) {
@@ -42,7 +42,7 @@ export default function HomePage() {
       try {
         // 지수와 섹터 병렬 요청
         const [finnhubRes, yahooRes, sectorRes] = await Promise.allSettled([
-          fetch('/api/quotes?symbols=%5EGSPC,%5EIXIC,%5EVIX,%5EKS11&source=yahoo'),
+          fetch('/api/quotes?symbols=ES%3DF,%5ENDX,%5EVIX,%5EKS11&source=yahoo'),
           Promise.resolve(new Response('{}', { status: 200 })), // unused
           fetch('/api/sectors'),
         ])
@@ -103,9 +103,7 @@ export default function HomePage() {
                   <p className="num" style={{ margin: '4px 0 2px', fontSize: 20, fontWeight: 700 }}>
                     {idx.id === '^VIX'
                       ? idx.price.toFixed(2)
-                      : idx.id === '^KS11' || idx.id === '^GSPC' || idx.id === '^IXIC'
-                        ? idx.price.toLocaleString('en-US', { maximumFractionDigits: 0 })
-                        : `$${idx.price.toFixed(2)}`}
+                      : idx.price.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                   </p>
                   <Pct v={idx.changePct} size={13} />
                 </div>
