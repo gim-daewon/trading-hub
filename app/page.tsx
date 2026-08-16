@@ -5,18 +5,18 @@ import IndexCard from './components/IndexCard'
 
 // ── 자산 그룹 ── 지수 추가 시 여기에만 추가
 const US_FUTURES = [
-  { id: 'ES=F',  label: 'ES 선물' },
   { id: 'YM=F',  label: '다우 선물' },
-  { id: 'RTY=F', label: '러셀 2000' },
+  { id: 'ES=F',  label: 'ES 선물' },
   { id: '^NDX',  label: 'NASDAQ 100' },
+  { id: 'RTY=F', label: '러셀 2000' },
 ]
 const KR = [
   { id: '^KS11', label: 'KOSPI' },
   { id: '^KQ11', label: 'KOSDAQ' },
 ]
 const COMMODITIES = [
-  { id: 'GC=F', label: '금' },
   { id: 'CL=F', label: 'WTI 원유' },
+  { id: 'GC=F', label: '금' },
   { id: 'SI=F', label: '은' },
 ]
 const CRYPTO = [
