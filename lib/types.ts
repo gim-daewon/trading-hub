@@ -3,7 +3,9 @@ export type DataSource = 'finnhub' | 'yahoo' | 'fred' | 'manual'
 export type SectorId =
   | 'tech' | 'finance' | 'energy' | 'health' | 'materials'
   | 'industrial' | 'staples' | 'consumer' | 'utilities' | 'realestate'
-  | 'communication' | 'semiconductor' | 'software' | 'space' | 'all'
+  | 'communication' | 'semiconductor' | 'software' | 'space'
+  | 'biotech' | 'defense' | 'cybersecurity' | 'ep_energy' | 'cleanenergy' | 'banks' | 'ecommerce'
+  | 'all'
 
 export interface Asset {
   id: string           // ticker or FRED series id

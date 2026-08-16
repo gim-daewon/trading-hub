@@ -9,17 +9,32 @@ export interface SectorMeta {
 }
 
 export const SECTORS: SectorMeta[] = [
+  // ── 정보기술 ──────────────────────────────────────────────────────────
   { id: 'tech',          label: '기술',        etf: 'XLK',  color: '#6366f1' },
   { id: 'semiconductor', label: '반도체',      etf: 'SMH',  color: '#8b5cf6' },
   { id: 'software',      label: '소프트웨어',  etf: 'IGV',  color: '#a78bfa' },
+  { id: 'cybersecurity', label: '사이버보안',  etf: 'HACK', color: '#dc2626' },
+  // ── 커뮤니케이션 ─────────────────────────────────────────────────────
   { id: 'communication', label: '커뮤니케이션', etf: 'XLC', color: '#3b82f6' },
-  { id: 'finance',       label: '금융',        etf: 'XLF',  color: '#10b981' },
+  { id: 'ecommerce',     label: '인터넷소매',  etf: 'IBUY', color: '#7c3aed' },
+  // ── 헬스케어 ─────────────────────────────────────────────────────────
   { id: 'health',        label: '헬스케어',    etf: 'XLV',  color: '#06b6d4' },
+  { id: 'biotech',       label: '생명공학',    etf: 'XBI',  color: '#d946ef' },
+  // ── 금융 ─────────────────────────────────────────────────────────────
+  { id: 'finance',       label: '금융',        etf: 'XLF',  color: '#10b981' },
+  { id: 'banks',         label: '은행',        etf: 'KBE',  color: '#065f46' },
+  // ── 산업재 ───────────────────────────────────────────────────────────
+  { id: 'industrial',    label: '산업재',      etf: 'XLI',  color: '#64748b' },
+  { id: 'defense',       label: '항공우주&방위', etf: 'ITA', color: '#475569' },
+  { id: 'space',         label: '우주탐사',    etf: 'ROKT', color: '#0ea5e9' },
+  // ── 에너지 ───────────────────────────────────────────────────────────
+  { id: 'energy',        label: '에너지',      etf: 'XLE',  color: '#f97316' },
+  { id: 'ep_energy',     label: 'E&P 탐사',    etf: 'XOP',  color: '#b45309' },
+  { id: 'cleanenergy',   label: '클린에너지',  etf: 'ICLN', color: '#16a34a' },
+  // ── 소비재 ───────────────────────────────────────────────────────────
   { id: 'consumer',      label: '소비재',      etf: 'XLY',  color: '#f59e0b' },
   { id: 'staples',       label: '필수소비',    etf: 'XLP',  color: '#84cc16' },
-  { id: 'industrial',    label: '산업재',      etf: 'XLI',  color: '#64748b' },
-  { id: 'space',         label: '우주항공',    etf: 'ROKT', color: '#0ea5e9' },
-  { id: 'energy',        label: '에너지',      etf: 'XLE',  color: '#f97316' },
+  // ── 기타 ─────────────────────────────────────────────────────────────
   { id: 'materials',     label: '소재',        etf: 'XLB',  color: '#78716c' },
   { id: 'utilities',     label: '유틸리티',    etf: 'XLU',  color: '#94a3b8' },
   { id: 'realestate',    label: '부동산',      etf: 'XLRE', color: '#ec4899' },
@@ -40,18 +55,25 @@ export const ASSETS: Asset[] = [
   // 섹터 ETF (SPDR 11개 + 특수)
   { id: 'XLK',  label: '기술 ETF',      type: 'etf', source: 'finnhub', sector: 'tech' },
   { id: 'SMH',  label: '반도체 ETF',    type: 'etf', source: 'finnhub', sector: 'semiconductor' },
-  { id: 'IGV',  label: '소프트웨어 ETF', type: 'etf', source: 'finnhub', sector: 'software' },
-  { id: 'ROKT', label: '우주항공 ETF',  type: 'etf', source: 'finnhub', sector: 'space' },
-  { id: 'XLC',  label: '커뮤니케이션',  type: 'etf', source: 'finnhub', sector: 'communication' },
-  { id: 'XLF',  label: '금융 ETF',      type: 'etf', source: 'finnhub', sector: 'finance' },
-  { id: 'XLV',  label: '헬스케어 ETF',  type: 'etf', source: 'finnhub', sector: 'health' },
-  { id: 'XLY',  label: '소비재 ETF',    type: 'etf', source: 'finnhub', sector: 'consumer' },
-  { id: 'XLP',  label: '필수소비 ETF',  type: 'etf', source: 'finnhub', sector: 'staples' },
-  { id: 'XLI',  label: '산업재 ETF',    type: 'etf', source: 'finnhub', sector: 'industrial' },
-  { id: 'XLE',  label: '에너지 ETF',    type: 'etf', source: 'finnhub', sector: 'energy' },
-  { id: 'XLB',  label: '소재 ETF',      type: 'etf', source: 'finnhub', sector: 'materials' },
-  { id: 'XLU',  label: '유틸리티 ETF',  type: 'etf', source: 'finnhub', sector: 'utilities' },
-  { id: 'XLRE', label: '부동산 ETF',    type: 'etf', source: 'finnhub', sector: 'realestate' },
+  { id: 'IGV',  label: '소프트웨어 ETF',  type: 'etf', source: 'finnhub', sector: 'software' },
+  { id: 'HACK', label: '사이버보안 ETF', type: 'etf', source: 'finnhub', sector: 'cybersecurity' },
+  { id: 'ROKT', label: '우주탐사 ETF',   type: 'etf', source: 'finnhub', sector: 'space' },
+  { id: 'XLC',  label: '커뮤니케이션',   type: 'etf', source: 'finnhub', sector: 'communication' },
+  { id: 'IBUY', label: '인터넷소매 ETF', type: 'etf', source: 'finnhub', sector: 'ecommerce' },
+  { id: 'XLF',  label: '금융 ETF',       type: 'etf', source: 'finnhub', sector: 'finance' },
+  { id: 'KBE',  label: '은행 ETF',       type: 'etf', source: 'finnhub', sector: 'banks' },
+  { id: 'XLV',  label: '헬스케어 ETF',   type: 'etf', source: 'finnhub', sector: 'health' },
+  { id: 'XBI',  label: '생명공학 ETF',   type: 'etf', source: 'finnhub', sector: 'biotech' },
+  { id: 'XLY',  label: '소비재 ETF',     type: 'etf', source: 'finnhub', sector: 'consumer' },
+  { id: 'XLP',  label: '필수소비 ETF',   type: 'etf', source: 'finnhub', sector: 'staples' },
+  { id: 'XLI',  label: '산업재 ETF',     type: 'etf', source: 'finnhub', sector: 'industrial' },
+  { id: 'ITA',  label: '항공우주&방위',  type: 'etf', source: 'finnhub', sector: 'defense' },
+  { id: 'XLE',  label: '에너지 ETF',     type: 'etf', source: 'finnhub', sector: 'energy' },
+  { id: 'XOP',  label: 'E&P 탐사 ETF',   type: 'etf', source: 'finnhub', sector: 'ep_energy' },
+  { id: 'ICLN', label: '클린에너지 ETF', type: 'etf', source: 'finnhub', sector: 'cleanenergy' },
+  { id: 'XLB',  label: '소재 ETF',       type: 'etf', source: 'finnhub', sector: 'materials' },
+  { id: 'XLU',  label: '유틸리티 ETF',   type: 'etf', source: 'finnhub', sector: 'utilities' },
+  { id: 'XLRE', label: '부동산 ETF',     type: 'etf', source: 'finnhub', sector: 'realestate' },
 
   // 매크로
   { id: '^VIX',  label: '공포지수 VIX',    type: 'macro', source: 'yahoo' },
