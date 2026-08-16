@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import ChartModal, { type ChartTarget } from './components/ChartModal'
+import IndexCard from './components/IndexCard'
 
 interface IndexQuote {
   id: string
@@ -37,7 +37,6 @@ export default function HomePage() {
   const [topSector, setTopSector] = useState<SectorTop | null>(null)
   const [botSector, setBotSector] = useState<SectorTop | null>(null)
   const [loading, setLoading]     = useState(true)
-  const [chart, setChart]         = useState<ChartTarget | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -100,20 +99,13 @@ export default function HomePage() {
                 <div key={i} style={{ height: 72, borderRadius: 12, background: 'var(--bg-card)' }} />
               ))
             : indices.map(idx => (
-                <div
+                <IndexCard
                   key={idx.id}
-                  className="card card-interactive"
-                  style={{ padding: '12px 14px' }}
-                  onClick={() => setChart({ symbol: idx.id, label: idx.label, price: idx.price, changePct: idx.changePct })}
-                >
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>{idx.label}</p>
-                  <p className="num" style={{ margin: '4px 0 2px', fontSize: 20, fontWeight: 700 }}>
-                    {idx.id === '^VIX'
-                      ? idx.price.toFixed(2)
-                      : idx.price.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                  </p>
-                  <Pct v={idx.changePct} size={13} />
-                </div>
+                  symbol={idx.id}
+                  label={idx.label}
+                  price={idx.price}
+                  changePct={idx.changePct}
+                />
               ))
           }
         </div>
@@ -147,9 +139,6 @@ export default function HomePage() {
           )}
         </div>
       </section>
-
-      {/* 차트 모달 */}
-      {chart && <ChartModal {...chart} onClose={() => setChart(null)} />}
 
       {/* 빠른 탐색 */}
       <section>
