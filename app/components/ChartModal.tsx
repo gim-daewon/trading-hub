@@ -1,7 +1,7 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
-interface Candle { date: string; close: number }
+interface Candle { date: string; open: number; high: number; low: number; close: number }
 
 const RANGES = [
   { label: '1주', value: '5d' },
@@ -11,81 +11,96 @@ const RANGES = [
   { label: '1년', value: '1y' },
 ]
 
-function LineChart({ candles, color }: { candles: Candle[]; color: string }) {
-  const svgRef = useRef<SVGSVGElement>(null)
-  const [hover, setHover] = useState<{ x: number; y: number; price: number; date: string } | null>(null)
+function CandleChart({ candles }: { candles: Candle[] }) {
+  const [hover, setHover] = useState<(Candle & { cx: number }) | null>(null)
 
   if (candles.length === 0) {
     return (
-      <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+      <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
         데이터 없음
       </div>
     )
   }
 
-  const W = 600, H = 200
-  const PAD = { top: 20, right: 16, bottom: 28, left: 8 }
-  const prices = candles.map(c => c.close)
-  const minP = Math.min(...prices)
-  const maxP = Math.max(...prices)
+  const W = 600, H = 240
+  const PAD = { top: 24, right: 16, bottom: 28, left: 8 }
+  const chartW = W - PAD.left - PAD.right
+  const chartH = H - PAD.top - PAD.bottom
+
+  const allPrices = candles.flatMap(c => [c.high, c.low])
+  const rawMin = Math.min(...allPrices)
+  const rawMax = Math.max(...allPrices)
+  const pad5pct = (rawMax - rawMin) * 0.05
+  const minP = rawMin - pad5pct
+  const maxP = rawMax + pad5pct
   const priceRange = maxP - minP || 1
 
-  const toX = (i: number) => PAD.left + (i / Math.max(candles.length - 1, 1)) * (W - PAD.left - PAD.right)
-  const toY = (p: number) => PAD.top + (1 - (p - minP) / priceRange) * (H - PAD.top - PAD.bottom)
+  const toY = (p: number) => PAD.top + (1 - (p - minP) / priceRange) * chartH
 
-  const points = candles.map((c, i) => `${toX(i)},${toY(c.close)}`).join(' ')
-  const areaPoints = `${toX(0)},${H - PAD.bottom} ${points} ${toX(candles.length - 1)},${H - PAD.bottom}`
+  const n = candles.length
+  const step = chartW / n
+  const bodyW = Math.max(1, step * 0.65)
+  const toX = (i: number) => PAD.left + i * step + step / 2
 
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!svgRef.current) return
-    const rect = svgRef.current.getBoundingClientRect()
-    const px = ((e.clientX - rect.left) / rect.width) * W
-    const idx = Math.round(((px - PAD.left) / (W - PAD.left - PAD.right)) * (candles.length - 1))
-    const i = Math.max(0, Math.min(candles.length - 1, idx))
-    setHover({ x: toX(i), y: toY(candles[i].close), price: candles[i].close, date: candles[i].date })
-  }
-
-  const fmt = (p: number) => p.toLocaleString('en-US', { maximumFractionDigits: 2 })
+  const fmt = (p: number) => p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
   return (
     <div style={{ position: 'relative' }}>
       <svg
-        ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
-        style={{ width: '100%', height: 200, cursor: 'crosshair', display: 'block' }}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setHover(null)}
+        style={{ width: '100%', height: 240, display: 'block', cursor: 'crosshair' }}
       >
-        <defs>
-          <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
-          </linearGradient>
-        </defs>
+        {/* grid */}
+        {[0.25, 0.5, 0.75].map(t => (
+          <line key={t}
+            x1={PAD.left} y1={PAD.top + t * chartH}
+            x2={W - PAD.right} y2={PAD.top + t * chartH}
+            stroke="#1e293b" strokeWidth="1"
+          />
+        ))}
 
-        {/* area fill */}
-        <polygon points={areaPoints} fill="url(#cg)" />
-        {/* line */}
-        <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+        {/* candles */}
+        {candles.map((c, i) => {
+          const x = toX(i)
+          const isUp = c.close >= c.open
+          const color = isUp ? '#22c55e' : '#ef4444'
+          const bodyTop = toY(Math.max(c.open, c.close))
+          const bodyBot = toY(Math.min(c.open, c.close))
+          const bodyH = Math.max(1, bodyBot - bodyTop)
+
+          return (
+            <g
+              key={c.date}
+              onMouseEnter={() => setHover({ ...c, cx: x })}
+              onMouseLeave={() => setHover(null)}
+            >
+              {/* wick */}
+              <line x1={x} y1={toY(c.high)} x2={x} y2={toY(c.low)} stroke={color} strokeWidth="1" />
+              {/* body */}
+              <rect x={x - bodyW / 2} y={bodyTop} width={bodyW} height={bodyH} fill={color} />
+              {/* hover target */}
+              <rect x={x - step / 2} y={PAD.top} width={step} height={chartH} fill="transparent" />
+            </g>
+          )
+        })}
 
         {/* crosshair */}
         {hover && (
-          <>
-            <line x1={hover.x} y1={PAD.top} x2={hover.x} y2={H - PAD.bottom}
-              stroke="#ffffff20" strokeWidth="1" strokeDasharray="3 3" />
-            <circle cx={hover.x} cy={hover.y} r="3.5" fill={color} />
-          </>
+          <line
+            x1={hover.cx} y1={PAD.top} x2={hover.cx} y2={H - PAD.bottom}
+            stroke="#ffffff18" strokeWidth="1" strokeDasharray="3 3"
+          />
         )}
 
-        {/* min / max axis labels */}
-        <text x={PAD.left + 2} y={PAD.top - 4} fontSize="9" fill="#475569" fontFamily="monospace">
-          {fmt(maxP)}
+        {/* price axis */}
+        <text x={PAD.left + 2} y={PAD.top - 6} fontSize="9" fill="#475569" fontFamily="monospace">
+          {fmt(rawMax)}
         </text>
         <text x={PAD.left + 2} y={H - PAD.bottom + 14} fontSize="9" fill="#475569" fontFamily="monospace">
-          {fmt(minP)}
+          {fmt(rawMin)}
         </text>
 
-        {/* first / last date */}
+        {/* date axis */}
         {candles.length > 1 && (
           <>
             <text x={PAD.left} y={H - 2} fontSize="9" fill="#334155" fontFamily="monospace">
@@ -98,17 +113,28 @@ function LineChart({ candles, color }: { candles: Candle[]; color: string }) {
         )}
       </svg>
 
-      {/* hover tooltip */}
+      {/* OHLC tooltip */}
       {hover && (
         <div style={{
-          position: 'absolute', top: 6, right: 6,
-          background: 'var(--bg-hover)', border: '1px solid var(--border)',
-          borderRadius: 6, padding: '4px 10px', fontSize: 11,
-          pointerEvents: 'none', fontFamily: 'var(--font-mono)',
-          display: 'flex', gap: 8,
+          position: 'absolute', top: 6, left: 6,
+          background: 'var(--bg-surface)', border: '1px solid var(--border)',
+          borderRadius: 6, padding: '6px 10px',
+          pointerEvents: 'none', fontFamily: 'var(--font-mono)', fontSize: 11,
         }}>
-          <span style={{ color: 'var(--text-muted)' }}>{hover.date}</span>
-          <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{fmt(hover.price)}</span>
+          <div style={{ color: 'var(--text-muted)', marginBottom: 4 }}>{hover.date}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: '1px 10px' }}>
+            {[
+              { k: 'O', v: hover.open,  color: hover.close >= hover.open ? '#22c55e' : '#ef4444' },
+              { k: 'H', v: hover.high,  color: 'var(--text-primary)' },
+              { k: 'L', v: hover.low,   color: 'var(--text-primary)' },
+              { k: 'C', v: hover.close, color: hover.close >= hover.open ? '#22c55e' : '#ef4444', bold: true },
+            ].map(({ k, v, color, bold }) => (
+              <>
+                <span key={k + 'k'} style={{ color: 'var(--text-muted)' }}>{k}</span>
+                <span key={k + 'v'} style={{ color, fontWeight: bold ? 700 : 400 }}>{fmt(v)}</span>
+              </>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -122,33 +148,37 @@ export interface ChartTarget {
   changePct: number
 }
 
-interface Props extends ChartTarget {
-  onClose: () => void
-}
+interface Props extends ChartTarget { onClose: () => void }
 
 export default function ChartModal({ symbol, label, price, changePct, onClose }: Props) {
-  const [range, setRange] = useState('3mo')
+  const [range, setRange]   = useState('3mo')
   const [candles, setCandles] = useState<Candle[]>([])
   const [loading, setLoading] = useState(true)
+  const [errMsg, setErrMsg]   = useState('')
 
   const isUp = changePct >= 0
-  const color = isUp ? '#22c55e' : '#ef4444'
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setCandles([])
+    setErrMsg('')
     fetch(`/api/history?symbol=${encodeURIComponent(symbol)}&range=${range}`)
       .then(r => r.json())
-      .then(j => { if (!cancelled) { setCandles(j.candles ?? []); setLoading(false) } })
-      .catch(() => { if (!cancelled) setLoading(false) })
+      .then(j => {
+        if (cancelled) return
+        if (j.error && !j.candles?.length) setErrMsg(j.error)
+        setCandles(j.candles ?? [])
+        setLoading(false)
+      })
+      .catch(e => { if (!cancelled) { setErrMsg(String(e)); setLoading(false) } })
     return () => { cancelled = true }
   }, [symbol, range])
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
   }, [onClose])
 
   const fmtPrice = (p: number) =>
@@ -157,28 +187,18 @@ export default function ChartModal({ symbol, label, price, changePct, onClose }:
   return (
     <>
       {/* backdrop */}
-      <div
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, background: '#00000088', backdropFilter: 'blur(4px)', zIndex: 100 }}
-      />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: '#00000088', backdropFilter: 'blur(4px)', zIndex: 100 }} />
 
       {/* modal */}
       <div style={{
         position: 'fixed', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
-        width: 'min(640px, calc(100vw - 32px))',
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        borderRadius: 16,
-        zIndex: 101,
-        overflow: 'hidden',
+        width: 'min(660px, calc(100vw - 32px))',
+        background: 'var(--bg-card)', border: '1px solid var(--border)',
+        borderRadius: 16, zIndex: 101, overflow: 'hidden',
       }}>
         {/* header */}
-        <div style={{
-          padding: '16px 20px 12px',
-          borderBottom: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
+        <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{symbol}</p>
             <p style={{ margin: '2px 0 0', fontSize: 18, fontWeight: 800 }}>{label}</p>
@@ -190,40 +210,35 @@ export default function ChartModal({ symbol, label, price, changePct, onClose }:
                 {isUp ? '+' : ''}{changePct.toFixed(2)}%
               </span>
             </div>
-            <button
-              onClick={onClose}
-              style={{
-                width: 28, height: 28, borderRadius: 6,
-                background: 'var(--bg-hover)', border: '1px solid var(--border)',
-                color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >✕</button>
+            <button onClick={onClose} style={{
+              width: 28, height: 28, borderRadius: 6,
+              background: 'var(--bg-hover)', border: '1px solid var(--border)',
+              color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>✕</button>
           </div>
         </div>
 
-        {/* range buttons */}
+        {/* range */}
         <div style={{ display: 'flex', gap: 4, padding: '12px 20px 4px' }}>
           {RANGES.map(r => (
-            <button
-              key={r.value}
-              onClick={() => setRange(r.value)}
-              style={{
-                padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12,
-                background: range === r.value ? 'var(--info)' : 'var(--bg-hover)',
-                color: range === r.value ? '#fff' : 'var(--text-muted)',
-                fontWeight: range === r.value ? 600 : 400,
-                transition: 'background 120ms',
-              }}
-            >{r.label}</button>
+            <button key={r.value} onClick={() => setRange(r.value)} style={{
+              padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12,
+              background: range === r.value ? 'var(--info)' : 'var(--bg-hover)',
+              color: range === r.value ? '#fff' : 'var(--text-muted)',
+              fontWeight: range === r.value ? 600 : 400,
+              transition: 'background 120ms',
+            }}>{r.label}</button>
           ))}
         </div>
 
         {/* chart */}
         <div style={{ padding: '4px 20px 20px' }}>
           {loading
-            ? <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>로딩 중...</div>
-            : <LineChart candles={candles} color={color} />
+            ? <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>로딩 중...</div>
+            : errMsg
+              ? <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--down)', fontSize: 12 }}>{errMsg}</div>
+              : <CandleChart candles={candles} />
           }
         </div>
       </div>
