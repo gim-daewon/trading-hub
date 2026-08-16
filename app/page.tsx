@@ -80,7 +80,7 @@ export default function HomePage() {
   })
 
   return (
-    <div style={{ padding: '16px', maxWidth: 600, margin: '0 auto' }}>
+    <div style={{ padding: '16px', paddingTop: 'max(16px, env(safe-area-inset-top))', maxWidth: 700, margin: '0 auto' }}>
       {/* 헤더 */}
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>

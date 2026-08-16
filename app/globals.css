@@ -111,38 +111,10 @@ body {
 .pill-danger { background: #7f1d1d55; color: var(--danger); }
 .pill-stale  { background: #1e293b;   color: var(--text-muted); }
 
-/* ── 바텀 네비 ───────────────────────────────────────────────────────── */
-.bottom-nav {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  height: 60px;
-  background: #0d1420ee;
-  backdrop-filter: blur(12px);
-  border-top: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  padding-bottom: env(safe-area-inset-bottom);
-  z-index: 50;
+/* 모바일 콘텐츠 상단 — 햄버거 버튼 공간 */
+@media (max-width: 767px) {
+  main > div:first-child { padding-top: 56px !important; }
 }
-.bottom-nav a {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  color: var(--text-muted);
-  font-size: 10px;
-  text-decoration: none;
-  transition: color var(--duration), background var(--duration);
-}
-.bottom-nav a.active,
-.bottom-nav a:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
-}
-.bottom-nav a span:first-child { font-size: 18px; }
 
 /* ── 스크롤바 ────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
