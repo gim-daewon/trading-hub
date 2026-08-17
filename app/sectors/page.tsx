@@ -165,7 +165,7 @@ export default function SectorsPage() {
       {view === 'heatmap' && (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
           gap: 8,
         }}>
           {loading
