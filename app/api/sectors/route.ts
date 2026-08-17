@@ -49,7 +49,7 @@ export async function GET() {
 
   const sectors = SECTORS.map(sector => {
     const q = quoteMap[sector.etf]
-    const changePct = q?.changePct ?? 0
+    const changePct = q?.changePct ?? null
     return {
       id:        sector.id,
       label:     sector.label,
@@ -58,13 +58,13 @@ export async function GET() {
       price:     q?.price ?? null,
       change:    q?.change ?? null,
       changePct,
-      rs1d:      spy ? calcRS(changePct, spyChg) : null,
+      rs1d:      (spy && changePct !== null) ? calcRS(changePct, spyChg) : null,
       prevClose: q?.prevClose ?? null,
       ts:        Date.now(),
     }
   })
 
-  sectors.sort((a, b) => (b.changePct ?? 0) - (a.changePct ?? 0))
+  sectors.sort((a, b) => (b.changePct ?? -999) - (a.changePct ?? -999))
 
   return NextResponse.json({
     sectors,

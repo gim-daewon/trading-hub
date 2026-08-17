@@ -8,9 +8,10 @@ interface Props {
   label: string
   price: number
   changePct: number
+  noChart?: boolean
 }
 
-export default function IndexCard({ symbol, label, price, changePct }: Props) {
+export default function IndexCard({ symbol, label, price, changePct, noChart }: Props) {
   const [open, setOpen] = useState(false)
 
   const isUp = changePct > 0
@@ -21,9 +22,9 @@ export default function IndexCard({ symbol, label, price, changePct }: Props) {
   return (
     <>
       <div
-        className="card card-interactive"
+        className={`card ${noChart ? '' : 'card-interactive'}`}
         style={{ padding: '12px 14px' }}
-        onClick={() => setOpen(true)}
+        onClick={() => { if (!noChart) setOpen(true) }}
       >
         <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>{label}</p>
         <p className="num" style={{ margin: '4px 0 2px', fontSize: 20, fontWeight: 700 }}>

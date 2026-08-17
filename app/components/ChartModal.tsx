@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { fmtAssetPrice } from '@/lib/format'
 
 interface Candle { date: string; open: number; high: number; low: number; close: number }
@@ -130,10 +130,10 @@ function CandleChart({ candles }: { candles: Candle[] }) {
               { k: 'L', v: hover.low,   color: 'var(--text-primary)' },
               { k: 'C', v: hover.close, color: hover.close >= hover.open ? '#22c55e' : '#ef4444', bold: true },
             ].map(({ k, v, color, bold }) => (
-              <>
-                <span key={k + 'k'} style={{ color: 'var(--text-muted)' }}>{k}</span>
-                <span key={k + 'v'} style={{ color, fontWeight: bold ? 700 : 400 }}>{fmt(v)}</span>
-              </>
+              <Fragment key={k}>
+                <span style={{ color: 'var(--text-muted)' }}>{k}</span>
+                <span style={{ color, fontWeight: bold ? 700 : 400 }}>{fmt(v)}</span>
+              </Fragment>
             ))}
           </div>
         </div>

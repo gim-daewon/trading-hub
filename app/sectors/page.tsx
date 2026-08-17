@@ -5,6 +5,8 @@ interface Holding {
   symbol: string
   name: string
   pct: number
+  price: number | null
+  changePct: number | null
 }
 
 interface SectorData {
@@ -291,22 +293,29 @@ export default function SectorsPage() {
               <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>데이터 없음</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {holdings.slice(0, 10).map(h => (
-                  <div key={h.symbol} style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '6px 10px', borderRadius: 8, background: 'var(--bg-surface)',
-                  }}>
-                    <span className="num" style={{ fontSize: 13, fontWeight: 700, minWidth: 52 }}>{h.symbol}</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name}</span>
-                    <span className="num" style={{ fontSize: 12, color: 'var(--text-secondary)', flexShrink: 0 }}>
-                      {(h.pct * 100).toFixed(1)}%
-                    </span>
-                    <div style={{
-                      width: Math.max(h.pct * 100 * 2, 2), height: 4, borderRadius: 2,
-                      background: 'var(--info)', flexShrink: 0,
-                    }} />
-                  </div>
-                ))}
+                {holdings.slice(0, 10).map(h => {
+                  const chgCls = h.changePct === null ? 'flat' : h.changePct > 0 ? 'up' : h.changePct < 0 ? 'down' : 'flat'
+                  return (
+                    <div key={h.symbol} style={{
+                      display: 'grid',
+                      gridTemplateColumns: '52px 1fr auto auto auto',
+                      alignItems: 'center', gap: 8,
+                      padding: '6px 10px', borderRadius: 8, background: 'var(--bg-surface)',
+                    }}>
+                      <span className="num" style={{ fontSize: 13, fontWeight: 700 }}>{h.symbol}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name}</span>
+                      <span className="num" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        {h.price !== null ? `$${h.price.toFixed(h.price >= 100 ? 1 : 2)}` : '—'}
+                      </span>
+                      <span className={`num ${chgCls}`} style={{ fontSize: 11, minWidth: 52, textAlign: 'right' }}>
+                        {h.changePct !== null ? `${h.changePct >= 0 ? '+' : ''}${h.changePct.toFixed(2)}%` : '—'}
+                      </span>
+                      <span className="num" style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 32, textAlign: 'right' }}>
+                        {(h.pct * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

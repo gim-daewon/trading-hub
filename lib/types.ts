@@ -20,7 +20,7 @@ export type SectorId =
   // 유틸리티·부동산
   | 'utilities' | 'dc_utilities' | 'realestate'
   // 테마
-  | 'quantum' | 'bitcoin_etf'
+  | 'quantum' | 'bitcoin_etf' | 'neo_cloud'
   // 레거시 (개별 주식 태깅용, ETF 없음)
   | 'tech' | 'health' | 'finance' | 'space' | 'ep_energy'
   | 'all'

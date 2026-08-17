@@ -24,10 +24,10 @@ const CRYPTO = [
   { id: 'ETH=F', label: '이더리움 선물' },
 ]
 const RATES_FX = [
-  { id: '^TNX',  label: '미국 10Y' },
-  { id: 'DGS2',  label: '미국 2Y' },
+  { id: '^TNX',     label: '미국 10Y' },
+  { id: 'DGS2',     label: '미국 2Y',    noChart: true },
   { id: 'DX-Y.NYB', label: '달러 인덱스' },
-  { id: 'KRW=X', label: '달러/원' },
+  { id: 'KRW=X',    label: '달러/원' },
 ]
 
 const ALL_YAHOO_GROUPS = [...US_FUTURES, ...KR, ...COMMODITIES, ...CRYPTO,
@@ -117,14 +117,14 @@ export default function HomePage() {
 
   const now = new Date().toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
-  function Cards({ assets, cols }: { assets: { id: string; label: string }[]; cols: number }) {
+  function Cards({ assets, cols }: { assets: { id: string; label: string; noChart?: boolean }[]; cols: number }) {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8 }}>
         {assets.map(a => {
           const q = quotes[a.id]
           return loading || !q
             ? <Skeleton key={a.id} />
-            : <IndexCard key={a.id} symbol={a.id} label={a.label} price={q.price} changePct={q.changePct} />
+            : <IndexCard key={a.id} symbol={a.id} label={a.label} price={q.price} changePct={q.changePct} noChart={a.noChart} />
         })}
       </div>
     )
