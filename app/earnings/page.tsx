@@ -1,131 +1,151 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { getEarningsAssets } from '@/lib/registry'
-import type { EarningsData } from '@/app/api/earnings/route'
+import { useEffect, useState, useCallback } from 'react'
+import { ASSETS } from '@/lib/registry'
+import type { EarningEntry } from '@/app/api/earnings-calendar/route'
 
-interface EarningsRow extends EarningsData {
-  label: string
-  daysUntil: number | null
+const WATCHLIST_SYMBOLS = new Set(ASSETS.map(a => a.id.toUpperCase()))
+const ASSET_LABEL = Object.fromEntries(ASSETS.map(a => [a.id.toUpperCase(), a.label]))
+
+const DAY_KO = ['월', '화', '수', '목', '금']
+const MONTH_KO = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
+
+function fmtDayLabel(dateStr: string, idx: number): string {
+  const d = new Date(dateStr)
+  return `${MONTH_KO[d.getMonth()]} ${d.getDate()}일 (${DAY_KO[idx]})`
 }
 
-function daysFrom(dateStr: string | null): number | null {
-  if (!dateStr) return null
-  const diff = new Date(dateStr).getTime() - new Date().setHours(0, 0, 0, 0)
-  return Math.round(diff / 86400000)
+function fmtWeekRange(days: string[]): string {
+  if (days.length < 5) return ''
+  const a = new Date(days[0]), b = new Date(days[4])
+  return `${a.getMonth() + 1}/${a.getDate()} – ${b.getMonth() + 1}/${b.getDate()}`
 }
 
-function DdayBadge({ days }: { days: number | null }) {
-  if (days === null) return <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>
-  const isToday  = days === 0
-  const isPast   = days < 0
-  const isSoon   = days <= 7 && days >= 0
-  const bg = isToday ? '#f59e0b' : isPast ? 'var(--bg-base)' : isSoon ? '#ef4444' : 'var(--bg-base)'
-  const color = isToday ? '#000' : isPast ? 'var(--text-muted)' : isSoon ? '#fff' : 'var(--text-secondary)'
-  const label = isToday ? 'D-DAY' : `D${days > 0 ? '-' : '+'}${Math.abs(days)}`
-  return (
-    <span style={{
-      display: 'inline-block', padding: '2px 8px', borderRadius: 4,
-      fontSize: 11, fontWeight: 700, fontFamily: 'monospace',
-      background: bg, color,
-      border: isPast ? '1px solid var(--border)' : 'none',
-    }}>{label}</span>
-  )
+function isToday(dateStr: string): boolean {
+  return dateStr === new Date().toISOString().slice(0, 10)
 }
 
-function BeatMiss({ actual, estimate }: { actual: number | null; estimate: number | null }) {
+function EpsChange({ actual, estimate }: { actual: number | null; estimate: number | null }) {
   if (actual === null || estimate === null) return null
   const beat = actual >= estimate
+  const delta = actual - estimate
   return (
     <span style={{
-      fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
-      background: beat ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+      marginLeft: 4, fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3,
+      background: beat ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)',
       color: beat ? '#22c55e' : '#ef4444',
     }}>
-      {beat ? '▲ BEAT' : '▼ MISS'}
+      {beat ? '▲' : '▼'} {delta >= 0 ? '+' : ''}{delta.toFixed(2)}
     </span>
   )
 }
 
-function fmtRevenue(v: number | null): string {
-  if (v === null) return '—'
-  if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}T`
-  if (v >= 1e9)  return `$${(v / 1e9).toFixed(2)}B`
-  if (v >= 1e6)  return `$${(v / 1e6).toFixed(0)}M`
-  return `$${v.toFixed(0)}`
+function EntryRow({ e, highlight }: { e: EarningEntry; highlight: boolean }) {
+  const reported = e.epsActual !== null
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px',
+      borderRadius: 6, background: highlight ? 'rgba(59,130,246,0.1)' : 'transparent',
+      borderLeft: highlight ? '2px solid #3b82f6' : '2px solid transparent',
+      opacity: reported ? 0.65 : 1,
+    }}>
+      {/* time badge */}
+      <span style={{
+        fontSize: 8, fontWeight: 700, width: 22, textAlign: 'center',
+        padding: '1px 0', borderRadius: 3, flexShrink: 0,
+        background: e.time === 'pre'  ? 'rgba(251,191,36,0.2)'
+                  : e.time === 'post' ? 'rgba(99,102,241,0.2)' : 'rgba(100,116,139,0.15)',
+        color:    e.time === 'pre'  ? '#f59e0b'
+                : e.time === 'post' ? '#818cf8' : '#64748b',
+      }}>
+        {e.time === 'pre' ? '장전' : e.time === 'post' ? '장후' : '?'}
+      </span>
+
+      {/* symbol + name */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <span style={{
+          fontSize: 12, fontWeight: highlight ? 800 : 700, fontFamily: 'monospace',
+          color: highlight ? '#3b82f6' : 'var(--text-primary)',
+        }}>{e.symbol}</span>
+        {highlight && ASSET_LABEL[e.symbol] && (
+          <span style={{ fontSize: 9, color: '#3b82f6', marginLeft: 4 }}>{ASSET_LABEL[e.symbol]}</span>
+        )}
+        {!highlight && (
+          <span style={{
+            display: 'block', fontSize: 9, color: 'var(--text-muted)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{e.name}</span>
+        )}
+      </div>
+
+      {/* EPS */}
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        {reported ? (
+          <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+            ${e.epsActual!.toFixed(2)}
+            <EpsChange actual={e.epsActual} estimate={e.epsEstimate} />
+          </span>
+        ) : e.epsEstimate !== null ? (
+          <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
+            ${e.epsEstimate.toFixed(2)}e
+          </span>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
-function fmtDate(s: string | null): string {
-  if (!s) return '—'
-  const d = new Date(s)
-  return `${d.getMonth() + 1}/${d.getDate()}`
-}
+function DayColumn({ date, dayIdx, entries, filter }: {
+  date: string
+  dayIdx: number
+  entries: EarningEntry[]
+  filter: 'all' | 'watchlist'
+}) {
+  const today = isToday(date)
+  const visible = filter === 'watchlist'
+    ? entries.filter(e => WATCHLIST_SYMBOLS.has(e.symbol))
+    : entries
 
-function EarningsCard({ row }: { row: EarningsRow }) {
-  const isPast = row.daysUntil !== null && row.daysUntil < 0
-  const beatDelta = row.lastActual !== null && row.lastEstimate !== null
-    ? row.lastActual - row.lastEstimate : null
+  // watchlist entries first, then rest
+  const sorted = [
+    ...visible.filter(e => WATCHLIST_SYMBOLS.has(e.symbol)),
+    ...visible.filter(e => !WATCHLIST_SYMBOLS.has(e.symbol)),
+  ]
 
   return (
-    <div className="card" style={{
-      padding: '14px 16px',
-      opacity: isPast ? 0.55 : 1,
-      borderLeft: row.daysUntil !== null && row.daysUntil <= 7 && row.daysUntil >= 0
-        ? '3px solid #ef4444' : '3px solid transparent',
+    <div style={{
+      flex: 1, minWidth: 0,
+      background: today ? 'rgba(59,130,246,0.04)' : 'var(--bg-card)',
+      borderRadius: 10, padding: '10px 8px',
+      border: today ? '1px solid rgba(59,130,246,0.3)' : '1px solid var(--border)',
     }}>
-      {/* header row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 15, fontWeight: 800, fontFamily: 'monospace' }}>{row.symbol}</span>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{row.label}</span>
+      {/* day header */}
+      <div style={{ marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 10, color: today ? '#3b82f6' : 'var(--text-muted)', fontWeight: today ? 700 : 400 }}>
+          {fmtDayLabel(date, dayIdx)}
         </div>
-        <DdayBadge days={row.daysUntil} />
-      </div>
-
-      {/* date + estimates */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 10 }}>
-        <div>
-          <p style={{ margin: 0, fontSize: 9.5, color: 'var(--text-muted)', marginBottom: 3 }}>실적 발표일</p>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontFamily: 'monospace' }}>
-            {fmtDate(row.nextDate)}
-          </p>
-        </div>
-        <div>
-          <p style={{ margin: 0, fontSize: 9.5, color: 'var(--text-muted)', marginBottom: 3 }}>EPS 예상</p>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontFamily: 'monospace' }}>
-            {row.epsEstimate !== null ? `$${row.epsEstimate.toFixed(2)}` : '—'}
-          </p>
-        </div>
-        <div>
-          <p style={{ margin: 0, fontSize: 9.5, color: 'var(--text-muted)', marginBottom: 3 }}>매출 예상</p>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontFamily: 'monospace' }}>
-            {fmtRevenue(row.revenueEstimate)}
-          </p>
-        </div>
-      </div>
-
-      {/* previous quarter */}
-      {row.lastQuarter && (
-        <div style={{
-          borderTop: '1px solid var(--border)', paddingTop: 8,
-          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-        }}>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>전분기 {row.lastQuarter}</span>
-          <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
-            실적 <strong style={{ color: 'var(--text-primary)' }}>
-              {row.lastActual !== null ? `$${row.lastActual.toFixed(2)}` : '—'}
-            </strong>
-            {row.lastEstimate !== null && (
-              <> / 예상 ${row.lastEstimate.toFixed(2)}</>
-            )}
-          </span>
-          <BeatMiss actual={row.lastActual} estimate={row.lastEstimate} />
-          {beatDelta !== null && (
-            <span style={{
-              fontSize: 10, fontFamily: 'monospace',
-              color: beatDelta >= 0 ? '#22c55e' : '#ef4444',
-            }}>
-              ({beatDelta >= 0 ? '+' : ''}{beatDelta.toFixed(2)})
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
+          {entries.length}건
+          {filter === 'all' && entries.filter(e => WATCHLIST_SYMBOLS.has(e.symbol)).length > 0 && (
+            <span style={{ color: '#3b82f6', marginLeft: 4 }}>
+              (내 종목 {entries.filter(e => WATCHLIST_SYMBOLS.has(e.symbol)).length})
             </span>
+          )}
+        </div>
+      </div>
+
+      {sorted.length === 0 ? (
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', padding: '12px 0' }}>
+          {filter === 'watchlist' ? '없음' : '데이터 없음'}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {sorted.slice(0, filter === 'all' ? 60 : 30).map(e => (
+            <EntryRow key={e.symbol + e.date} e={e} highlight={WATCHLIST_SYMBOLS.has(e.symbol)} />
+          ))}
+          {filter === 'all' && sorted.length > 60 && (
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>
+              +{sorted.length - 60}건 더
+            </div>
           )}
         </div>
       )}
@@ -133,68 +153,94 @@ function EarningsCard({ row }: { row: EarningsRow }) {
   )
 }
 
-function LoadingCard() {
-  return (
-    <div style={{ height: 110, borderRadius: 12, background: 'var(--bg-card)', animation: 'pulse 1.4s ease infinite' }} />
-  )
-}
-
 export default function EarningsPage() {
-  const [rows, setRows] = useState<EarningsRow[]>([])
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [data, setData] = useState<{ days: string[]; entries: EarningEntry[] } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState<'all' | 'watchlist'>('all')
 
-  useEffect(() => {
-    const assets = getEarningsAssets()
-    Promise.all(
-      assets.map(a =>
-        fetch(`/api/earnings?symbol=${a.id}`)
-          .then(r => r.json())
-          .then((d: EarningsData) => ({
-            ...d,
-            label: a.label,
-            daysUntil: daysFrom(d.nextDate),
-          }))
-          .catch((): EarningsRow => ({
-            symbol: a.id, label: a.label,
-            nextDate: null, epsEstimate: null, revenueEstimate: null,
-            lastQuarter: null, lastActual: null, lastEstimate: null,
-            daysUntil: null,
-          }))
-      )
-    ).then(results => {
-      // sort: upcoming first (nearest), then past (most recent), then unknown
-      const sorted = [...results].sort((a, b) => {
-        if (a.daysUntil === null && b.daysUntil === null) return 0
-        if (a.daysUntil === null) return 1
-        if (b.daysUntil === null) return -1
-        const af = a.daysUntil >= 0, bf = b.daysUntil >= 0
-        if (af && bf) return a.daysUntil - b.daysUntil   // upcoming: nearest first
-        if (!af && !bf) return b.daysUntil - a.daysUntil // past: most recent first
-        return af ? -1 : 1                                // upcoming before past
-      })
-      setRows(sorted)
-    }).finally(() => setLoading(false))
+  const load = useCallback((offset: number) => {
+    setLoading(true)
+    setData(null)
+    fetch(`/api/earnings-calendar?week=${offset}`)
+      .then(r => r.json())
+      .then(j => setData(j))
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => { load(weekOffset) }, [weekOffset, load])
+
+  const days = data?.days ?? []
+  const entries = data?.entries ?? []
+
   return (
-    <div style={{ padding: '16px', maxWidth: 700, margin: '0 auto' }}>
-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>실적 캘린더</h1>
-        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-          D-7 이내 빨간 테두리 · 전분기 Beat/Miss 표시
-        </p>
+    <div style={{ padding: '16px', maxWidth: 1100, margin: '0 auto' }}>
+      {/* header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>실적 캘린더</h1>
+          {days.length === 5 && (
+            <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
+              {fmtWeekRange(days)}
+            </p>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* filter */}
+          <div style={{ display: 'flex', gap: 3, background: 'var(--bg-card)', borderRadius: 8, padding: 3 }}>
+            {(['all', 'watchlist'] as const).map(f => (
+              <button key={f} onClick={() => setFilter(f)} style={{
+                padding: '4px 10px', borderRadius: 6, fontSize: 11, border: 'none',
+                background: filter === f ? 'var(--info)' : 'transparent',
+                color: filter === f ? '#fff' : 'var(--text-muted)',
+                cursor: 'pointer',
+              }}>{f === 'all' ? '전체' : '내 종목'}</button>
+            ))}
+          </div>
+          {/* week nav */}
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button onClick={() => setWeekOffset(w => w - 1)} style={{
+              padding: '5px 10px', borderRadius: 7, fontSize: 13, border: '1px solid var(--border)',
+              background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer',
+            }}>←</button>
+            <button onClick={() => setWeekOffset(0)} style={{
+              padding: '5px 10px', borderRadius: 7, fontSize: 11, border: '1px solid var(--border)',
+              background: weekOffset === 0 ? 'var(--info)' : 'var(--bg-card)',
+              color: weekOffset === 0 ? '#fff' : 'var(--text-muted)', cursor: 'pointer',
+            }}>이번 주</button>
+            <button onClick={() => setWeekOffset(w => w + 1)} style={{
+              padding: '5px 10px', borderRadius: 7, fontSize: 13, border: '1px solid var(--border)',
+              background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer',
+            }}>→</button>
+          </div>
+        </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {loading
-          ? Array.from({ length: 8 }).map((_, i) => <LoadingCard key={i} />)
-          : rows.map(r => <EarningsCard key={r.symbol} row={r} />)
-        }
-      </div>
+      {/* calendar grid */}
+      {loading ? (
+        <div style={{ display: 'flex', gap: 8 }}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} style={{ flex: 1, height: 300, borderRadius: 10, background: 'var(--bg-card)', opacity: 0.4 }} />
+          ))}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          {days.map((date, i) => (
+            <DayColumn
+              key={date}
+              date={date}
+              dayIdx={i}
+              entries={entries.filter(e => e.date === date)}
+              filter={filter}
+            />
+          ))}
+        </div>
+      )}
 
-      <p style={{ marginTop: 12, fontSize: 10, color: 'var(--text-muted)' }}>
-        Yahoo Finance · 1시간 캐시 · EPS는 Non-GAAP 기준
+      <p style={{ marginTop: 10, fontSize: 10, color: 'var(--text-muted)' }}>
+        Nasdaq 공개 API · 30분 캐시 · 파란색 = 내 워치리스트 종목 · EPS는 Non-GAAP 기준
       </p>
     </div>
   )
