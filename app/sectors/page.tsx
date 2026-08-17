@@ -23,9 +23,7 @@ interface SectorData {
 
 interface SpyData { price: number; changePct: number }
 
-type SortKey = 'changePct'
 type ViewMode = 'heatmap' | 'table'
-type Period   = '1D' | '1W' | '1M'
 
 function heatColor(pct: number | null): string {
   if (pct === null) return '#1e293b'
@@ -64,8 +62,6 @@ export default function SectorsPage() {
   const [error, setError]       = useState<string | null>(null)
   const [fetchedAt, setFetchedAt] = useState<number | null>(null)
   const [view, setView]         = useState<ViewMode>('heatmap')
-  const [sort, setSort]         = useState<SortKey>('changePct')
-  const [period, setPeriod]     = useState<Period>('1D')
   const [selected, setSelected]     = useState<SectorData | null>(null)
   const [holdings, setHoldings]     = useState<Holding[]>([])
   const [holdLoading, setHoldLoad]  = useState(false)
@@ -113,6 +109,7 @@ export default function SectorsPage() {
     : null
 
   return (
+    <>
     <div style={{ padding: '16px', maxWidth: 900, margin: '0 auto' }}>
       {/* 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -255,73 +252,6 @@ export default function SectorsPage() {
         </div>
       )}
 
-      {/* ── 선택된 섹터 상세 ── */}
-      {selected && (
-        <div className="card" style={{ marginTop: 16, padding: '14px 16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>{selected.etf}</p>
-              <h2 style={{ margin: '2px 0 8px', fontSize: 18, fontWeight: 700 }}>{selected.label}</h2>
-            </div>
-            <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-            {[
-              { label: '현재가',   v: selected.price ? `$${selected.price.toFixed(2)}` : '—' },
-              { label: '1D 등락', v: <PctBadge v={selected.changePct} /> },
-              { label: 'vs SPY',  v: <RsBadge v={selected.rs1d} /> },
-            ].map(item => (
-              <div key={item.label} style={{ background: 'var(--bg-surface)', borderRadius: 8, padding: '10px 12px' }}>
-                <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)' }}>{item.label}</p>
-                <p className="num" style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700 }}>{item.v}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* 구성종목 */}
-          <div style={{ marginTop: 14 }}>
-            <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              주요 구성종목
-            </p>
-            {holdLoading ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} style={{ height: 28, borderRadius: 6, background: 'var(--bg-surface)', opacity: 0.6 }} />
-                ))}
-              </div>
-            ) : holdings.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>데이터 없음</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {holdings.slice(0, 10).map(h => {
-                  const chgCls = h.changePct === null ? 'flat' : h.changePct > 0 ? 'up' : h.changePct < 0 ? 'down' : 'flat'
-                  return (
-                    <div key={h.symbol} style={{
-                      display: 'grid',
-                      gridTemplateColumns: '52px 1fr auto auto auto',
-                      alignItems: 'center', gap: 8,
-                      padding: '6px 10px', borderRadius: 8, background: 'var(--bg-surface)',
-                    }}>
-                      <span className="num" style={{ fontSize: 13, fontWeight: 700 }}>{h.symbol}</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name}</span>
-                      <span className="num" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                        {h.price !== null ? `$${h.price.toFixed(h.price >= 100 ? 1 : 2)}` : '—'}
-                      </span>
-                      <span className={`num ${chgCls}`} style={{ fontSize: 11, minWidth: 52, textAlign: 'right' }}>
-                        {h.changePct !== null ? `${h.changePct >= 0 ? '+' : ''}${h.changePct.toFixed(2)}%` : '—'}
-                      </span>
-                      <span className="num" style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 32, textAlign: 'right' }}>
-                        {(h.pct * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* 범례 */}
       {view === 'heatmap' && (
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 14, flexWrap: 'wrap' }}>
@@ -345,11 +275,110 @@ export default function SectorsPage() {
       )}
 
       <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1 }
-          50% { opacity: 0.4 }
-        }
+        @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
+        @keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
       `}</style>
     </div>
+
+    {/* ── 바텀시트: 섹터 상세 ── */}
+
+    {selected && (
+      <>
+        {/* 백드롭 */}
+        <div
+          onClick={() => setSelected(null)}
+          style={{
+            position: 'fixed', inset: 0, background: '#00000066',
+            backdropFilter: 'blur(2px)', zIndex: 200,
+          }}
+        />
+
+        {/* 패널 */}
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0,
+          background: 'var(--bg-card)', borderTop: '1px solid var(--border)',
+          borderRadius: '16px 16px 0 0',
+          maxHeight: '70vh', overflowY: 'auto',
+          zIndex: 201,
+          animation: 'slideUp 220ms cubic-bezier(0.32, 0.72, 0, 1)',
+          padding: '0 0 env(safe-area-inset-bottom)',
+        }}>
+          {/* 핸들 */}
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border)' }} />
+          </div>
+
+          <div style={{ padding: '0 16px 24px' }}>
+            {/* 헤더 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{selected.etf}</p>
+                <h2 style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800 }}>{selected.label}</h2>
+              </div>
+              <button onClick={() => setSelected(null)} style={{
+                width: 28, height: 28, borderRadius: 6,
+                background: 'var(--bg-hover)', border: '1px solid var(--border)',
+                color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>✕</button>
+            </div>
+
+            {/* 스탯 3개 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
+              {[
+                { label: '현재가',   v: selected.price ? `$${selected.price.toFixed(2)}` : '—' },
+                { label: '1D 등락', v: <PctBadge v={selected.changePct} /> },
+                { label: 'vs SPY',  v: <RsBadge v={selected.rs1d} /> },
+              ].map(item => (
+                <div key={item.label} style={{ background: 'var(--bg-surface)', borderRadius: 10, padding: '10px 12px' }}>
+                  <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{item.label}</p>
+                  <p className="num" style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700 }}>{item.v}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* 구성종목 */}
+            <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              주요 구성종목 top 10
+            </p>
+            {holdLoading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} style={{ height: 32, borderRadius: 8, background: 'var(--bg-surface)', opacity: 0.6, animation: 'pulse 1.5s infinite' }} />
+                ))}
+              </div>
+            ) : holdings.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>데이터 없음 (휴장일이거나 Yahoo 응답 없음)</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {holdings.slice(0, 10).map(h => {
+                  const chgCls = h.changePct === null ? 'flat' : h.changePct > 0 ? 'up' : h.changePct < 0 ? 'down' : 'flat'
+                  return (
+                    <div key={h.symbol} style={{
+                      display: 'grid', gridTemplateColumns: '52px 1fr auto auto auto',
+                      alignItems: 'center', gap: 8,
+                      padding: '7px 10px', borderRadius: 8, background: 'var(--bg-surface)',
+                    }}>
+                      <span className="num" style={{ fontSize: 13, fontWeight: 700 }}>{h.symbol}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name}</span>
+                      <span className="num" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        {h.price !== null ? `$${h.price.toFixed(h.price >= 100 ? 1 : 2)}` : '—'}
+                      </span>
+                      <span className={`num ${chgCls}`} style={{ fontSize: 11, minWidth: 52, textAlign: 'right' }}>
+                        {h.changePct !== null ? `${h.changePct >= 0 ? '+' : ''}${h.changePct.toFixed(2)}%` : '—'}
+                      </span>
+                      <span className="num" style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 32, textAlign: 'right' }}>
+                        {(h.pct * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </>
+    )}
+    </>
   )
 }
