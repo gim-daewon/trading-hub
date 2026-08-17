@@ -25,13 +25,13 @@ interface CreditState {
 function YieldCurveChart({ points }: { points: YieldPoint[] }) {
   const valid = points.filter((p): p is YieldPoint & { rate: number } => p.rate !== null)
   if (valid.length < 2) return (
-    <div style={{ height: 164, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+    <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
       데이터 없음
     </div>
   )
 
-  const W = 560, H = 164
-  const PAD = { top: 16, right: 8, bottom: 28, left: 40 }
+  const W = 560, H = 160
+  const PAD = { top: 20, right: 8, bottom: 24, left: 40 }
   const cW = W - PAD.left - PAD.right
   const cH = H - PAD.top - PAD.bottom
 
@@ -50,7 +50,6 @@ function YieldCurveChart({ points }: { points: YieldPoint[] }) {
   const inverted = r2y !== null && r10y !== null && r2y > r10y
   const lineColor = inverted ? '#ef4444' : '#22c55e'
 
-  // SVG path (skips null points)
   const segs: string[] = []
   let cmd = 'M'
   points.forEach((p, i) => {
@@ -61,39 +60,66 @@ function YieldCurveChart({ points }: { points: YieldPoint[] }) {
   })
   const d = segs.join(' ')
 
-  // Area fill bounds
   const validIdxs = points.map((p, i) => p.rate !== null ? i : -1).filter(i => i >= 0)
   const fi = validIdxs[0], li = validIdxs[validIdxs.length - 1]
   const areaD = `${d} L ${toX(li).toFixed(1)},${(PAD.top + cH).toFixed(1)} L ${toX(fi).toFixed(1)},${(PAD.top + cH).toFixed(1)} Z`
 
-  // Y-axis ticks (3)
   const yTicks = [yMax, (yMax + yMin) / 2, yMin]
+  const midY = PAD.top + cH / 2
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 164, display: 'block' }}>
-      {/* grid */}
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 160, display: 'block' }}>
       {yTicks.map((v, i) => (
         <line key={i} x1={PAD.left} y1={toY(v)} x2={W - PAD.right} y2={toY(v)}
           stroke="#1e293b" strokeWidth="1" />
       ))}
-      {/* y labels */}
       {yTicks.map((v, i) => (
         <text key={i} x={PAD.left - 4} y={toY(v) + 3} fontSize="9" fill="#475569"
           textAnchor="end" fontFamily="monospace">{v.toFixed(2)}%</text>
       ))}
-      {/* area */}
       <path d={areaD} fill={lineColor} fillOpacity="0.08" />
-      {/* curve */}
       <path d={d} fill="none" stroke={lineColor} strokeWidth="2" strokeLinejoin="round" />
-      {/* points + x labels */}
-      {points.map((p, i) => p.rate === null ? null : (
-        <g key={p.id}>
-          <circle cx={toX(i)} cy={toY(p.rate)} r="3" fill={lineColor} />
-          <text x={toX(i)} y={H - 4} fontSize="9" fill="#475569"
-            textAnchor="middle" fontFamily="monospace">{p.label}</text>
-        </g>
-      ))}
+      {points.map((p, i) => {
+        if (p.rate === null) return null
+        const cx = toX(i)
+        const cy = toY(p.rate)
+        // place rate label above dot if dot is in lower half, below if in upper half
+        const above = cy >= midY
+        const labelY = above ? cy - 6 : cy + 13
+        return (
+          <g key={p.id}>
+            <circle cx={cx} cy={cy} r="3" fill={lineColor} />
+            <text x={cx} y={labelY} fontSize="8.5" fill={lineColor}
+              textAnchor="middle" fontFamily="monospace" fontWeight="600">
+              {p.rate.toFixed(2)}
+            </text>
+            <text x={cx} y={H - 4} fontSize="8.5" fill="#475569"
+              textAnchor="middle" fontFamily="monospace">{p.label}</text>
+          </g>
+        )
+      })}
     </svg>
+  )
+}
+
+function YieldRateTable({ points }: { points: YieldPoint[] }) {
+  return (
+    <div style={{ display: 'flex', gap: 3, marginTop: 10, overflowX: 'auto', paddingBottom: 2 }}>
+      {points.map(p => (
+        <div key={p.id} style={{
+          flex: '1 0 0', minWidth: 44, textAlign: 'center',
+          padding: '6px 2px', borderRadius: 6, background: 'var(--bg-base)',
+        }}>
+          <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginBottom: 4, letterSpacing: '0.03em' }}>{p.label}</div>
+          <div style={{
+            fontSize: 13, fontFamily: 'monospace', fontWeight: 700,
+            color: p.rate !== null ? 'var(--text-primary)' : 'var(--text-muted)',
+          }}>
+            {p.rate !== null ? p.rate.toFixed(2) : '—'}
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -328,12 +354,15 @@ export default function MarketPage() {
       {/* ── 1. 수익률 곡선 ────────────────────────────────────────────── */}
       <section style={{ marginBottom: 28 }}>
         <SectionHead title="수익률 곡선" sub="미국 국채 만기별 금리 · FRED" />
-        <div className="card" style={{ padding: '14px 16px 8px' }}>
+        <div className="card" style={{ padding: '14px 16px 12px' }}>
           {curveLoading
-            ? <div style={{ height: 164, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>로딩 중...</div>
+            ? <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>로딩 중...</div>
             : curve
-              ? <YieldCurveChart points={curve.points} />
-              : <div style={{ height: 164, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>FRED API 키 확인 필요</div>
+              ? <>
+                  <YieldCurveChart points={curve.points} />
+                  <YieldRateTable points={curve.points} />
+                </>
+              : <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>FRED API 키 확인 필요</div>
           }
         </div>
         {curve && (
