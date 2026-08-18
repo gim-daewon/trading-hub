@@ -65,6 +65,7 @@ export default function SectorsPage() {
   const [selected, setSelected]     = useState<SectorData | null>(null)
   const [holdings, setHoldings]     = useState<Holding[]>([])
   const [holdLoading, setHoldLoad]  = useState(false)
+  const [holdSource, setHoldSource] = useState<string>('static')
 
   const load = useCallback(async () => {
     try {
@@ -97,8 +98,8 @@ export default function SectorsPage() {
     setHoldLoad(true)
     fetch(`/api/etf-holdings?etf=${selected.etf}`)
       .then(r => r.json())
-      .then(j => setHoldings(j.holdings ?? []))
-      .catch(() => setHoldings([]))
+      .then(j => { setHoldings(j.holdings ?? []); setHoldSource(j.source ?? 'static') })
+      .catch(() => { setHoldings([]); setHoldSource('static') })
       .finally(() => setHoldLoad(false))
   }, [selected])
 
@@ -338,9 +339,18 @@ export default function SectorsPage() {
             </div>
 
             {/* 구성종목 */}
-            <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              주요 구성종목 top 10
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                주요 구성종목 top 10
+              </p>
+              <span style={{
+                fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 3,
+                background: holdSource === 'ishares' ? 'rgba(34,197,94,0.15)' : 'rgba(100,116,139,0.15)',
+                color:      holdSource === 'ishares' ? '#22c55e' : '#64748b',
+              }}>
+                {holdSource === 'ishares' ? 'iShares 실시간' : holdSource === 'yahoo' ? 'Yahoo' : '정적 데이터'}
+              </span>
+            </div>
             {holdLoading ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {Array.from({ length: 5 }).map((_, i) => (
