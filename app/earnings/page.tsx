@@ -1,89 +1,69 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
-import { ASSETS } from '@/lib/registry'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import type { CSSProperties } from 'react'
 import type { EarningEntry } from '@/app/api/earnings-calendar/route'
 
-const WATCHLIST_SYMBOLS = new Set(ASSETS.map(a => a.id.toUpperCase()))
-const ASSET_LABEL = Object.fromEntries(ASSETS.map(a => [a.id.toUpperCase(), a.label]))
-
 const DAY_KO = ['월', '화', '수', '목', '금']
-const MONTH_KO = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
+const MONTH_KO = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월']
 
-function fmtDayLabel(dateStr: string, idx: number): string {
+function fmtDayLabel(dateStr: string, idx: number) {
   const d = new Date(dateStr)
   return `${MONTH_KO[d.getMonth()]} ${d.getDate()}일 (${DAY_KO[idx]})`
 }
 
-function fmtWeekRange(days: string[]): string {
+function fmtWeekRange(days: string[]) {
   if (days.length < 5) return ''
   const a = new Date(days[0]), b = new Date(days[4])
   return `${a.getMonth() + 1}/${a.getDate()} – ${b.getMonth() + 1}/${b.getDate()}`
 }
 
-function isToday(dateStr: string): boolean {
-  return dateStr === new Date().toISOString().slice(0, 10)
-}
-
-function EpsChange({ actual, estimate }: { actual: number | null; estimate: number | null }) {
+function EpsBadge({ actual, estimate }: { actual: number | null; estimate: number | null }) {
   if (actual === null || estimate === null) return null
   const beat = actual >= estimate
   const delta = actual - estimate
   return (
     <span style={{
-      marginLeft: 4, fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3,
+      fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, flexShrink: 0,
       background: beat ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)',
       color: beat ? '#22c55e' : '#ef4444',
     }}>
-      {beat ? '▲' : '▼'} {delta >= 0 ? '+' : ''}{delta.toFixed(2)}
+      {delta >= 0 ? '+' : ''}{delta.toFixed(2)}
     </span>
   )
 }
 
-function EntryRow({ e, highlight }: { e: EarningEntry; highlight: boolean }) {
+function EntryRow({ e }: { e: EarningEntry }) {
   const reported = e.epsActual !== null
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px',
-      borderRadius: 6, background: highlight ? 'rgba(59,130,246,0.1)' : 'transparent',
-      borderLeft: highlight ? '2px solid #3b82f6' : '2px solid transparent',
-      opacity: reported ? 0.65 : 1,
+      display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px',
+      borderBottom: '1px solid var(--border)', opacity: reported ? 0.6 : 1,
     }}>
-      {/* time badge */}
       <span style={{
-        fontSize: 8, fontWeight: 700, width: 22, textAlign: 'center',
-        padding: '1px 0', borderRadius: 3, flexShrink: 0,
+        fontSize: 9, fontWeight: 700, width: 28, textAlign: 'center', flexShrink: 0,
+        padding: '2px 0', borderRadius: 3,
         background: e.time === 'pre'  ? 'rgba(251,191,36,0.2)'
                   : e.time === 'post' ? 'rgba(99,102,241,0.2)' : 'rgba(100,116,139,0.15)',
-        color:    e.time === 'pre'  ? '#f59e0b'
-                : e.time === 'post' ? '#818cf8' : '#64748b',
+        color: e.time === 'pre' ? '#f59e0b' : e.time === 'post' ? '#818cf8' : '#64748b',
       }}>
         {e.time === 'pre' ? '장전' : e.time === 'post' ? '장후' : '?'}
       </span>
-
-      {/* symbol + name */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <span style={{
-          fontSize: 12, fontWeight: highlight ? 800 : 700, fontFamily: 'monospace',
-          color: highlight ? '#3b82f6' : 'var(--text-primary)',
-        }}>{e.symbol}</span>
-        {highlight && ASSET_LABEL[e.symbol] && (
-          <span style={{ fontSize: 9, color: '#3b82f6', marginLeft: 4 }}>{ASSET_LABEL[e.symbol]}</span>
-        )}
-        {!highlight && (
-          <span style={{
-            display: 'block', fontSize: 9, color: 'var(--text-muted)',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>{e.name}</span>
-        )}
-      </div>
-
-      {/* EPS */}
-      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+      <span style={{
+        fontSize: 13, fontWeight: 800, fontFamily: 'monospace', width: 64, flexShrink: 0,
+        color: 'var(--text-primary)',
+      }}>{e.symbol}</span>
+      <span style={{
+        flex: 1, fontSize: 11, color: 'var(--text-muted)',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>{e.name}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
         {reported ? (
-          <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
-            ${e.epsActual!.toFixed(2)}
-            <EpsChange actual={e.epsActual} estimate={e.epsEstimate} />
-          </span>
+          <>
+            <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+              ${e.epsActual!.toFixed(2)}
+            </span>
+            <EpsBadge actual={e.epsActual} estimate={e.epsEstimate} />
+          </>
         ) : e.epsEstimate !== null ? (
           <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
             ${e.epsEstimate.toFixed(2)}e
@@ -94,90 +74,152 @@ function EntryRow({ e, highlight }: { e: EarningEntry; highlight: boolean }) {
   )
 }
 
-function DayColumn({ date, dayIdx, entries, filter }: {
-  date: string
-  dayIdx: number
-  entries: EarningEntry[]
-  filter: 'all' | 'watchlist'
-}) {
-  const today = isToday(date)
-  const visible = filter === 'watchlist'
-    ? entries.filter(e => WATCHLIST_SYMBOLS.has(e.symbol))
-    : entries
-
-  // watchlist entries first, then rest
-  const sorted = [
-    ...visible.filter(e => WATCHLIST_SYMBOLS.has(e.symbol)),
-    ...visible.filter(e => !WATCHLIST_SYMBOLS.has(e.symbol)),
-  ]
-
+function SectionGroup({ title, entries }: { title: string; entries: EarningEntry[] }) {
+  const [limit, setLimit] = useState(25)
   return (
-    <div style={{
-      flex: 1, minWidth: 0,
-      background: today ? 'rgba(59,130,246,0.04)' : 'var(--bg-card)',
-      borderRadius: 10, padding: '10px 8px',
-      border: today ? '1px solid rgba(59,130,246,0.3)' : '1px solid var(--border)',
-    }}>
-      {/* day header */}
-      <div style={{ marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
-        <div style={{ fontSize: 10, color: today ? '#3b82f6' : 'var(--text-muted)', fontWeight: today ? 700 : 400 }}>
-          {fmtDayLabel(date, dayIdx)}
-        </div>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
-          {entries.length}건
-          {filter === 'all' && entries.filter(e => WATCHLIST_SYMBOLS.has(e.symbol)).length > 0 && (
-            <span style={{ color: '#3b82f6', marginLeft: 4 }}>
-              (내 종목 {entries.filter(e => WATCHLIST_SYMBOLS.has(e.symbol)).length})
-            </span>
-          )}
-        </div>
+    <div>
+      <div style={{
+        padding: '5px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+        color: 'var(--text-muted)', background: 'rgba(255,255,255,0.025)',
+        borderBottom: '1px solid var(--border)',
+      }}>
+        {title} · {entries.length}건
       </div>
-
-      {sorted.length === 0 ? (
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', padding: '12px 0' }}>
-          {filter === 'watchlist' ? '없음' : '데이터 없음'}
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          {sorted.slice(0, filter === 'all' ? 60 : 30).map(e => (
-            <EntryRow key={e.symbol + e.date} e={e} highlight={WATCHLIST_SYMBOLS.has(e.symbol)} />
-          ))}
-          {filter === 'all' && sorted.length > 60 && (
-            <div style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>
-              +{sorted.length - 60}건 더
-            </div>
-          )}
-        </div>
+      {entries.slice(0, limit).map(e => <EntryRow key={e.symbol + e.date} e={e} />)}
+      {entries.length > limit && (
+        <button onClick={() => setLimit(l => l + 25)} style={{
+          display: 'block', width: '100%', padding: 10,
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: '#60a5fa', fontSize: 11,
+        }}>
+          +{entries.length - limit}건 더 보기
+        </button>
       )}
     </div>
   )
 }
 
+function DayList({ entries, label }: { entries: EarningEntry[]; label: string }) {
+  const pre   = entries.filter(e => e.time === 'pre')
+  const post  = entries.filter(e => e.time === 'post')
+  const other = entries.filter(e => e.time !== 'pre' && e.time !== 'post')
+
+  if (!entries.length) {
+    return (
+      <div style={{
+        background: 'var(--bg-card)', borderRadius: 10, padding: 48,
+        textAlign: 'center', color: 'var(--text-muted)', fontSize: 13,
+        border: '1px solid var(--border)',
+      }}>
+        실적 발표 없음
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ background: 'var(--bg-card)', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
+      <div style={{
+        padding: '11px 16px', borderBottom: '1px solid var(--border)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{label}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>총 {entries.length}건</span>
+      </div>
+      {pre.length   > 0 && <SectionGroup title="장전"     entries={pre} />}
+      {post.length  > 0 && <SectionGroup title="장후"     entries={post} />}
+      {other.length > 0 && <SectionGroup title="시간 미정" entries={other} />}
+    </div>
+  )
+}
+
+function SearchResults({ days, filtered }: { days: string[]; filtered: EarningEntry[] }) {
+  if (!filtered.length) {
+    return (
+      <div style={{
+        background: 'var(--bg-card)', borderRadius: 10, padding: 48,
+        textAlign: 'center', color: 'var(--text-muted)', fontSize: 13,
+        border: '1px solid var(--border)',
+      }}>
+        검색 결과 없음
+      </div>
+    )
+  }
+  return (
+    <div style={{ background: 'var(--bg-card)', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
+      <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--text-muted)' }}>
+        {filtered.length}건 매치
+      </div>
+      {days.map((date, i) => {
+        const dayEntries = filtered.filter(e => e.date === date)
+        if (!dayEntries.length) return null
+        return (
+          <div key={date}>
+            <div style={{
+              padding: '5px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+              color: 'var(--text-muted)', background: 'rgba(255,255,255,0.025)',
+              borderBottom: '1px solid var(--border)',
+            }}>
+              {fmtDayLabel(date, i)} · {dayEntries.length}건
+            </div>
+            {dayEntries.map(e => <EntryRow key={e.symbol + e.date} e={e} />)}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function EarningsPage() {
-  const [weekOffset, setWeekOffset] = useState(0)
-  const [data, setData] = useState<{ days: string[]; entries: EarningEntry[] } | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'watchlist'>('all')
+  const [weekOffset, setWeekOffset]   = useState(0)
+  const [data, setData]               = useState<{ days: string[]; entries: EarningEntry[] } | null>(null)
+  const [loading, setLoading]         = useState(true)
+  const [selectedDay, setSelectedDay] = useState(0)
+  const [search, setSearch]           = useState('')
 
   const load = useCallback((offset: number) => {
     setLoading(true)
     setData(null)
     fetch(`/api/earnings-calendar?week=${offset}`)
       .then(r => r.json())
-      .then(j => setData(j))
+      .then(j => {
+        setData(j)
+        const today = new Date().toISOString().slice(0, 10)
+        const idx = (j.days as string[])?.indexOf(today) ?? -1
+        setSelectedDay(idx >= 0 ? idx : 0)
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { load(weekOffset) }, [weekOffset, load])
 
-  const days = data?.days ?? []
+  const days    = data?.days ?? []
   const entries = data?.entries ?? []
 
+  const q = search.trim().toLowerCase()
+  const filtered = useMemo(() =>
+    q ? entries.filter(e =>
+      e.symbol.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)
+    ) : null
+  , [entries, q])
+
+  const dayEntries = useMemo(() =>
+    days[selectedDay] ? entries.filter(e => e.date === days[selectedDay]) : []
+  , [entries, days, selectedDay])
+
+  const btnBase: CSSProperties = {
+    padding: '5px 10px', borderRadius: 7, fontSize: 13,
+    border: '1px solid var(--border)', background: 'var(--bg-card)',
+    color: 'var(--text-primary)', cursor: 'pointer',
+  }
+
   return (
-    <div style={{ padding: '16px', maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: '16px', maxWidth: 860, margin: '0 auto' }}>
       {/* header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 14, flexWrap: 'wrap', gap: 8,
+      }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>실적 캘린더</h1>
           {days.length === 5 && (
@@ -186,61 +228,80 @@ export default function EarningsPage() {
             </p>
           )}
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* filter */}
-          <div style={{ display: 'flex', gap: 3, background: 'var(--bg-card)', borderRadius: 8, padding: 3 }}>
-            {(['all', 'watchlist'] as const).map(f => (
-              <button key={f} onClick={() => setFilter(f)} style={{
-                padding: '4px 10px', borderRadius: 6, fontSize: 11, border: 'none',
-                background: filter === f ? 'var(--info)' : 'transparent',
-                color: filter === f ? '#fff' : 'var(--text-muted)',
-                cursor: 'pointer',
-              }}>{f === 'all' ? '전체' : '내 종목'}</button>
-            ))}
-          </div>
-          {/* week nav */}
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button onClick={() => setWeekOffset(w => w - 1)} style={{
-              padding: '5px 10px', borderRadius: 7, fontSize: 13, border: '1px solid var(--border)',
-              background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer',
-            }}>←</button>
-            <button onClick={() => setWeekOffset(0)} style={{
-              padding: '5px 10px', borderRadius: 7, fontSize: 11, border: '1px solid var(--border)',
-              background: weekOffset === 0 ? 'var(--info)' : 'var(--bg-card)',
-              color: weekOffset === 0 ? '#fff' : 'var(--text-muted)', cursor: 'pointer',
-            }}>이번 주</button>
-            <button onClick={() => setWeekOffset(w => w + 1)} style={{
-              padding: '5px 10px', borderRadius: 7, fontSize: 13, border: '1px solid var(--border)',
-              background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer',
-            }}>→</button>
-          </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button onClick={() => setWeekOffset(w => w - 1)} style={btnBase}>←</button>
+          <button onClick={() => setWeekOffset(0)} style={{
+            ...btnBase,
+            background: weekOffset === 0 ? 'var(--info)' : 'var(--bg-card)',
+            color: weekOffset === 0 ? '#fff' : 'var(--text-muted)',
+          }}>이번 주</button>
+          <button onClick={() => setWeekOffset(w => w + 1)} style={btnBase}>→</button>
         </div>
       </div>
 
-      {/* calendar grid */}
-      {loading ? (
-        <div style={{ display: 'flex', gap: 8 }}>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} style={{ flex: 1, height: 300, borderRadius: 10, background: 'var(--bg-card)', opacity: 0.4 }} />
-          ))}
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-          {days.map((date, i) => (
-            <DayColumn
-              key={date}
-              date={date}
-              dayIdx={i}
-              entries={entries.filter(e => e.date === date)}
-              filter={filter}
-            />
-          ))}
+      {/* search */}
+      <div style={{ position: 'relative', marginBottom: 12 }}>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="티커 또는 회사명 검색..."
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            padding: '9px 36px 9px 12px', borderRadius: 8,
+            border: `1px solid ${q ? 'rgba(59,130,246,0.5)' : 'var(--border)'}`,
+            background: 'var(--bg-card)', color: 'var(--text-primary)',
+            fontSize: 13, outline: 'none',
+          }}
+        />
+        {search && (
+          <button onClick={() => setSearch('')} style={{
+            position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+            background: 'none', border: 'none', color: 'var(--text-muted)',
+            cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0,
+          }}>×</button>
+        )}
+      </div>
+
+      {/* day tabs — hidden when searching */}
+      {!loading && !q && days.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+          {days.map((date, i) => {
+            const cnt     = entries.filter(e => e.date === date).length
+            const isToday = date === new Date().toISOString().slice(0, 10)
+            const active  = i === selectedDay
+            return (
+              <button key={date} onClick={() => setSelectedDay(i)} style={{
+                flex: 1, padding: '8px 4px', borderRadius: 8, cursor: 'pointer',
+                border: `1px solid ${active ? '#3b82f6' : 'var(--border)'}`,
+                background: active ? 'rgba(59,130,246,0.12)' : 'var(--bg-card)',
+                color: active ? '#60a5fa' : isToday ? '#f59e0b' : 'var(--text-muted)',
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{DAY_KO[i]}</div>
+                <div style={{ fontSize: 10, marginTop: 2 }}>{cnt}건</div>
+                {isToday && <div style={{ fontSize: 8, marginTop: 1, color: '#f59e0b' }}>오늘</div>}
+              </button>
+            )
+          })}
         </div>
       )}
 
+      {/* content */}
+      {loading ? (
+        <div style={{
+          background: 'var(--bg-card)', borderRadius: 10, height: 280,
+          opacity: 0.4, border: '1px solid var(--border)',
+        }} />
+      ) : filtered !== null ? (
+        <SearchResults days={days} filtered={filtered} />
+      ) : (
+        <DayList
+          entries={dayEntries}
+          label={days[selectedDay] ? fmtDayLabel(days[selectedDay], selectedDay) : ''}
+        />
+      )}
+
       <p style={{ marginTop: 10, fontSize: 10, color: 'var(--text-muted)' }}>
-        Nasdaq 공개 API · 30분 캐시 · 파란색 = 내 워치리스트 종목 · EPS는 Non-GAAP 기준
+        Nasdaq 공개 API · 30분 캐시 · EPS Non-GAAP 기준
       </p>
     </div>
   )
