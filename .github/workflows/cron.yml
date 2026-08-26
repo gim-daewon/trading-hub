@@ -1,0 +1,39 @@
+name: Trading Hub Daily Alert
+
+on:
+  # KST 07:30 = UTC 22:30 (prev day) → Sun-Thu UTC = Mon-Fri KST
+  # KST 17:00 = UTC 08:00            → Mon-Fri UTC
+  schedule:
+    - cron: '30 22 * * 0-4'   # 07:30 KST 아침 알림
+    - cron: '0 8 * * 1-5'     # 17:00 KST 저녁 알림
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'morning or afternoon'
+        required: false
+        default: 'morning'
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine type
+        id: type
+        run: |
+          # manual dispatch: use input; scheduled: infer from UTC hour
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "type=${{ github.event.inputs.type }}" >> $GITHUB_OUTPUT
+          elif [ "$(date -u +%H)" = "22" ]; then
+            echo "type=morning" >> $GITHUB_OUTPUT
+          else
+            echo "type=afternoon" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Call collect endpoint
+        run: |
+          STATUS=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.VERCEL_URL }}/api/cron/collect?type=${{ steps.type.outputs.type }}")
+          echo "HTTP $STATUS"
+          cat /tmp/resp.json
+          [ "$STATUS" = "200" ] || exit 1
