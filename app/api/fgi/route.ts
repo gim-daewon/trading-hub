@@ -19,7 +19,7 @@ export async function GET() {
   try {
     const res = await fetch(
       'https://production.dataviz.cnn.io/index/fearandgreed/graphdata',
-      { headers: CNN_HEADERS, cache: 'no-store' }
+      { headers: CNN_HEADERS, next: { revalidate: 300 } }
     )
     if (!res.ok) throw new Error(`CNN FGI ${res.status}`)
 

@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import IndexCard from './components/IndexCard'
 
-// ── 자산 그룹 ── 지수 추가 시 여기에만 추가
 const US_FUTURES = [
   { id: 'YM=F',  label: '다우 선물' },
   { id: 'ES=F',  label: 'ES 선물' },
@@ -48,7 +47,6 @@ function Pct({ v }: { v: number }) {
 function Head({ title }: { title: string }) {
   return <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{title}</p>
 }
-
 function FgiCard({ fgi }: { fgi: Fgi | null }) {
   if (!fgi) return <Skeleton />
   const { score, change, ratingKo } = fgi
@@ -67,14 +65,36 @@ function FgiCard({ fgi }: { fgi: Fgi | null }) {
   )
 }
 
+interface CardsProps {
+  assets: { id: string; label: string; noChart?: boolean }[]
+  cols: number
+  quotes: QuoteMap
+  loading: boolean
+}
+function Cards({ assets, cols, quotes, loading }: CardsProps) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8 }}>
+      {assets.map(a => {
+        const q = quotes[a.id]
+        return loading || !q
+          ? <Skeleton key={a.id} />
+          : <IndexCard key={a.id} symbol={a.id} label={a.label} price={q.price} changePct={q.changePct} noChart={a.noChart} />
+      })}
+    </div>
+  )
+}
+
 export default function HomePage() {
   const [quotes, setQuotes]   = useState<QuoteMap>({})
   const [fgi, setFgi]         = useState<Fgi | null>(null)
   const [topSector, setTop]   = useState<SectorTop | null>(null)
   const [botSector, setBot]   = useState<SectorTop | null>(null)
   const [loading, setLoading] = useState(true)
+  const [now, setNow]         = useState('')
 
   useEffect(() => {
+    setNow(new Date().toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }))
+
     const yahooSymbols = [...new Set(ALL_YAHOO_GROUPS.map(a => a.id))]
     const symbolsParam = yahooSymbols.map(encodeURIComponent).join(',')
 
@@ -87,48 +107,39 @@ export default function HomePage() {
       const q: QuoteMap = {}
 
       if (quotesRes.status === 'fulfilled' && quotesRes.value.ok) {
-        const j = await quotesRes.value.json()
-        for (const [id, d] of Object.entries(j.data as Record<string, Q>))
-          q[id] = { price: d.price, changePct: d.changePct }
+        try {
+          const j = await quotesRes.value.json()
+          for (const [id, d] of Object.entries(j.data as Record<string, Q>))
+            q[id] = { price: d.price, changePct: d.changePct }
+        } catch {}
       }
 
       if (fredRes.status === 'fulfilled' && fredRes.value.ok) {
-        const j = await fredRes.value.json()
-        const d = j.data?.DGS2
-        if (d) q['DGS2'] = { price: d.value, changePct: d.prevValue ? (d.change / d.prevValue) * 100 : 0 }
+        try {
+          const j = await fredRes.value.json()
+          const d = j.data?.DGS2
+          if (d) q['DGS2'] = { price: d.value, changePct: d.prevValue ? (d.change / d.prevValue) * 100 : 0 }
+        } catch {}
       }
 
       setQuotes(q)
 
       if (sectorsRes.status === 'fulfilled' && sectorsRes.value.ok) {
-        const j = await sectorsRes.value.json()
-        const s: SectorTop[] = j.sectors ?? []
-        if (s.length > 0) { setTop(s[0]); setBot(s[s.length - 1]) }
+        try {
+          const j = await sectorsRes.value.json()
+          const s: SectorTop[] = j.sectors ?? []
+          if (s.length > 0) { setTop(s[0]); setBot(s[s.length - 1]) }
+        } catch {}
       }
 
       if (fgiRes.status === 'fulfilled' && fgiRes.value.ok) {
-        const j = await fgiRes.value.json()
-        if (!j.error) setFgi(j)
+        try {
+          const j = await fgiRes.value.json()
+          if (!j.error) setFgi(j)
+        } catch {}
       }
-
-      setLoading(false)
-    })
+    }).catch(() => {}).finally(() => setLoading(false))
   }, [])
-
-  const now = new Date().toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-
-  function Cards({ assets, cols }: { assets: { id: string; label: string; noChart?: boolean }[]; cols: number }) {
-    return (
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8 }}>
-        {assets.map(a => {
-          const q = quotes[a.id]
-          return loading || !q
-            ? <Skeleton key={a.id} />
-            : <IndexCard key={a.id} symbol={a.id} label={a.label} price={q.price} changePct={q.changePct} noChart={a.noChart} />
-        })}
-      </div>
-    )
-  }
 
   return (
     <div style={{ padding: '16px', maxWidth: 700, margin: '0 auto' }}>
@@ -137,13 +148,11 @@ export default function HomePage() {
         <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>{now}</p>
       </div>
 
-      {/* 미국 선물 */}
       <section style={{ marginBottom: 20 }}>
         <Head title="미국 선물" />
-        <Cards assets={US_FUTURES} cols={2} />
+        <Cards assets={US_FUTURES} cols={2} quotes={quotes} loading={loading} />
       </section>
 
-      {/* 변동성 */}
       <section style={{ marginBottom: 20 }}>
         <Head title="변동성" />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
@@ -155,31 +164,26 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 한국 */}
       <section style={{ marginBottom: 20 }}>
         <Head title="한국" />
-        <Cards assets={KR} cols={2} />
+        <Cards assets={KR} cols={2} quotes={quotes} loading={loading} />
       </section>
 
-      {/* 원자재 */}
       <section style={{ marginBottom: 20 }}>
         <Head title="원자재" />
-        <Cards assets={COMMODITIES} cols={3} />
+        <Cards assets={COMMODITIES} cols={3} quotes={quotes} loading={loading} />
       </section>
 
-      {/* 크립토 */}
       <section style={{ marginBottom: 20 }}>
         <Head title="크립토 선물" />
-        <Cards assets={CRYPTO} cols={2} />
+        <Cards assets={CRYPTO} cols={2} quotes={quotes} loading={loading} />
       </section>
 
-      {/* 금리 & 환율 */}
       <section style={{ marginBottom: 20 }}>
         <Head title="금리 & 환율" />
-        <Cards assets={RATES_FX} cols={2} />
+        <Cards assets={RATES_FX} cols={2} quotes={quotes} loading={loading} />
       </section>
 
-      {/* 섹터 자금 흐름 */}
       <section style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <Head title="섹터 자금 흐름" />
@@ -206,7 +210,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 바로 가기 */}
       <section>
         <Head title="바로 가기" />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
