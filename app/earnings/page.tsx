@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { CSSProperties } from 'react'
 import type { EarningEntry } from '@/app/api/earnings-calendar/route'
+import type { EarningDetail } from '@/app/api/earnings-detail/route'
 
 const DAY_KO = ['월', '화', '수', '목', '금']
 const MONTH_KO = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월']
@@ -17,59 +18,141 @@ function fmtWeekRange(days: string[]) {
   return `${a.getMonth() + 1}/${a.getDate()} – ${b.getMonth() + 1}/${b.getDate()}`
 }
 
-function EpsBadge({ actual, estimate }: { actual: number | null; estimate: number | null }) {
-  if (actual === null || estimate === null) return null
-  const beat = actual >= estimate
-  const delta = actual - estimate
+function DetailPanel({ symbol }: { symbol: string }) {
+  const [detail, setDetail]   = useState<EarningDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/earnings-detail?symbol=${symbol}`)
+      .then(r => r.json())
+      .then(j => { if (!j.error) setDetail(j) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [symbol])
+
+  const row = (label: string, val: string | null, surp: string | null, pct: string | null) => {
+    if (!val) return null
+    const positive = surp ? !surp.startsWith('-') : null
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', width: 40, flexShrink: 0 }}>{label}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace' }}>{val}</span>
+        {surp && (
+          <span style={{
+            fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
+            background: positive ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)',
+            color: positive ? '#22c55e' : '#ef4444',
+          }}>
+            {surp}{pct ? ` (${pct})` : ''}
+          </span>
+        )}
+      </div>
+    )
+  }
+
   return (
-    <span style={{
-      fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, flexShrink: 0,
-      background: beat ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)',
-      color: beat ? '#22c55e' : '#ef4444',
+    <div style={{
+      padding: '10px 14px 12px',
+      background: 'rgba(255,255,255,0.02)',
+      borderBottom: '1px solid var(--border)',
     }}>
-      {delta >= 0 ? '+' : ''}{delta.toFixed(2)}
-    </span>
+      {loading ? (
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>로딩 중...</span>
+      ) : !detail ? (
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>상세 데이터 없음</span>
+      ) : (
+        <div>
+          {detail.fiscalQuarterEnding && (
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 6, letterSpacing: '0.06em' }}>
+              분기: {detail.fiscalQuarterEnding}
+            </div>
+          )}
+          {row('매출', detail.revActual, detail.revSurprise, detail.revSurpPct)}
+          {row('추정', detail.revEstimate, null, null)}
+          {detail.epsSurpPct && (
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+              EPS 서프라이즈: <span style={{ color: !detail.epsSurprise?.startsWith('-') ? '#22c55e' : '#ef4444', fontWeight: 700 }}>{detail.epsSurprise} ({detail.epsSurpPct})</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
 function EntryRow({ e }: { e: EarningEntry }) {
+  const [open, setOpen] = useState(false)
+
   const reported = e.epsActual !== null
+  const beat = reported && e.epsEstimate !== null && e.epsActual! >= e.epsEstimate
+  const miss = reported && e.epsEstimate !== null && e.epsActual! < e.epsEstimate
+  const accentColor = beat ? '#22c55e' : miss ? '#ef4444' : null
+
+  const surpPct = (reported && e.epsEstimate && e.epsEstimate !== 0)
+    ? ((e.epsActual! - e.epsEstimate) / Math.abs(e.epsEstimate) * 100)
+    : null
+
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px',
-      borderBottom: '1px solid var(--border)', opacity: reported ? 0.6 : 1,
-    }}>
-      <span style={{
-        fontSize: 9, fontWeight: 700, width: 28, textAlign: 'center', flexShrink: 0,
-        padding: '2px 0', borderRadius: 3,
-        background: e.time === 'pre'  ? 'rgba(251,191,36,0.2)'
-                  : e.time === 'post' ? 'rgba(99,102,241,0.2)' : 'rgba(100,116,139,0.15)',
-        color: e.time === 'pre' ? '#f59e0b' : e.time === 'post' ? '#818cf8' : '#64748b',
-      }}>
-        {e.time === 'pre' ? '장전' : e.time === 'post' ? '장후' : '?'}
-      </span>
-      <span style={{
-        fontSize: 13, fontWeight: 800, fontFamily: 'monospace', width: 64, flexShrink: 0,
-        color: 'var(--text-primary)',
-      }}>{e.symbol}</span>
-      <span style={{
-        flex: 1, fontSize: 11, color: 'var(--text-muted)',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      }}>{e.name}</span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-        {reported ? (
-          <>
-            <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
-              ${e.epsActual!.toFixed(2)}
+    <div>
+      <div
+        onClick={() => { if (reported) setOpen(o => !o) }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px',
+          borderBottom: open ? 'none' : '1px solid var(--border)',
+          cursor: reported ? 'pointer' : 'default',
+          borderLeft: accentColor ? `3px solid ${accentColor}` : '3px solid transparent',
+          background: beat ? 'rgba(34,197,94,0.04)' : miss ? 'rgba(239,68,68,0.04)' : 'transparent',
+        }}
+      >
+        <span style={{
+          fontSize: 9, fontWeight: 700, width: 28, textAlign: 'center', flexShrink: 0,
+          padding: '2px 0', borderRadius: 3,
+          background: e.time === 'pre'  ? 'rgba(251,191,36,0.2)'
+                    : e.time === 'post' ? 'rgba(99,102,241,0.2)' : 'rgba(100,116,139,0.15)',
+          color: e.time === 'pre' ? '#f59e0b' : e.time === 'post' ? '#818cf8' : '#64748b',
+        }}>
+          {e.time === 'pre' ? '장전' : e.time === 'post' ? '장후' : '?'}
+        </span>
+        <span style={{
+          fontSize: 13, fontWeight: 800, fontFamily: 'monospace', width: 64, flexShrink: 0,
+          color: 'var(--text-primary)',
+        }}>{e.symbol}</span>
+        <span style={{
+          flex: 1, fontSize: 11, color: 'var(--text-muted)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{e.name}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+          {reported ? (
+            <>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace' }}>
+                  EPS ${e.epsActual!.toFixed(2)}
+                </div>
+                {surpPct !== null && (
+                  <div style={{ fontSize: 9, color: accentColor ?? 'var(--text-muted)', fontWeight: 700 }}>
+                    {surpPct >= 0 ? '+' : ''}{surpPct.toFixed(1)}%
+                  </div>
+                )}
+              </div>
+              {accentColor && (
+                <span style={{
+                  fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 4, flexShrink: 0,
+                  background: beat ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)',
+                  color: accentColor,
+                }}>
+                  {beat ? '어닝 서프라이즈' : '어닝 쇼크'}
+                </span>
+              )}
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{open ? '▲' : '▼'}</span>
+            </>
+          ) : e.epsEstimate !== null ? (
+            <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
+              예상 ${e.epsEstimate.toFixed(2)}
             </span>
-            <EpsBadge actual={e.epsActual} estimate={e.epsEstimate} />
-          </>
-        ) : e.epsEstimate !== null ? (
-          <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
-            ${e.epsEstimate.toFixed(2)}e
-          </span>
-        ) : null}
+          ) : null}
+        </div>
       </div>
+      {open && reported && <DetailPanel symbol={e.symbol} />}
     </div>
   )
 }
