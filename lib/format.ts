@@ -12,7 +12,8 @@ const INT = new Set([
   'FGI',  // 공탐지수 (가상)
 ])
 
-export function fmtAssetPrice(symbol: string, price: number): string {
+export function fmtAssetPrice(symbol: string, price: number | null | undefined): string {
+  if (price == null || isNaN(price)) return '—'
   if (FIXED2.has(symbol)) return price.toFixed(2)
   if (INT.has(symbol)) return price.toLocaleString('en-US', { maximumFractionDigits: 0 })
   return price.toLocaleString('en-US', { maximumFractionDigits: 2 })

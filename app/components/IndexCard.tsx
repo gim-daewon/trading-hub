@@ -14,10 +14,11 @@ interface Props {
 export default function IndexCard({ symbol, label, price, changePct, noChart }: Props) {
   const [open, setOpen] = useState(false)
 
-  const isUp = changePct > 0
-  const cls  = isUp ? 'up' : changePct < 0 ? 'down' : 'flat'
+  const pct  = changePct ?? 0
+  const isUp = pct > 0
+  const cls  = isUp ? 'up' : pct < 0 ? 'down' : 'flat'
 
-  const fmtPrice = (p: number) => fmtAssetPrice(symbol, p)
+  const fmtPrice = (p: number | null | undefined) => fmtAssetPrice(symbol, p)
 
   return (
     <>
@@ -31,7 +32,7 @@ export default function IndexCard({ symbol, label, price, changePct, noChart }: 
           {fmtPrice(price)}
         </p>
         <span className={`num ${cls}`} style={{ fontSize: 13 }}>
-          {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%
+          {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
         </span>
       </div>
 

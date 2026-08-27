@@ -209,11 +209,12 @@ function MacroStat({ label, value, prev, unit = '', fmt, alert }: {
 }) {
   const d = value === null ? '—' : fmt ? fmt(value) : `${value.toFixed(2)}${unit}`
   const chg = value !== null && prev != null ? value - prev : null
+  const chgStr = chg === null ? null : fmt ? fmt(Math.abs(chg)) : `${Math.abs(chg).toFixed(2)}${unit}`
   return (
-    <div style={{ background: 'var(--bg-base)', borderRadius: 8, padding: '10px 12px', border: alert ? '1px solid #ef4444' : undefined }}>
-      <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: '0 0 3px', lineHeight: 1.2 }}>{label}</p>
-      <p style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace', margin: '0 0 1px', color: alert ? '#ef4444' : 'var(--text-primary)' }}>{d}</p>
-      {chg !== null && <p style={{ fontSize: 10, margin: 0, color: chg > 0 ? '#ef4444' : '#22c55e' }}>{chg > 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(2)}</p>}
+    <div style={{ background: 'var(--bg-base)', borderRadius: 8, padding: '10px 12px', border: alert ? '1px solid #ef4444' : undefined, overflow: 'hidden' }}>
+      <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: '0 0 3px', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</p>
+      <p style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace', margin: '0 0 1px', color: alert ? '#ef4444' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d}</p>
+      {chgStr !== null && <p style={{ fontSize: 10, margin: 0, color: chg! > 0 ? '#ef4444' : '#22c55e', whiteSpace: 'nowrap' }}>{chg! > 0 ? '▲' : '▼'} {chgStr}</p>}
     </div>
   )
 }
@@ -379,8 +380,8 @@ export default function MarketPage() {
   const q = mktQ
   const d = (s?: MStat | null) => (s?.value != null && s?.prev != null) ? s.value - s.prev : null
 
-  const GRID5 = { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 } as const
-  const GRID4 = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 } as const
+  const GRID5 = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: 8 } as const
+  const GRID4 = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(88px, 1fr))', gap: 8 } as const
 
   return (
     <div style={{ padding: '16px', maxWidth: 900, margin: '0 auto' }}>
