@@ -41,6 +41,9 @@
   --duration: 150ms;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
 
+  /* 레이아웃: 모바일 하단 네비 높이 (데스크톱은 0으로 덮어씀) */
+  --nav-h: calc(58px + env(safe-area-inset-bottom));
+
   background: var(--bg-base);
   color: var(--text-primary);
 }
@@ -53,7 +56,48 @@ body {
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
-  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  /* 가로 바운스만 차단. 세로는 브라우저 당겨서 새로고침을 살린다 */
+  overscroll-behavior-x: none;
+}
+
+/* ── 네비게이션 표시 분기 ────────────────────────────────────────────── */
+.mobile-nav { display: flex; }
+.desktop-sidebar { display: none; }
+
+@media (min-width: 768px) {
+  :root { --nav-h: 0px; }
+  .mobile-nav { display: none !important; }
+  .desktop-sidebar { display: flex; }
+}
+
+/* 바텀시트 공용 애니메이션 */
+@keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
+
+/* ── 차트 모달: 모바일 하단 시트 / 데스크톱 중앙 ─────────────────────── */
+.chart-modal {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 85dvh;
+  border-radius: 16px 16px 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: slideUp 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (min-width: 768px) {
+  .chart-modal {
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    width: min(660px, calc(100vw - 32px));
+    max-height: calc(100dvh - 64px);
+    border-radius: 16px;
+    padding-bottom: 0;
+    animation: none;
+  }
 }
 
 /* 숫자는 항상 monospace (가격, % 변동) */
@@ -67,12 +111,16 @@ body {
   transition: border-color var(--duration) var(--ease),
               background   var(--duration) var(--ease);
 }
-.card:hover { border-color: #2d3f5c; }
 .card-interactive {
   cursor: pointer;
 }
-.card-interactive:hover { background: var(--bg-hover); }
 .card-interactive:active { transform: scale(0.99); }
+
+/* hover는 실제 포인터 기기에서만. 터치에서 탭 후 스타일이 잔류하는 걸 막는다 */
+@media (hover: hover) and (pointer: fine) {
+  .card:hover { border-color: #2d3f5c; }
+  .card-interactive:hover { background: var(--bg-hover); }
+}
 
 /* ── 상승/하락 ───────────────────────────────────────────────────────── */
 .up   { color: var(--up); }
@@ -93,7 +141,11 @@ body {
               filter   var(--duration) var(--ease);
   cursor: pointer;
 }
-.heat-cell:hover { transform: scale(1.04); filter: brightness(1.15); }
+.heat-cell:active { filter: brightness(1.15); }
+
+@media (hover: hover) and (pointer: fine) {
+  .heat-cell:hover { transform: scale(1.04); filter: brightness(1.15); }
+}
 
 /* ── 상태 pill ───────────────────────────────────────────────────────── */
 .pill {
@@ -110,11 +162,6 @@ body {
 .pill-warn   { background: #78350f33; color: var(--warn); }
 .pill-danger { background: #7f1d1d55; color: var(--danger); }
 .pill-stale  { background: #1e293b;   color: var(--text-muted); }
-
-/* 모바일 콘텐츠 상단 — 햄버거 버튼 공간 */
-@media (max-width: 767px) {
-  main > div:first-child { padding-top: 56px !important; }
-}
 
 /* ── 스크롤바 ────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }

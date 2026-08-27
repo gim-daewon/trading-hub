@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import PageHeader from '../components/PageHeader'
 
 interface Holding {
   symbol: string
@@ -105,38 +106,22 @@ export default function SectorsPage() {
 
   const sorted = [...sectors].sort((a, b) => (b.changePct ?? -999) - (a.changePct ?? -999))
 
-  const timeStr = fetchedAt
-    ? new Date(fetchedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-    : null
-
   return (
     <>
     <div style={{ padding: '16px', maxWidth: 900, margin: '0 auto' }}>
-      {/* 헤더 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>섹터 자금 흐름</h1>
-          {spy && (
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
-              SPY <span className="num" style={{ color: spy.changePct >= 0 ? 'var(--up)' : 'var(--down)' }}>
-                {pctLabel(spy.changePct)}
-              </span>
-              {timeStr && <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>기준 {timeStr}</span>}
-            </p>
-          )}
-        </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          style={{
-            background: 'var(--bg-card)', border: '1px solid var(--border)',
-            color: 'var(--text-secondary)', borderRadius: 8, padding: '6px 12px',
-            fontSize: 12, cursor: loading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {loading ? '로딩...' : '새로고침'}
-        </button>
-      </div>
+      <PageHeader
+        title="섹터 자금 흐름"
+        fetchedAt={fetchedAt}
+        onRefresh={load}
+        loading={loading}
+        sub={spy && (
+          <span style={{ color: 'var(--text-secondary)' }}>
+            SPY <span className="num" style={{ color: spy.changePct >= 0 ? 'var(--up)' : 'var(--down)' }}>
+              {pctLabel(spy.changePct)}
+            </span>
+          </span>
+        )}
+      />
 
       {/* 뷰/정렬 토글 */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -277,7 +262,6 @@ export default function SectorsPage() {
 
       <style>{`
         @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
-        @keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
       `}</style>
     </div>
 

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#0a0e1a"/>
+  <!-- maskable safe zone(중앙 80%) 안에 캔들 배치 -->
+  <g stroke-width="10" stroke-linecap="round">
+    <line x1="176" y1="196" x2="176" y2="356" stroke="#ef4444"/>
+    <line x1="256" y1="128" x2="256" y2="396" stroke="#22c55e"/>
+    <line x1="336" y1="164" x2="336" y2="340" stroke="#22c55e"/>
+  </g>
+  <rect x="152" y="224" width="48" height="104" rx="4" fill="#ef4444"/>
+  <rect x="232" y="160" width="48" height="200" rx="4" fill="#22c55e"/>
+  <rect x="312" y="192" width="48" height="128" rx="4" fill="#22c55e"/>
+</svg>

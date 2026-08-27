@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import IndexCard from './components/IndexCard'
+import PageHeader from './components/PageHeader'
 
 const US_FUTURES = [
   { id: 'YM=F',  label: '다우 선물' },
@@ -90,10 +91,10 @@ export default function HomePage() {
   const [topSector, setTop]   = useState<SectorTop | null>(null)
   const [botSector, setBot]   = useState<SectorTop | null>(null)
   const [loading, setLoading] = useState(true)
-  const [now, setNow]         = useState('')
+  const [fetchedAt, setFetchedAt] = useState<number | null>(null)
 
-  useEffect(() => {
-    setNow(new Date().toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }))
+  const load = useCallback(() => {
+    setLoading(true)
 
     const yahooSymbols = [...new Set(ALL_YAHOO_GROUPS.map(a => a.id))]
     const symbolsParam = yahooSymbols.map(encodeURIComponent).join(',')
@@ -138,15 +139,17 @@ export default function HomePage() {
           if (!j.error) setFgi(j)
         } catch {}
       }
-    }).catch(() => {}).finally(() => setLoading(false))
+    }).catch(() => {}).finally(() => {
+      setFetchedAt(Date.now())
+      setLoading(false)
+    })
   }, [])
+
+  useEffect(() => { load() }, [load])
 
   return (
     <div style={{ padding: '16px', maxWidth: 700, margin: '0 auto' }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>Trading Hub</h1>
-        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>{now}</p>
-      </div>
+      <PageHeader title="Trading Hub" fetchedAt={fetchedAt} onRefresh={load} loading={loading} />
 
       <section style={{ marginBottom: 20 }}>
         <Head title="미국 선물" />

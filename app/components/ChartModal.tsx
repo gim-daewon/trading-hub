@@ -13,7 +13,7 @@ const RANGES = [
 ]
 
 function CandleChart({ candles }: { candles: Candle[] }) {
-  const [hover, setHover] = useState<(Candle & { cx: number }) | null>(null)
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
 
   if (candles.length === 0) {
     return (
@@ -45,11 +45,27 @@ function CandleChart({ candles }: { candles: Candle[] }) {
 
   const fmt = (p: number) => p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+  const hover = hoverIdx !== null ? candles[hoverIdx] : null
+  const hoverX = hoverIdx !== null ? toX(hoverIdx) : 0
+
+  // 마우스·터치 공용. clientX를 viewBox 좌표로 환산해 캔들 인덱스를 역산한다
+  const scrub = (e: React.PointerEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    if (rect.width === 0) return
+    const vx = ((e.clientX - rect.left) / rect.width) * W
+    const i = Math.floor((vx - PAD.left) / step)
+    setHoverIdx(i >= 0 && i < n ? i : null)
+  }
+
   return (
     <div style={{ position: 'relative' }}>
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        style={{ width: '100%', height: 240, display: 'block', cursor: 'crosshair' }}
+        style={{ width: '100%', height: 240, display: 'block', cursor: 'crosshair', touchAction: 'pan-y' }}
+        onPointerDown={scrub}
+        onPointerMove={e => { if (e.pointerType === 'mouse' || e.buttons > 0) scrub(e) }}
+        onPointerLeave={() => setHoverIdx(null)}
+        onPointerUp={e => { if (e.pointerType !== 'mouse') setHoverIdx(null) }}
       >
         {/* grid */}
         {[0.25, 0.5, 0.75].map(t => (
@@ -70,17 +86,11 @@ function CandleChart({ candles }: { candles: Candle[] }) {
           const bodyH = Math.max(1, bodyBot - bodyTop)
 
           return (
-            <g
-              key={c.date}
-              onMouseEnter={() => setHover({ ...c, cx: x })}
-              onMouseLeave={() => setHover(null)}
-            >
+            <g key={c.date}>
               {/* wick */}
               <line x1={x} y1={toY(c.high)} x2={x} y2={toY(c.low)} stroke={color} strokeWidth="1" />
               {/* body */}
               <rect x={x - bodyW / 2} y={bodyTop} width={bodyW} height={bodyH} fill={color} />
-              {/* hover target */}
-              <rect x={x - step / 2} y={PAD.top} width={step} height={chartH} fill="transparent" />
             </g>
           )
         })}
@@ -88,26 +98,26 @@ function CandleChart({ candles }: { candles: Candle[] }) {
         {/* crosshair */}
         {hover && (
           <line
-            x1={hover.cx} y1={PAD.top} x2={hover.cx} y2={H - PAD.bottom}
-            stroke="#ffffff18" strokeWidth="1" strokeDasharray="3 3"
+            x1={hoverX} y1={PAD.top} x2={hoverX} y2={H - PAD.bottom}
+            stroke="#ffffff30" strokeWidth="1.5" strokeDasharray="3 3"
           />
         )}
 
         {/* price axis */}
-        <text x={PAD.left + 2} y={PAD.top - 6} fontSize="9" fill="#475569" fontFamily="monospace">
+        <text x={PAD.left + 2} y={PAD.top - 8} fontSize="15" fill="#64748b" fontFamily="monospace">
           {fmt(rawMax)}
         </text>
-        <text x={PAD.left + 2} y={H - PAD.bottom + 14} fontSize="9" fill="#475569" fontFamily="monospace">
+        <text x={PAD.left + 2} y={H - PAD.bottom + 18} fontSize="15" fill="#64748b" fontFamily="monospace">
           {fmt(rawMin)}
         </text>
 
         {/* date axis */}
         {candles.length > 1 && (
           <>
-            <text x={PAD.left} y={H - 2} fontSize="9" fill="#334155" fontFamily="monospace">
+            <text x={PAD.left} y={H - 2} fontSize="14" fill="#475569" fontFamily="monospace">
               {candles[0].date}
             </text>
-            <text x={W - PAD.right} y={H - 2} fontSize="9" fill="#334155" fontFamily="monospace" textAnchor="end">
+            <text x={W - PAD.right} y={H - 2} fontSize="14" fill="#475569" fontFamily="monospace" textAnchor="end">
               {candles[candles.length - 1].date}
             </text>
           </>
@@ -117,10 +127,12 @@ function CandleChart({ candles }: { candles: Candle[] }) {
       {/* OHLC tooltip */}
       {hover && (
         <div style={{
-          position: 'absolute', top: 6, left: 6,
+          position: 'absolute', top: 6,
+          // 스크럽 위치 반대편에 붙여 손가락에 가리지 않게 한다
+          ...(hoverX > W / 2 ? { left: 6 } : { right: 6 }),
           background: 'var(--bg-surface)', border: '1px solid var(--border)',
           borderRadius: 6, padding: '6px 10px',
-          pointerEvents: 'none', fontFamily: 'var(--font-mono)', fontSize: 11,
+          pointerEvents: 'none', fontFamily: 'var(--font-mono)', fontSize: 12,
         }}>
           <div style={{ color: 'var(--text-muted)', marginBottom: 4 }}>{hover.date}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: '1px 10px' }}>
@@ -189,13 +201,10 @@ export default function ChartModal({ symbol, label, price, changePct, onClose }:
       {/* backdrop */}
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: '#00000088', backdropFilter: 'blur(4px)', zIndex: 100 }} />
 
-      {/* modal */}
-      <div style={{
-        position: 'fixed', top: '50%', left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: 'min(660px, calc(100vw - 32px))',
+      {/* modal — 데스크톱은 중앙, 모바일은 하단 시트 (chart-modal 클래스) */}
+      <div className="chart-modal" style={{
+        position: 'fixed', zIndex: 101, overflowY: 'auto',
         background: 'var(--bg-card)', border: '1px solid var(--border)',
-        borderRadius: 16, zIndex: 101, overflow: 'hidden',
       }}>
         {/* header */}
         <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -210,20 +219,20 @@ export default function ChartModal({ symbol, label, price, changePct, onClose }:
                 {isUp ? '+' : ''}{changePct.toFixed(2)}%
               </span>
             </div>
-            <button onClick={onClose} style={{
-              width: 28, height: 28, borderRadius: 6,
+            <button onClick={onClose} aria-label="닫기" style={{
+              width: 40, height: 40, borderRadius: 10, flexShrink: 0,
               background: 'var(--bg-hover)', border: '1px solid var(--border)',
-              color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14,
+              color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>✕</button>
           </div>
         </div>
 
         {/* range */}
-        <div style={{ display: 'flex', gap: 4, padding: '12px 20px 4px' }}>
+        <div style={{ display: 'flex', gap: 6, padding: '12px 20px 4px' }}>
           {RANGES.map(r => (
             <button key={r.value} onClick={() => setRange(r.value)} style={{
-              padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12,
+              flex: 1, minHeight: 40, borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13,
               background: range === r.value ? 'var(--info)' : 'var(--bg-hover)',
               color: range === r.value ? '#fff' : 'var(--text-muted)',
               fontWeight: range === r.value ? 600 : 400,

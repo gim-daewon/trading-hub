@@ -146,6 +146,7 @@ export interface NavSection {
   label: string
   href: string
   icon: string  // emoji
+  soon?: boolean  // 아직 구현 안 된 스텁 페이지
 }
 
 export const NAV_SECTIONS: NavSection[] = [
@@ -154,10 +155,14 @@ export const NAV_SECTIONS: NavSection[] = [
   { id: 'sectors',  label: '섹터',         href: '/sectors',  icon: '🔥' },
   { id: 'earnings', label: '실적',         href: '/earnings', icon: '📅' },
   { id: 'calendar', label: '캘린더',       href: '/calendar', icon: '📆' },
-  { id: 'journal',  label: '매매일지',     href: '/journal',  icon: '📒' },
-  { id: 'credit',   label: 'AI크레딧',     href: '/credit',   icon: '⚠' },
-  { id: 'desk',     label: '데스크',       href: '/desk',     icon: '💼' },
+  { id: 'journal',  label: '매매일지',     href: '/journal',  icon: '📒', soon: true },
+  { id: 'credit',   label: 'AI크레딧',     href: '/credit',   icon: '⚠',  soon: true },
+  { id: 'desk',     label: '데스크',       href: '/desk',     icon: '💼', soon: true },
 ]
+
+// 모바일 하단 네비 = primary 4개 + 더보기. 나머지는 더보기 시트로.
+export const PRIMARY_NAV = NAV_SECTIONS.slice(0, 4)
+export const SECONDARY_NAV = NAV_SECTIONS.slice(4)
 
 // 헬퍼
 export const getSectorMeta = (id: SectorId) =>

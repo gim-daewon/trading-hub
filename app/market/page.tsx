@@ -1,5 +1,49 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import PageHeader from '../components/PageHeader'
+
+// 섹션 점프 바 높이만큼 스크롤 여백을 줘야 제목이 가리지 않는다
+const SECTION = { marginBottom: 28, scrollMarginTop: 60 } as const
+
+const JUMP_TARGETS = [
+  { id: 'yield',      label: '수익률곡선' },
+  { id: 'liquidity',  label: '유동성' },
+  { id: 'inflation',  label: '인플레' },
+  { id: 'employment', label: '고용' },
+  { id: 'fx',         label: '환율' },
+  { id: 'commodity',  label: '원자재' },
+  { id: 'global',     label: '글로벌' },
+  { id: 'relperf',    label: '상대성과' },
+  { id: 'credit',     label: '신용' },
+  { id: 'stress',     label: '스트레스' },
+  { id: 'cycle',      label: '경기' },
+]
+
+function SectionJump() {
+  return (
+    <div style={{
+      position: 'sticky', top: 0, zIndex: 10,
+      display: 'flex', gap: 6, overflowX: 'auto',
+      margin: '0 -16px 18px', padding: '8px 16px',
+      background: 'var(--bg-base)',
+      borderBottom: '1px solid var(--border)',
+      scrollbarWidth: 'none',
+    }}>
+      {JUMP_TARGETS.map(t => (
+        <button
+          key={t.id}
+          onClick={() => document.getElementById(t.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          style={{
+            flexShrink: 0, minHeight: 36, padding: '0 14px', borderRadius: 18,
+            border: '1px solid var(--border)', background: 'var(--bg-card)',
+            color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >{t.label}</button>
+      ))}
+    </div>
+  )
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -28,7 +72,8 @@ function YieldCurveChart({ points }: { points: YieldPoint[] }) {
     <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>데이터 없음</div>
   )
   const W = 560, H = 160
-  const PAD = { top: 20, right: 8, bottom: 24, left: 40 }
+  // left/bottom은 확대된 축 라벨(fontSize 15)이 잘리지 않을 만큼 확보
+  const PAD = { top: 22, right: 10, bottom: 28, left: 62 }
   const cW = W - PAD.left - PAD.right, cH = H - PAD.top - PAD.bottom
   const rates = valid.map(p => p.rate)
   const minR = Math.min(...rates), maxR = Math.max(...rates), rng = maxR - minR || 0.1
@@ -52,7 +97,7 @@ function YieldCurveChart({ points }: { points: YieldPoint[] }) {
       {[yMax, (yMax + yMin) / 2, yMin].map((v, i) => (
         <g key={i}>
           <line x1={PAD.left} y1={toY(v)} x2={W - PAD.right} y2={toY(v)} stroke="#1e293b" strokeWidth="1" />
-          <text x={PAD.left - 4} y={toY(v) + 3} fontSize="9" fill="#475569" textAnchor="end" fontFamily="monospace">{v.toFixed(2)}%</text>
+          <text x={PAD.left - 6} y={toY(v) + 5} fontSize="15" fill="#64748b" textAnchor="end" fontFamily="monospace">{v.toFixed(2)}%</text>
         </g>
       ))}
       <path d={areaD} fill={lineColor} fillOpacity="0.08" />
@@ -64,8 +109,8 @@ function YieldCurveChart({ points }: { points: YieldPoint[] }) {
         return (
           <g key={p.id}>
             <circle cx={cx} cy={cy} r="3" fill={lineColor} />
-            <text x={cx} y={above ? cy - 6 : cy + 13} fontSize="8.5" fill={lineColor} textAnchor="middle" fontFamily="monospace" fontWeight="600">{p.rate.toFixed(2)}</text>
-            <text x={cx} y={H - 4} fontSize="8.5" fill="#475569" textAnchor="middle" fontFamily="monospace">{p.label}</text>
+            <text x={cx} y={above ? cy - 9 : cy + 19} fontSize="14" fill={lineColor} textAnchor="middle" fontFamily="monospace" fontWeight="600">{p.rate.toFixed(2)}</text>
+            <text x={cx} y={H - 5} fontSize="14" fill="#64748b" textAnchor="middle" fontFamily="monospace">{p.label}</text>
           </g>
         )
       })}
@@ -96,7 +141,7 @@ function RelPerfChart({ series }: { series: PerfLine[] }) {
     <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>데이터 없음</div>
   )
   const W = 560, H = 220
-  const PAD = { top: 16, right: 8, bottom: 28, left: 46 }
+  const PAD = { top: 18, right: 10, bottom: 30, left: 68 }
   const cW = W - PAD.left - PAD.right, cH = H - PAD.top - PAD.bottom
   const allPcts = series.flatMap(s => s.pts.map(p => p.pct))
   const rawMin = Math.min(0, ...allPcts), rawMax = Math.max(0, ...allPcts), rng = rawMax - rawMin || 1
@@ -110,7 +155,7 @@ function RelPerfChart({ series }: { series: PerfLine[] }) {
       {yTicks.map((v, i) => (
         <g key={i}>
           <line x1={PAD.left} y1={toY(v)} x2={W - PAD.right} y2={toY(v)} stroke="#1e293b" strokeWidth="1" />
-          <text x={PAD.left - 4} y={toY(v) + 3} fontSize="9" fill="#475569" textAnchor="end" fontFamily="monospace">{v >= 0 ? '+' : ''}{v.toFixed(1)}%</text>
+          <text x={PAD.left - 6} y={toY(v) + 5} fontSize="15" fill="#64748b" textAnchor="end" fontFamily="monospace">{v >= 0 ? '+' : ''}{v.toFixed(1)}%</text>
         </g>
       ))}
       {zeroY >= PAD.top && zeroY <= PAD.top + cH && (
@@ -132,8 +177,8 @@ function RelPerfChart({ series }: { series: PerfLine[] }) {
         if (!ref) return null
         return (
           <>
-            <text x={PAD.left} y={H - 4} fontSize="9" fill="#334155" fontFamily="monospace">{ref.pts[0].date}</text>
-            <text x={W - PAD.right} y={H - 4} fontSize="9" fill="#334155" textAnchor="end" fontFamily="monospace">{ref.pts[ref.pts.length - 1].date}</text>
+            <text x={PAD.left} y={H - 5} fontSize="14" fill="#475569" fontFamily="monospace">{ref.pts[0].date}</text>
+            <text x={W - PAD.right} y={H - 5} fontSize="14" fill="#475569" textAnchor="end" fontFamily="monospace">{ref.pts[ref.pts.length - 1].date}</text>
           </>
         )
       })()}
@@ -339,11 +384,7 @@ export default function MarketPage() {
   const [macroLoading, setMacroLoading] = useState(true)
   const [mktQ,         setMktQ]         = useState<MQ | null>(null)
   const [mktLoading,   setMktLoading]   = useState(true)
-
-  useEffect(() => {
-    setCurveLoading(true)
-    fetch('/api/yield-curve').then(r => r.json()).then(setCurve).catch(() => {}).finally(() => setCurveLoading(false))
-  }, [])
+  const [fetchedAt,    setFetchedAt]    = useState<number | null>(null)
 
   const loadPerf = useCallback(async (range: PerfRange) => {
     setPerfLoading(true)
@@ -366,15 +407,17 @@ export default function MarketPage() {
 
   useEffect(() => { loadPerf(perfRange) }, [perfRange, loadPerf])
 
-  useEffect(() => {
-    setMacroLoading(true)
-    fetch('/api/macro').then(r => r.json()).then(setMacro).catch(() => {}).finally(() => setMacroLoading(false))
+  // 상대성과(기간 선택 의존)를 제외한 나머지를 한 번에 갱신
+  const load = useCallback(() => {
+    setCurveLoading(true); setMacroLoading(true); setMktLoading(true)
+    Promise.allSettled([
+      fetch('/api/yield-curve').then(r => r.json()).then(setCurve).finally(() => setCurveLoading(false)),
+      fetch('/api/macro').then(r => r.json()).then(setMacro).finally(() => setMacroLoading(false)),
+      fetch('/api/market-quotes').then(r => r.json()).then(setMktQ).finally(() => setMktLoading(false)),
+    ]).then(() => setFetchedAt(Date.now()))
   }, [])
 
-  useEffect(() => {
-    setMktLoading(true)
-    fetch('/api/market-quotes').then(r => r.json()).then(setMktQ).catch(() => {}).finally(() => setMktLoading(false))
-  }, [])
+  useEffect(() => { load() }, [load])
 
   const m = macro
   const q = mktQ
@@ -383,14 +426,16 @@ export default function MarketPage() {
   const GRID5 = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: 8 } as const
   const GRID4 = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(88px, 1fr))', gap: 8 } as const
 
+  const anyLoading = curveLoading || macroLoading || mktLoading
+
   return (
     <div style={{ padding: '16px', maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>시장</h1>
-      </div>
+      <PageHeader title="시장" fetchedAt={fetchedAt} onRefresh={load} loading={anyLoading} />
+
+      <SectionJump />
 
       {/* ── 1. 수익률 곡선 ──────────────────────────────────────────── */}
-      <section style={{ marginBottom: 28 }}>
+      <section id="yield" style={SECTION}>
         <SectionHead title="수익률 곡선" sub="미국 국채 만기별 금리 · FRED" />
         <div className="card" style={{ padding: '14px 16px 12px' }}>
           {curveLoading
@@ -405,7 +450,7 @@ export default function MarketPage() {
       </section>
 
       {/* ── 2. 유동성 패널 ──────────────────────────────────────────── */}
-      <section style={{ marginBottom: 28 }}>
+      <section id="liquidity" style={SECTION}>
         <SectionHead title="유동성 패널" sub="Fed 자산 · 역레포 · TGA · 기준금리 · FRED 12h" />
         {macroLoading ? <Skel n={5} cols={5} /> : (
           <div style={GRID5}>
@@ -420,7 +465,7 @@ export default function MarketPage() {
       </section>
 
       {/* ── 3. 인플레이션 스코어카드 ────────────────────────────────── */}
-      <section style={{ marginBottom: 28 }}>
+      <section id="inflation" style={SECTION}>
         <SectionHead title="인플레이션" sub="FRED · YoY% · 12h 캐시" />
         {macroLoading ? <Skel n={5} cols={5} /> : (
           <div style={GRID5}>
@@ -435,7 +480,7 @@ export default function MarketPage() {
       </section>
 
       {/* ── 4. 고용 스코어카드 ──────────────────────────────────────── */}
-      <section style={{ marginBottom: 28 }}>
+      <section id="employment" style={SECTION}>
         <SectionHead title="고용" sub="FRED · 12h 캐시" />
         {macroLoading ? <Skel n={4} cols={4} /> : (
           <div style={GRID4}>
@@ -449,7 +494,7 @@ export default function MarketPage() {
       </section>
 
       {/* ── 5. 달러 & 환율 ──────────────────────────────────────────── */}
-      <section style={{ marginBottom: 28 }}>
+      <section id="fx" style={SECTION}>
         <SectionHead title="달러 & 환율" sub="Yahoo Finance · 5분 캐시" />
         {mktLoading ? <Skel n={5} cols={5} /> : (
           <div style={GRID5}>
@@ -464,7 +509,7 @@ export default function MarketPage() {
       </section>
 
       {/* ── 6. 원자재 ───────────────────────────────────────────────── */}
-      <section style={{ marginBottom: 28 }}>
+      <section id="commodity" style={SECTION}>
         <SectionHead title="원자재" sub="Yahoo Finance · 5분 캐시" />
         {mktLoading ? <Skel n={4} cols={4} /> : (
           <div style={GRID4}>
@@ -478,7 +523,7 @@ export default function MarketPage() {
       </section>
 
       {/* ── 7. 글로벌 증시 ──────────────────────────────────────────── */}
-      <section style={{ marginBottom: 28 }}>
+      <section id="global" style={SECTION}>
         <SectionHead title="글로벌 증시" sub="Yahoo Finance · 5분 캐시" />
         {mktLoading ? <Skel n={4} cols={4} /> : (
           <div style={GRID4}>
@@ -492,7 +537,7 @@ export default function MarketPage() {
       </section>
 
       {/* ── 8. 지수 상대성과 ────────────────────────────────────────── */}
-      <section style={{ marginBottom: 28 }}>
+      <section id="relperf" style={SECTION}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>지수 상대성과</h2>
@@ -535,7 +580,7 @@ export default function MarketPage() {
       </section>
 
       {/* ── 9. 신용 & 변동성 ────────────────────────────────────────── */}
-      <section style={{ marginBottom: 28 }}>
+      <section id="credit" style={SECTION}>
         <SectionHead title="신용 & 변동성" sub="OAS 상승 = 신용 리스크 증가 · FRED 12h · Yahoo 5min" />
         {(macroLoading || mktLoading) ? <Skel n={5} cols={5} /> : (
           <div style={GRID5}>
@@ -550,7 +595,7 @@ export default function MarketPage() {
       </section>
 
       {/* ── 10. 시장 스트레스 & 심리 ────────────────────────────────── */}
-      <section style={{ marginBottom: 28 }}>
+      <section id="stress" style={SECTION}>
         <SectionHead title="시장 스트레스 & 심리" sub="STLFSI · VVIX · SKEW" />
         {(macroLoading || mktLoading) ? <Skel n={3} cols={3} /> : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
@@ -563,7 +608,7 @@ export default function MarketPage() {
       </section>
 
       {/* ── 11. 경기 사이클 ─────────────────────────────────────────── */}
-      <section style={{ marginBottom: 16 }}>
+      <section id="cycle" style={SECTION}>
         <SectionHead title="경기 사이클" sub="GDP · Sahm Rule · 소매판매 · 주택착공 · FRED 12h" />
         {macroLoading ? <Skel n={4} cols={4} /> : (
           <div style={GRID4}>
