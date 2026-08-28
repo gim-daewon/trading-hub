@@ -62,12 +62,17 @@ body {
 }
 
 /* ── 네비게이션 표시 분기 ────────────────────────────────────────────── */
-.mobile-nav { display: flex; }
+/* display는 전적으로 이 클래스들이 소유한다.
+   컴포넌트 인라인 스타일에 display를 두면 인라인이 클래스를 이겨서
+   모바일에 데스크톱 사이드바가 뜬다 (실제로 겪은 회귀). 인라인에 두지 말 것. */
+.mobile-nav  { display: flex; }
+.mobile-only { display: block; }
 .desktop-sidebar { display: none; }
 
 @media (min-width: 768px) {
   :root { --nav-h: 0px; }
-  .mobile-nav { display: none !important; }
+  .mobile-nav,
+  .mobile-only { display: none; }
   .desktop-sidebar { display: flex; }
 }
 

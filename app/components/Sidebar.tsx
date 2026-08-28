@@ -19,7 +19,6 @@ export default function Sidebar() {
       width: 200,
       background: '#0d1420',
       borderLeft: '1px solid var(--border)',
-      display: 'flex',
       flexDirection: 'column',
       zIndex: 40,
     }}>

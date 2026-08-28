@@ -38,7 +38,6 @@ export default function BottomNav() {
     <>
       <nav className="mobile-nav" style={{
         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 70,
-        display: 'flex',
         background: 'rgba(10,14,26,0.94)',
         backdropFilter: 'blur(12px)',
         borderTop: '1px solid var(--border)',
@@ -75,10 +74,10 @@ export default function BottomNav() {
         <>
           <div
             onClick={() => setMoreOpen(false)}
-            className="mobile-nav"
+            className="mobile-only"
             style={{ position: 'fixed', inset: 0, background: '#00000088', backdropFilter: 'blur(2px)', zIndex: 68 }}
           />
-          <div className="mobile-nav" style={{
+          <div className="mobile-only" style={{
             position: 'fixed', left: 0, right: 0,
             bottom: `calc(${NAV_H}px + env(safe-area-inset-bottom))`,
             zIndex: 69,

@@ -15,6 +15,12 @@ const CNN_HEADERS = {
   'Origin': 'https://www.cnn.com',
 }
 
+// CNN이 'greed' / 'Greed' / 'extreme fear' 등 표기를 섞어 보낸다.
+// 맵 키(Title Case)에 맞춰 정규화한 뒤 조회한다.
+function toTitleCase(s: string): string {
+  return s.trim().toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
 export async function GET() {
   try {
     const res = await fetch(
@@ -36,7 +42,7 @@ export async function GET() {
       prevScore,
       change,
       rating:   fgi.rating ?? '',
-      ratingKo: RATING_KO[fgi.rating] ?? fgi.rating,
+      ratingKo: RATING_KO[toTitleCase(fgi.rating ?? '')] ?? fgi.rating ?? '',
     })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
