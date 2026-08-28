@@ -41,7 +41,7 @@ export default function IndexCard({ symbol, label, price, changePct, noChart }: 
           symbol={symbol}
           label={label}
           price={price}
-          changePct={changePct}
+          changePct={pct}
           onClose={() => setOpen(false)}
         />
       )}

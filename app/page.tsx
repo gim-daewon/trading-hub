@@ -35,13 +35,15 @@ const ALL_YAHOO_GROUPS = [...US_FUTURES, ...KR, ...COMMODITIES, ...CRYPTO,
 
 interface Q { price: number; changePct: number }
 type QuoteMap = Record<string, Q>
-interface SectorTop { label: string; changePct: number }
+// API는 데이터를 못 구한 섹터도 changePct: null로 내려준다 (예: PBS 미디어)
+interface SectorTop { label: string; changePct: number | null }
 interface Fgi { score: number; prevScore: number; change: number; ratingKo: string }
 
 function Skeleton() {
   return <div style={{ height: 72, borderRadius: 12, background: 'var(--bg-card)' }} />
 }
-function Pct({ v }: { v: number }) {
+function Pct({ v }: { v: number | null }) {
+  if (v === null) return <span className="flat" style={{ fontSize: 13 }}>—</span>
   const cls = v > 0 ? 'up' : v < 0 ? 'down' : 'flat'
   return <span className={`num ${cls}`} style={{ fontSize: 13 }}>{v >= 0 ? '+' : ''}{v.toFixed(2)}%</span>
 }
@@ -128,7 +130,11 @@ export default function HomePage() {
       if (sectorsRes.status === 'fulfilled' && sectorsRes.value.ok) {
         try {
           const j = await sectorsRes.value.json()
-          const s: SectorTop[] = j.sectors ?? []
+          // API가 null을 뒤로 정렬하므로 마지막 항목은 늘 데이터 없는 섹터다.
+          // 걸러내지 않으면 "약세"에 값 없는 섹터가 잡힌다.
+          const s: SectorTop[] = (j.sectors ?? []).filter(
+            (x: SectorTop) => x.changePct !== null
+          )
           if (s.length > 0) { setTop(s[0]); setBot(s[s.length - 1]) }
         } catch {}
       }
