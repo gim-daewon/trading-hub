@@ -4,11 +4,13 @@ import Link from 'next/link'
 import IndexCard from './components/IndexCard'
 import PageHeader from './components/PageHeader'
 
+// 전부 선물이어야 한다. 현물 지수(^NDX 등)를 섞으면 미국 정규장 마감 후
+// 그 항목만 값이 멈춰서 옆의 선물과 등락 부호가 반대로 보인다.
 const US_FUTURES = [
   { id: 'YM=F',  label: '다우 선물' },
-  { id: 'ES=F',  label: 'ES 선물' },
-  { id: '^NDX',  label: 'NASDAQ 100' },
-  { id: 'RTY=F', label: '러셀 2000' },
+  { id: 'ES=F',  label: 'S&P 선물' },
+  { id: 'NQ=F',  label: '나스닥 선물' },
+  { id: 'RTY=F', label: '러셀 선물' },
 ]
 const KR = [
   { id: '^KS11', label: 'KOSPI' },
