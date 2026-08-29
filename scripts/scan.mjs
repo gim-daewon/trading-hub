@@ -28,9 +28,11 @@ if (!/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(SUPABASE_URL)) {
 }
 console.log(`Supabase: ${SUPABASE_URL}`)
 
-// Vercel 라우트(705종목)보다 넓게 잡는다
-const MIN_DOLLAR_VOL = 2e7   // $20M
-const MIN_MARKET_CAP = 2e9   // $2B
+// Vercel 라우트(705종목)보다 넓게 잡는다.
+// 첫 실행이 1,776종목에 46초였으므로 여유가 크다. 소형주까지 포함해
+// 시총 구간별로 나눠 볼 수 있게 $500M까지 내렸다 (약 2,700종목).
+const MIN_DOLLAR_VOL = 5e6   // $5M
+const MIN_MARKET_CAP = 5e8   // $500M
 const CONCURRENCY    = 10    // 데이터센터 IP라 야후가 더 조인다. 낮게 유지
 const MAX_RETRY      = 2
 

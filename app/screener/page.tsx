@@ -1,37 +1,29 @@
 'use client'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import { TvLink, TvLayoutSetting } from '../components/TvLink'
+import {
+  TIERS, CATS, TIER_EVIDENCE, verdictOf,
+  type TierId, type CatKey, type Regime, type Perf,
+} from '@/lib/screener-shared'
 
 interface Row {
   symbol: string; name: string; sector: string; marketCap: number
   f5: number | null; f20: number | null; f60: number | null
   rvol: number | null; chg20: number | null
 }
-interface Perf { avg: number; md: number; hit: number; n: number }
-interface Ev { up: Perf; down: Perf; verdict?: string; note: string }
 interface Data {
-  regime: 'up' | 'down'
+  regime: Regime
   spyChg20: number | null
   scanned: number
   universeSize: number
-  categories: Record<CatKey, Row[]>
-  evidence: {
-    baseline: { up: Perf; down: Perf; note: string }
-    momentum: Ev; turning: Ev; sustained: Ev; quiet: Ev
-    caveats: string[]
-  }
+  source: 'snapshot' | 'live'
+  tierCounts: Record<TierId, number>
+  categories: Record<TierId, Record<CatKey, Row[]>>
+  caveats: string[]
   fetchedAt: number
+  error?: string
 }
-
-type CatKey = 'momentum' | 'turning' | 'sustained' | 'quiet'
-
-const CATS: { key: CatKey; label: string; rule: string }[] = [
-  { key: 'momentum',  label: '모멘텀 매집', rule: '20일 순자금 상위 + 20일 상승 10% 이상' },
-  { key: 'turning',   label: '자금 전환',   rule: '60일 유출 → 20·5일 유입 전환' },
-  { key: 'sustained', label: '지속 매집',   rule: '5·20·60일 모두 유입' },
-  { key: 'quiet',     label: '조용한 매집', rule: '20일 순자금 상위 + 20일 등락 −5~+2%' },
-]
 
 const sgn = (v: number | null, d = 0) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(d)}`
 const cls = (v: number | null) => v == null ? 'flat' : v > 0 ? 'up' : v < 0 ? 'down' : 'flat'
@@ -53,43 +45,52 @@ function Bar({ v }: { v: number | null }) {
   )
 }
 
-/** 카테고리의 실측 성과를 기준선과 비교해 그대로 보여준다 */
-function EvidenceBox({ ev, base, regime }: { ev: Ev; base: { up: Perf; down: Perf }; regime: 'up' | 'down' }) {
-  const p = regime === 'up' ? ev.up : ev.down
-  const b = regime === 'up' ? base.up : base.down
-  const beatsAvg = p.avg > b.avg
-  const beatsHit = p.hit > b.hit
+/** 해당 시총 구간·국면에서 실제로 측정된 성과. 판정을 크게 앞세운다. */
+function EvidenceBox({ tier, cat, regime }: { tier: TierId; cat: CatKey; regime: Regime }) {
+  const p: Perf = TIER_EVIDENCE[tier][cat][regime]
+  const b: Perf = TIER_EVIDENCE[tier].base[regime]
+  const v = verdictOf(p, b)
 
   return (
     <div style={{
-      background: 'var(--bg-base)', border: '1px solid var(--border)',
+      background: 'var(--bg-base)',
+      border: `1px solid ${v.strong ? 'rgba(34,197,94,0.35)' : 'var(--border)'}`,
+      borderLeft: `3px solid ${v.strong ? 'var(--up)' : 'var(--text-muted)'}`,
       borderRadius: 8, padding: '10px 12px', marginBottom: 10, fontSize: 11,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-        <span style={{ color: 'var(--text-muted)' }}>2년 백테스트 · 현재 국면 기준</span>
-        <span className={`pill ${beatsAvg && beatsHit ? 'pill-up' : 'pill-stale'}`}>
-          {ev.verdict ?? '미검증'}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+        <span style={{
+          fontSize: 13, fontWeight: 800,
+          color: v.strong ? 'var(--up)' : 'var(--text-muted)',
+        }}>{v.text}</span>
+        <span style={{ color: 'var(--text-muted)' }}>
+          {TIERS.find(t => t.id === tier)?.label} · {regime === 'up' ? 'SPY 상승 구간' : 'SPY 하락 구간'} · 2년 실측
         </span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(72px, 1fr))', gap: 8 }}>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(76px, 1fr))', gap: 8 }}>
         {[
-          { k: '평균 초과', v: `${sgn(p.avg, 2)}%p`, hl: beatsAvg },
-          { k: '중앙값', v: `${sgn(p.md, 2)}%p`, hl: p.md > b.md },
-          { k: 'SPY 상회율', v: `${p.hit}%`, hl: beatsHit },
-          { k: '표본', v: p.n.toLocaleString(), hl: false },
+          { k: '평균 초과', v: `${sgn(p.avg, 2)}%p`, base: `${sgn(b.avg, 2)}`, hl: p.avg > b.avg },
+          { k: '중앙값',    v: `${sgn(p.md, 2)}%p`,  base: `${sgn(b.md, 2)}`,  hl: p.md > b.md },
+          { k: 'SPY 상회율', v: `${p.hit}%`,          base: `${b.hit}%`,        hl: p.hit >= b.hit },
+          { k: '표본',      v: p.n.toLocaleString(), base: '',                 hl: false },
         ].map(x => (
           <div key={x.k}>
             <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>{x.k}</div>
             <div className="num" style={{ fontSize: 13, fontWeight: 700, color: x.hl ? 'var(--up)' : 'var(--text-secondary)' }}>
               {x.v}
             </div>
+            {x.base && <div className="num" style={{ fontSize: 9, color: 'var(--text-muted)' }}>기준 {x.base}</div>}
           </div>
         ))}
       </div>
-      <div style={{ marginTop: 6, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 6 }}>
-        기준선(전체 평균) {sgn(b.avg, 2)}%p · 상회율 {b.hit}%
-      </div>
-      <p style={{ margin: '6px 0 0', color: 'var(--text-muted)', lineHeight: 1.5 }}>{ev.note}</p>
+
+      {p.avg > b.avg && p.md <= b.md && (
+        <p style={{ margin: '8px 0 0', color: 'var(--warn)', lineHeight: 1.5 }}>
+          평균은 기준선을 넘지만 중앙값은 못 넘는다. 소수 대박 종목이 평균을 끌어올린 것이므로,
+          몇 종목만 골라 사면 손해 볼 확률이 더 높다.
+        </p>
+      )}
     </div>
   )
 }
@@ -98,26 +99,40 @@ export default function ScreenerPage() {
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
+  const [tier, setTier] = useState<TierId>('large')
   const [tab, setTab] = useState<CatKey>('momentum')
 
   const load = useCallback(() => {
     setLoading(true); setErr('')
     fetch('/api/screener')
       .then(r => r.json())
-      .then(j => { if (j.error) setErr(j.error); else setData(j) })
+      .then(j => { setData(j); if (j.error) setErr(j.error) })
       .catch(e => setErr(String(e)))
       .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { load() }, [load])
 
-  // 국면에 맞는 카테고리를 기본 선택 — 백테스트에서 하락장은 자금전환이 유일하게 상회했다
+  // 국면에 맞는 카테고리를 기본 선택. 하락장에서는 자금전환이 대형주에서 가장 강했다
   useEffect(() => {
     if (data) setTab(data.regime === 'down' ? 'turning' : 'momentum')
   }, [data?.regime])
 
-  const rows = data?.categories[tab] ?? []
-  const ev = data?.evidence[tab]
+  const rows = data?.categories?.[tier]?.[tab] ?? []
+
+  // 근거가 약한 카테고리를 뒤로 민다 — 지우지는 않는다.
+  // 지우면 "왜 없지?" 하고 나중에 또 만들게 되지만, 근거와 함께 남으면 그게 기록이 된다.
+  const orderedCats = useMemo(() => {
+    if (!data) return CATS
+    return [...CATS].sort((a, b) => {
+      const s = (k: CatKey) => {
+        const p = TIER_EVIDENCE[tier][k][data.regime]
+        const base = TIER_EVIDENCE[tier].base[data.regime]
+        return verdictOf(p, base).strong ? 0 : 1
+      }
+      return s(a.key) - s(b.key)
+    })
+  }, [data, tier])
 
   return (
     <div style={{ padding: 16, maxWidth: 900, margin: '0 auto' }}>
@@ -127,10 +142,11 @@ export default function ScreenerPage() {
         onRefresh={load}
         loading={loading}
         sub={data && (
-          <span>
-            {data.regime === 'up' ? '상승 국면' : '하락 국면'}
-            <span style={{ marginLeft: 4 }}>(SPY 20일 {sgn(data.spyChg20, 1)}%)</span>
-            <span style={{ marginLeft: 8 }}>{data.scanned}/{data.universeSize}종목</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span className={`pill ${data.source === 'snapshot' ? 'pill-up' : 'pill-stale'}`}>
+              {data.source === 'snapshot' ? `스냅샷 ${data.scanned.toLocaleString()}` : `라이브 ${data.scanned}`}
+            </span>
+            <span>{data.regime === 'up' ? '상승 국면' : '하락 국면'} (SPY 20일 {sgn(data.spyChg20, 1)}%)</span>
           </span>
         )}
       />
@@ -138,23 +154,48 @@ export default function ScreenerPage() {
       <div className="card" style={{ padding: '10px 12px', marginBottom: 14, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
         <b style={{ color: 'var(--warn)' }}>이건 추천이 아니라 필터다.</b> 순자금은 실제 순매수가 아니라
         상승일·하락일 거래대금 비교로 만든 <b>대리지표</b>다(미국은 기관 순매수를 실시간 공개하지 않는다).
-        자체 백테스트에서 어떤 카테고리도 뚜렷한 예측력을 보이지 못했다. 각 탭의 실측치를 보고 직접 판단할 것.
-        <br />스캔 비용이 커서 <b>12시간마다</b> 갱신된다. 유니버스는 거래대금 $100M·시총 $10B 이상.
+        <br />시총 구간마다 결과가 정반대라 <b>구간별로 따로 측정</b>했다. 각 탭의 실측치를 보고 직접 판단할 것.
         <div style={{ marginTop: 8 }}><TvLayoutSetting /></div>
       </div>
 
+      {/* 시총 구간 */}
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 10, paddingBottom: 2 }}>
+        {TIERS.map(t => {
+          const active = tier === t.id
+          const n = data?.tierCounts?.[t.id] ?? 0
+          return (
+            <button key={t.id} onClick={() => setTier(t.id)} style={{
+              flexShrink: 0, minHeight: 38, padding: '0 14px', borderRadius: 10,
+              border: `1px solid ${active ? 'var(--info)' : 'var(--border)'}`,
+              cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap',
+              background: active ? 'rgba(59,130,246,0.15)' : 'var(--bg-card)',
+              color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+              fontWeight: active ? 700 : 400,
+            }}>{t.label}{n > 0 && <span className="num" style={{ marginLeft: 6, opacity: 0.7 }}>{n}</span>}</button>
+          )
+        })}
+      </div>
+
+      {/* 신호 카테고리 — 근거 있는 것이 앞에 온다 */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 12, paddingBottom: 2 }}>
-        {CATS.map(c => {
-          const n = data?.categories[c.key]?.length ?? 0
+        {orderedCats.map(c => {
+          const n = data?.categories?.[tier]?.[c.key]?.length ?? 0
           const active = tab === c.key
+          const strong = data
+            ? verdictOf(TIER_EVIDENCE[tier][c.key][data.regime], TIER_EVIDENCE[tier].base[data.regime]).strong
+            : false
           return (
             <button key={c.key} onClick={() => setTab(c.key)} style={{
               flexShrink: 0, minHeight: 38, padding: '0 14px', borderRadius: 19,
               border: '1px solid var(--border)', cursor: 'pointer', fontSize: 12,
               background: active ? 'var(--info)' : 'var(--bg-card)',
-              color: active ? '#fff' : 'var(--text-muted)',
+              color: active ? '#fff' : strong ? 'var(--text-secondary)' : 'var(--text-muted)',
               fontWeight: active ? 700 : 400, whiteSpace: 'nowrap',
-            }}>{c.label}{n > 0 && ` ${n}`}</button>
+              opacity: active || strong ? 1 : 0.65,
+            }}>
+              {strong && <span style={{ marginRight: 4 }}>●</span>}
+              {c.label}{n > 0 && ` ${n}`}
+            </button>
           )
         })}
       </div>
@@ -163,26 +204,26 @@ export default function ScreenerPage() {
         조건: {CATS.find(c => c.key === tab)?.rule}
       </p>
 
-      {data && ev && <EvidenceBox ev={ev} base={data.evidence.baseline} regime={data.regime} />}
+      {data && <EvidenceBox tier={tier} cat={tab} regime={data.regime} />}
 
       {err && <div className="card" style={{ padding: 16, color: 'var(--down)', fontSize: 13 }}>{err}</div>}
 
       {loading && !data && (
         <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-          705종목 스캔 중… 최초 조회는 몇 초 걸립니다
+          불러오는 중…
         </div>
       )}
 
       {data && !loading && rows.length === 0 && (
         <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-          조건에 맞는 종목 없음
+          이 구간에 조건을 만족하는 종목이 없다
         </div>
       )}
 
       {rows.length > 0 && (
         <div className="card" style={{ overflow: 'hidden' }}>
           <div className="overflow-x-table">
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 560 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 580 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11 }}>
                   <th style={{ textAlign: 'left', padding: '8px 10px' }}>종목</th>
@@ -190,7 +231,7 @@ export default function ScreenerPage() {
                   <th style={{ textAlign: 'right', padding: '8px 10px' }}>5일</th>
                   <th style={{ textAlign: 'right', padding: '8px 10px' }}>60일</th>
                   <th style={{ textAlign: 'right', padding: '8px 10px' }}>20일 등락</th>
-                  <th style={{ textAlign: 'right', padding: '8px 10px' }}>RVOL</th>
+                  <th style={{ textAlign: 'right', padding: '8px 10px' }}>시총</th>
                 </tr>
               </thead>
               <tbody>
@@ -204,8 +245,8 @@ export default function ScreenerPage() {
                     <td className={`num ${cls(r.f5)}`} style={{ textAlign: 'right', padding: '9px 10px', fontSize: 12 }}>{sgn(r.f5)}%</td>
                     <td className={`num ${cls(r.f60)}`} style={{ textAlign: 'right', padding: '9px 10px', fontSize: 12 }}>{sgn(r.f60)}%</td>
                     <td className={`num ${cls(r.chg20)}`} style={{ textAlign: 'right', padding: '9px 10px', fontSize: 12 }}>{sgn(r.chg20, 1)}%</td>
-                    <td className="num" style={{ textAlign: 'right', padding: '9px 10px', fontSize: 12, color: 'var(--text-secondary)' }}>
-                      {r.rvol == null ? '—' : r.rvol.toFixed(2) + 'x'}
+                    <td className="num" style={{ textAlign: 'right', padding: '9px 10px', fontSize: 11, color: 'var(--text-muted)' }}>
+                      ${(r.marketCap / 1e9).toFixed(1)}B
                     </td>
                   </tr>
                 ))}
@@ -218,7 +259,7 @@ export default function ScreenerPage() {
       {data && (
         <div style={{ marginTop: 14, fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.7 }}>
           <p style={{ margin: '0 0 4px', fontWeight: 700 }}>백테스트 한계</p>
-          {data.evidence.caveats.map((c, i) => <div key={i}>· {c}</div>)}
+          {data.caveats?.map((c, i) => <div key={i}>· {c}</div>)}
         </div>
       )}
     </div>
