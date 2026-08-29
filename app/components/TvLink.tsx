@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import {
   tvAnchor, tvUrl, getLayoutId, setLayoutId, extractLayoutId,
   getOpenInApp, setOpenInApp, platform,
+  getLinkMode, setLinkMode, type LinkMode,
 } from '@/lib/tradingview'
 
 /**
@@ -28,7 +29,7 @@ export function TvLink({ symbol, children, style }: {
   )
 
   useEffect(() => {
-    setA(tvAnchor(symbol, getLayoutId(), getOpenInApp()))
+    setA(tvAnchor(symbol, getLayoutId(), getOpenInApp(), getLinkMode()))
   }, [symbol])
 
   return (
@@ -56,12 +57,14 @@ export function TvLayoutSetting() {
   const [editing, setEditing] = useState(false)
   const [err, setErr] = useState('')
   const [inApp, setInApp] = useState(true)
+  const [mode, setMode] = useState<LinkMode>('chart')
   const [plat, setPlat] = useState<'android' | 'ios' | 'other'>('other')
 
   useEffect(() => {
     const v = getLayoutId()
     setIdState(v); setDraft(v)
     setInApp(getOpenInApp())
+    setMode(getLinkMode())
     setPlat(platform())
   }, [])
 
@@ -93,6 +96,24 @@ export function TvLayoutSetting() {
             </span>
           </span>
         </label>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>열 화면</span>
+        {([['chart', '차트'], ['symbol', '종목 개요 (가벼움)']] as [LinkMode, string][]).map(([m, label]) => (
+          <button key={m} onClick={() => { setLinkMode(m); setMode(m) }} style={{
+            minHeight: 30, padding: '0 10px', borderRadius: 15, fontSize: 11, cursor: 'pointer',
+            border: `1px solid ${mode === m ? 'var(--info)' : 'var(--border)'}`,
+            background: mode === m ? 'rgba(59,130,246,0.15)' : 'var(--bg-card)',
+            color: mode === m ? 'var(--text-primary)' : 'var(--text-muted)',
+          }}>{label}</button>
+        ))}
+      </div>
+      {mode === 'symbol' && (
+        <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          앱이 차트를 WebView로 그리느라 느릴 때 쓴다. 종목 개요가 먼저 뜨고 거기서 차트를 열 수 있다.
+          단 이 모드에서는 저장한 차트 레이아웃이 적용되지 않는다.
+        </p>
       )}
 
       {!editing ? (

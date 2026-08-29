@@ -96,7 +96,28 @@ export function tvUrl(symbol: string, layoutId?: string): string {
 //   Android — intent:// + S.browser_fallback_url. 앱이 없으면 브라우저로 자동 폴백된다
 //   iOS     — 평범한 https 링크. 단 target="_blank"면 Universal Link가 안 걸리므로 빼야 한다
 const APP_KEY = 'tv-open-in-app'
+const MODE_KEY = 'tv-link-mode'
 const ANDROID_PACKAGE = 'com.tradingview.tradingviewapp'
+
+// 안드로이드 앱은 차트를 Android System WebView로 렌더한다. 그래서 /chart/ 링크는
+// 앱 안에서 웹 차트를 통째로 불러오느라 느리다. /symbols/ 는 종목 개요 페이지라
+// 더 가볍다. 어느 쪽이 빠른지는 기기·네트워크마다 달라 사용자가 고르게 한다.
+export type LinkMode = 'chart' | 'symbol'
+
+export function getLinkMode(): LinkMode {
+  if (typeof window === 'undefined') return 'chart'
+  try { return localStorage.getItem(MODE_KEY) === 'symbol' ? 'symbol' : 'chart' } catch { return 'chart' }
+}
+
+export function setLinkMode(m: LinkMode): void {
+  if (typeof window === 'undefined') return
+  try { localStorage.setItem(MODE_KEY, m) } catch { /* 프라이빗 모드 */ }
+}
+
+/** 종목 개요 페이지. 차트보다 가볍다 (거래소:티커 -> 거래소-티커) */
+export function tvSymbolUrl(symbol: string): string {
+  return `https://www.tradingview.com/symbols/${encodeURIComponent(toTvSymbol(symbol).replace(':', '-'))}/`
+}
 
 export function getOpenInApp(): boolean {
   if (typeof window === 'undefined') return true
@@ -122,9 +143,10 @@ export function platform(): Platform {
  * 앵커에 넣을 href/target을 만든다.
  * target을 비워야 하는 경우가 있어(iOS Universal Link) 둘을 같이 반환한다.
  */
-export function tvAnchor(symbol: string, layoutId?: string, openInApp = true):
+export function tvAnchor(symbol: string, layoutId?: string, openInApp = true, mode?: LinkMode):
   { href: string; target?: string } {
-  const web = tvUrl(symbol, layoutId)
+  // 심볼 개요 모드에서는 레이아웃 ID가 의미 없다 (저장 차트를 안 연다)
+  const web = (mode ?? getLinkMode()) === 'symbol' ? tvSymbolUrl(symbol) : tvUrl(symbol, layoutId)
   if (!openInApp) return { href: web, target: '_blank' }
 
   switch (platform()) {
