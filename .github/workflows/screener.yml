@@ -1,0 +1,29 @@
+name: Screener Scan
+
+# 미국 장 마감 후 스캔. 20:00 UTC = 16:00 ET(정규장 마감) = KST 05:00 익일
+# 나스닥 스크리너가 당일 종가를 반영한 뒤 도는 시각으로 잡았다.
+on:
+  schedule:
+    - cron: '0 21 * * 1-5'   # UTC 21:00 = ET 17:00 (마감 1시간 후)
+  workflow_dispatch:          # 수동 실행
+
+# 기존 cron.yml(텔레그램 알림)과는 완전히 별개다. 서로 영향 없음.
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'   # lib/flow.ts 를 직접 import 하려면 24 필요
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run scan
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/scan.mjs

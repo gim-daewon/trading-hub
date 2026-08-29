@@ -107,22 +107,13 @@ export const EVIDENCE = {
   ],
 } as const
 
-export async function GET() {
-  try {
-    const [list, regimeInfo] = await Promise.all([universe(), marketRegime()])
+/** 스냅샷 경로와 라이브 스캔 경로가 같은 분류 규칙을 쓰도록 공유한다 */
+function buildCategories(rows: ScreenerRow[]) {
+  const byFlow = [...rows].sort((a, b) => (b.f20 ?? -999) - (a.f20 ?? -999))
+  const top150 = byFlow.slice(0, 150)
 
-    const rows = await mapLimit(list, 20, async (u): Promise<ScreenerRow | null> => {
-      const bars = await fetchBars(u.symbol)
-      if (!bars || bars.length < 65) return null
-      const m = computeFlow(bars)
-      if (m.f20 === null) return null
-      return { ...u, ...m, persistence: persistence(m) }
-    })
-
-    const byFlow = [...rows].sort((a, b) => (b.f20 ?? -999) - (a.f20 ?? -999))
-    const top150 = byFlow.slice(0, 150)
-
-    const categories = {
+  return {
+    categories: {
       // 20일 순자금 상위 + 이미 상승 → 상승장에서 강했음
       momentum: top150.filter(r => (r.chg20 ?? 0) >= 10).slice(0, 25),
       // 20일 순자금 상위 + 가격 정체.
@@ -135,14 +126,106 @@ export async function GET() {
       turning: byFlow
         .filter(r => (r.f60 ?? 0) < 0 && (r.f20 ?? 0) > 10 && (r.f5 ?? 0) > 10)
         .slice(0, 25),
+    },
+  }
+}
+
+/**
+ * GitHub Actions가 저장한 스냅샷(1,900종목)을 읽는다.
+ * 없으면 null을 반환하고 호출부가 라이브 스캔(705종목)으로 폴백한다.
+ */
+async function fromSupabase(): Promise<{
+  rows: ScreenerRow[]; regime: Regime; spyChg20: number | null; universeSize: number; scannedAt: number
+} | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) return null
+
+  try {
+    const headers = { apikey: key, Authorization: `Bearer ${key}` }
+    const snapRes = await fetch(
+      `${url}/rest/v1/screener_snapshots?select=*&order=scanned_at.desc&limit=1`,
+      { headers, next: { revalidate: 3600 } }
+    )
+    if (!snapRes.ok) return null
+    const [snap] = await snapRes.json()
+    if (!snap) return null
+
+    // 스냅샷이 이틀 넘게 묵었으면 신선한 라이브 스캔이 낫다
+    const ageHours = (Date.now() - new Date(snap.scanned_at).getTime()) / 3.6e6
+    if (ageHours > 48) return null
+
+    const rowsRes = await fetch(
+      `${url}/rest/v1/screener_rows?select=*&snapshot_id=eq.${snap.id}&limit=5000`,
+      { headers, next: { revalidate: 3600 } }
+    )
+    if (!rowsRes.ok) return null
+    const raw = await rowsRes.json()
+    if (!Array.isArray(raw) || raw.length === 0) return null
+
+    type DbRow = {
+      symbol: string; name: string | null; sector: string | null; market_cap: number | null
+      f5: number | null; f20: number | null; f60: number | null
+      rvol: number | null; chg20: number | null; persistence: Persistence | null
+    }
+    const rows: ScreenerRow[] = (raw as DbRow[]).map(r => ({
+      symbol: r.symbol,
+      name: r.name ?? '',
+      sector: r.sector ?? '',
+      marketCap: r.market_cap ?? 0,
+      f5: r.f5, f20: r.f20, f60: r.f60,
+      rvol: r.rvol, chg20: r.chg20,
+      avgDollarVol: null,
+      persistence: r.persistence ?? 'unknown',
+    }))
+
+    return {
+      rows,
+      regime: snap.regime as Regime,
+      spyChg20: snap.spy_chg20,
+      universeSize: snap.universe_size,
+      scannedAt: new Date(snap.scanned_at).getTime(),
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function GET() {
+  try {
+    // 1순위: GitHub Actions 스냅샷 (1,900종목, 즉시 응답)
+    const snap = await fromSupabase()
+    if (snap) {
+      return NextResponse.json({
+        ...buildCategories(snap.rows),
+        regime: snap.regime,
+        spyChg20: snap.spyChg20,
+        scanned: snap.rows.length,
+        universeSize: snap.universeSize,
+        source: 'snapshot',
+        evidence: EVIDENCE,
+        fetchedAt: snap.scannedAt,
+      })
     }
 
+    // 2순위: 라이브 스캔 (705종목, Vercel 10초 제한)
+    const [list, regimeInfo] = await Promise.all([universe(), marketRegime()])
+
+    const rows = await mapLimit(list, 20, async (u): Promise<ScreenerRow | null> => {
+      const bars = await fetchBars(u.symbol)
+      if (!bars || bars.length < 65) return null
+      const m = computeFlow(bars)
+      if (m.f20 === null) return null
+      return { ...u, ...m, persistence: persistence(m) }
+    })
+
     return NextResponse.json({
+      ...buildCategories(rows),
       regime: regimeInfo.regime,
       spyChg20: regimeInfo.spyChg20,
       scanned: rows.length,
       universeSize: list.length,
-      categories,
+      source: 'live',
       evidence: EVIDENCE,
       fetchedAt: Date.now(),
     })
