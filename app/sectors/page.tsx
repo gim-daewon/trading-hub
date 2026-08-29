@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import PageHeader from '../components/PageHeader'
+import { TvLink } from '../components/TvLink'
 
 interface Holding {
   symbol: string
@@ -406,7 +407,7 @@ export default function SectorsPage() {
                           alignItems: 'center', gap: 8, padding: '5px 10px',
                           borderRadius: 6, background: 'var(--bg-surface)',
                         }}>
-                          <span className="num" style={{ fontSize: 12, fontWeight: 700 }}>{c.symbol}</span>
+                          <span className="num" style={{ fontSize: 12, fontWeight: 700 }}><TvLink symbol={c.symbol} /></span>
                           <span className="num" style={{ fontSize: 10, color: 'var(--text-muted)' }}>{(c.pct * 100).toFixed(1)}%</span>
                           <span style={{ height: 5, borderRadius: 3, background: 'var(--bg-base)', overflow: 'hidden' }}>
                             <span style={{

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import IndexCard from './components/IndexCard'
 import PageHeader from './components/PageHeader'
+import RiskGauge from './components/RiskGauge'
 
 // 전부 선물이어야 한다. 현물 지수(^NDX 등)를 섞으면 미국 정규장 마감 후
 // 그 항목만 값이 멈춰서 옆의 선물과 등락 부호가 반대로 보인다.
@@ -158,6 +159,10 @@ export default function HomePage() {
   return (
     <div style={{ padding: '16px', maxWidth: 700, margin: '0 auto' }}>
       <PageHeader title="Trading Hub" fetchedAt={fetchedAt} onRefresh={load} loading={loading} />
+
+      <div style={{ marginBottom: 20 }}>
+        <RiskGauge compact />
+      </div>
 
       <section style={{ marginBottom: 20 }}>
         <Head title="미국 선물" />

@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
+import { TvLink, TvLayoutSetting } from '../components/TvLink'
 
 interface Row {
   symbol: string; name: string; sector: string; marketCap: number
@@ -139,6 +140,7 @@ export default function ScreenerPage() {
         상승일·하락일 거래대금 비교로 만든 <b>대리지표</b>다(미국은 기관 순매수를 실시간 공개하지 않는다).
         자체 백테스트에서 어떤 카테고리도 뚜렷한 예측력을 보이지 못했다. 각 탭의 실측치를 보고 직접 판단할 것.
         <br />스캔 비용이 커서 <b>12시간마다</b> 갱신된다. 유니버스는 거래대금 $100M·시총 $10B 이상.
+        <div style={{ marginTop: 8 }}><TvLayoutSetting /></div>
       </div>
 
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 12, paddingBottom: 2 }}>
@@ -195,7 +197,7 @@ export default function ScreenerPage() {
                 {rows.map(r => (
                   <tr key={r.symbol} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '9px 10px' }}>
-                      <div className="num" style={{ fontWeight: 700 }}>{r.symbol}</div>
+                      <div className="num" style={{ fontWeight: 700 }}><TvLink symbol={r.symbol} /></div>
                       <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{(r.sector || '').slice(0, 22)}</div>
                     </td>
                     <td style={{ padding: '9px 10px' }}><Bar v={r.f20} /></td>
