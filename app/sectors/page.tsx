@@ -56,6 +56,20 @@ function RsBadge({ v }: { v: number | null }) {
   return <span className={`num ${cls}`}>{sign}{v.toFixed(2)}pp</span>
 }
 
+interface ConstituentFlow {
+  symbol: string; name: string; pct: number
+  f5: number | null; f20: number | null; f60: number | null
+  rvol: number | null; chg20: number | null
+}
+interface SectorFlow {
+  etfFlow: { f20: number | null } | null
+  weightedF20: number | null
+  megaCapSkew: { symbol: string; pct: number; f20: number; othersAvg: number } | null
+  inflow: number
+  outflow: number
+  constituents: ConstituentFlow[]
+}
+
 export default function SectorsPage() {
   const [sectors, setSectors]   = useState<SectorData[]>([])
   const [spy, setSpy]           = useState<SpyData | null>(null)
@@ -67,6 +81,8 @@ export default function SectorsPage() {
   const [holdings, setHoldings]     = useState<Holding[]>([])
   const [holdLoading, setHoldLoad]  = useState(false)
   const [holdSource, setHoldSource] = useState<string>('static')
+  const [flow, setFlow]             = useState<SectorFlow | null>(null)
+  const [flowLoading, setFlowLoad]  = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -102,6 +118,17 @@ export default function SectorsPage() {
       .then(j => { setHoldings(j.holdings ?? []); setHoldSource(j.source ?? 'static') })
       .catch(() => { setHoldings([]); setHoldSource('static') })
       .finally(() => setHoldLoad(false))
+  }, [selected])
+
+  // 구성종목 자금 흐름 (10요청, 약 0.4초)
+  useEffect(() => {
+    if (!selected) { setFlow(null); return }
+    setFlowLoad(true)
+    fetch(`/api/sector-flow?etf=${selected.etf}`)
+      .then(r => r.json())
+      .then(j => setFlow(j.error ? null : j))
+      .catch(() => setFlow(null))
+      .finally(() => setFlowLoad(false))
   }, [selected])
 
   const sorted = [...sectors].sort((a, b) => (b.changePct ?? -999) - (a.changePct ?? -999))
@@ -320,6 +347,83 @@ export default function SectorsPage() {
                   <p className="num" style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700 }}>{item.v}</p>
                 </div>
               ))}
+            </div>
+
+            {/* 구성종목 자금 흐름 — ETF 거래량은 유통시장 손바뀜이라
+                어느 종목에 돈이 갔는지 못 본다. 종목별로 내려가야 분화가 보인다. */}
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                구성종목 자금 흐름 · 20일
+              </p>
+              {flowLoading ? (
+                <div style={{ height: 88, borderRadius: 8, background: 'var(--bg-surface)', opacity: 0.6, animation: 'pulse 1.5s infinite' }} />
+              ) : !flow || flow.constituents.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>자금 데이터 없음</p>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 96, background: 'var(--bg-surface)', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>ETF 레벨</div>
+                      <div className={`num ${(flow.etfFlow?.f20 ?? 0) >= 0 ? 'up' : 'down'}`} style={{ fontSize: 15, fontWeight: 700 }}>
+                        {flow.etfFlow?.f20 == null ? '—' : `${flow.etfFlow.f20 >= 0 ? '+' : ''}${flow.etfFlow.f20.toFixed(0)}%`}
+                      </div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 96, background: 'var(--bg-surface)', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>비중가중</div>
+                      <div className={`num ${(flow.weightedF20 ?? 0) >= 0 ? 'up' : 'down'}`} style={{ fontSize: 15, fontWeight: 700 }}>
+                        {flow.weightedF20 == null ? '—' : `${flow.weightedF20 >= 0 ? '+' : ''}${flow.weightedF20.toFixed(0)}%`}
+                      </div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 96, background: 'var(--bg-surface)', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>유입 / 유출</div>
+                      <div className="num" style={{ fontSize: 15, fontWeight: 700 }}>
+                        <span className="up">{flow.inflow}</span>
+                        <span style={{ color: 'var(--text-muted)' }}> / </span>
+                        <span className="down">{flow.outflow}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {flow.megaCapSkew && (
+                    <div style={{
+                      background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.3)',
+                      borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: 11, color: 'var(--warn)',
+                    }}>
+                      대형주 왜곡 — 최대 비중 <b>{flow.megaCapSkew.symbol}</b>({(flow.megaCapSkew.pct * 100).toFixed(1)}%)가{' '}
+                      {flow.megaCapSkew.f20 >= 0 ? '+' : ''}{flow.megaCapSkew.f20.toFixed(0)}%로
+                      나머지 평균({flow.megaCapSkew.othersAvg >= 0 ? '+' : ''}{flow.megaCapSkew.othersAvg.toFixed(0)}%)과 방향이 반대다.
+                      ETF 수치만 보면 가려진다.
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {flow.constituents.map(c => {
+                      const w = Math.min(Math.abs(c.f20 ?? 0), 100)
+                      const up = (c.f20 ?? 0) >= 0
+                      return (
+                        <div key={c.symbol} style={{
+                          display: 'grid', gridTemplateColumns: '52px 40px 1fr 46px',
+                          alignItems: 'center', gap: 8, padding: '5px 10px',
+                          borderRadius: 6, background: 'var(--bg-surface)',
+                        }}>
+                          <span className="num" style={{ fontSize: 12, fontWeight: 700 }}>{c.symbol}</span>
+                          <span className="num" style={{ fontSize: 10, color: 'var(--text-muted)' }}>{(c.pct * 100).toFixed(1)}%</span>
+                          <span style={{ height: 5, borderRadius: 3, background: 'var(--bg-base)', overflow: 'hidden' }}>
+                            <span style={{
+                              display: 'block', height: '100%', width: `${w}%`,
+                              background: up ? 'var(--up)' : 'var(--down)',
+                              marginLeft: up ? 0 : `${100 - w}%`,
+                            }} />
+                          </span>
+                          <span className={`num ${up ? 'up' : 'down'}`} style={{ fontSize: 11, textAlign: 'right' }}>
+                            {c.f20 == null ? '—' : `${up ? '+' : ''}${c.f20.toFixed(0)}%`}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* 구성종목 */}
