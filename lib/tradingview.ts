@@ -90,3 +90,54 @@ export function tvUrl(symbol: string, layoutId?: string): string {
     ? `https://www.tradingview.com/chart/${id}/?symbol=${sym}`
     : `https://www.tradingview.com/chart/?symbol=${sym}`
 }
+
+// ── 앱으로 열기 ────────────────────────────────────────────────────────
+// tradingview:// 커스텀 스킴은 공식 문서에 없어서 쓰지 않는다. 확실한 두 경로만 쓴다.
+//   Android — intent:// + S.browser_fallback_url. 앱이 없으면 브라우저로 자동 폴백된다
+//   iOS     — 평범한 https 링크. 단 target="_blank"면 Universal Link가 안 걸리므로 빼야 한다
+const APP_KEY = 'tv-open-in-app'
+const ANDROID_PACKAGE = 'com.tradingview.tradingviewapp'
+
+export function getOpenInApp(): boolean {
+  if (typeof window === 'undefined') return true
+  try { return localStorage.getItem(APP_KEY) !== '0' } catch { return true }
+}
+
+export function setOpenInApp(on: boolean): void {
+  if (typeof window === 'undefined') return
+  try { localStorage.setItem(APP_KEY, on ? '1' : '0') } catch { /* 프라이빗 모드 */ }
+}
+
+export type Platform = 'android' | 'ios' | 'other'
+
+export function platform(): Platform {
+  if (typeof navigator === 'undefined') return 'other'
+  const ua = navigator.userAgent
+  if (/Android/i.test(ua)) return 'android'
+  if (/iPhone|iPad|iPod/i.test(ua)) return 'ios'
+  return 'other'
+}
+
+/**
+ * 앵커에 넣을 href/target을 만든다.
+ * target을 비워야 하는 경우가 있어(iOS Universal Link) 둘을 같이 반환한다.
+ */
+export function tvAnchor(symbol: string, layoutId?: string, openInApp = true):
+  { href: string; target?: string } {
+  const web = tvUrl(symbol, layoutId)
+  if (!openInApp) return { href: web, target: '_blank' }
+
+  switch (platform()) {
+    case 'android':
+      return {
+        href: `intent://${web.replace(/^https:\/\//, '')}` +
+              `#Intent;scheme=https;package=${ANDROID_PACKAGE};` +
+              `S.browser_fallback_url=${encodeURIComponent(web)};end`,
+      }
+    case 'ios':
+      // target="_blank"를 붙이면 새 탭이 열리며 앱 전환이 막힌다
+      return { href: web }
+    default:
+      return { href: web, target: '_blank' }
+  }
+}

@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import PageHeader from '../components/PageHeader'
-import { TvLink } from '../components/TvLink'
+import { TvLink, TvLayoutSetting } from '../components/TvLink'
 
 interface Holding {
   symbol: string
@@ -348,6 +348,13 @@ export default function SectorsPage() {
                   <p className="num" style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700 }}>{item.v}</p>
                 </div>
               ))}
+            </div>
+
+            <div style={{
+              marginBottom: 14, padding: '8px 10px', borderRadius: 8,
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            }}>
+              <TvLayoutSetting />
             </div>
 
             {/* 구성종목 자금 흐름 — ETF 거래량은 유통시장 손바뀜이라
