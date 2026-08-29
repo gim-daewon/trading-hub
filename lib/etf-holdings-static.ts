@@ -110,7 +110,7 @@ export const STATIC_HOLDINGS: Record<string, StaticHolding[]> = {
     { symbol: 'TM',    name: 'Toyota Motor',      pct: 0.045 },
     { symbol: 'APTV',  name: 'Aptiv PLC',         pct: 0.042 },
     { symbol: 'ON',    name: 'ON Semiconductor',  pct: 0.040 },
-    { symbol: 'MOBILEYE', name: 'Mobileye',       pct: 0.038 },
+    { symbol: 'MBLY', name: 'Mobileye',           pct: 0.038 },
     { symbol: 'GM',    name: 'General Motors',    pct: 0.035 },
   ],
   // ── 소비재 ─────────────────────────────────────────────────────────────
@@ -147,7 +147,7 @@ export const STATIC_HOLDINGS: Record<string, StaticHolding[]> = {
     { symbol: 'ETSY', name: 'Etsy',         pct: 0.055 },
     { symbol: 'W',    name: 'Wayfair',      pct: 0.052 },
     { symbol: 'CPNG', name: 'Coupang',      pct: 0.048 },
-    { symbol: 'WISH', name: 'ContextLogic', pct: 0.042 },
+    { symbol: 'LOGC', name: 'ContextLogic', pct: 0.042 },
     { symbol: 'REAL', name: 'RealReal',     pct: 0.038 },
   ],
   XLP: [
@@ -244,7 +244,7 @@ export const STATIC_HOLDINGS: Record<string, StaticHolding[]> = {
     { symbol: 'V',    name: 'Visa',                    pct: 0.105 },
     { symbol: 'MA',   name: 'Mastercard',              pct: 0.098 },
     { symbol: 'PYPL', name: 'PayPal',                  pct: 0.082 },
-    { symbol: 'SQ',   name: 'Block (Square)',          pct: 0.075 },
+    { symbol: 'XYZ',  name: 'Block (Square)',          pct: 0.075 },
     { symbol: 'FIS',  name: 'Fidelity National Info',  pct: 0.068 },
     { symbol: 'FISV', name: 'Fiserv',                  pct: 0.065 },
     { symbol: 'GPN',  name: 'Global Payments',         pct: 0.058 },
