@@ -1,4 +1,5 @@
 'use client'
+import { TvLink } from './TvLink'
 import { Fragment, useEffect, useState } from 'react'
 import { fmtAssetPrice } from '@/lib/format'
 
@@ -209,7 +210,7 @@ export default function ChartModal({ symbol, label, price, changePct, onClose }:
         {/* header */}
         <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{symbol}</p>
+            <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}><TvLink symbol={symbol} /></p>
             <p style={{ margin: '2px 0 0', fontSize: 18, fontWeight: 800 }}>{label}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>

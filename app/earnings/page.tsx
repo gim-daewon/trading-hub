@@ -1,4 +1,5 @@
 'use client'
+import { TvLink } from '../components/TvLink'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { CSSProperties } from 'react'
 import type { EarningEntry } from '@/app/api/earnings-calendar/route'
@@ -116,7 +117,7 @@ function EntryRow({ e }: { e: EarningEntry }) {
         <span style={{
           fontSize: 13, fontWeight: 800, fontFamily: 'monospace', width: 64, flexShrink: 0,
           color: 'var(--text-primary)',
-        }}>{e.symbol}</span>
+        }}><TvLink symbol={e.symbol} /></span>
         <span style={{
           flex: 1, fontSize: 11, color: 'var(--text-muted)',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',

@@ -250,7 +250,7 @@ export default function SectorsPage() {
                         </div>
                       </td>
                       <td style={{ textAlign: 'right', padding: '10px 8px', color: 'var(--text-secondary)' }} className="num">
-                        {s.etf}
+                        <TvLink symbol={s.etf} />
                       </td>
                       <td style={{ textAlign: 'right', padding: '10px 8px' }} className="num">
                         {s.price ? `$${s.price.toFixed(2)}` : '—'}
@@ -325,7 +325,7 @@ export default function SectorsPage() {
             {/* 헤더 */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
               <div>
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{selected.etf}</p>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}><TvLink symbol={selected.etf} /></p>
                 <h2 style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800 }}>{selected.label}</h2>
               </div>
               <button onClick={() => setSelected(null)} style={{
@@ -458,7 +458,7 @@ export default function SectorsPage() {
                       alignItems: 'center', gap: 8,
                       padding: '7px 10px', borderRadius: 8, background: 'var(--bg-surface)',
                     }}>
-                      <span className="num" style={{ fontSize: 13, fontWeight: 700 }}>{h.symbol}</span>
+                      <span className="num" style={{ fontSize: 13, fontWeight: 700 }}><TvLink symbol={h.symbol} /></span>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name}</span>
                       <span className="num" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                         {h.price !== null ? `$${h.price.toFixed(h.price >= 100 ? 1 : 2)}` : '—'}

@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import ChartModal from './ChartModal'
+import { TvLink } from './TvLink'
 import { fmtAssetPrice } from '@/lib/format'
 
 interface Props {
@@ -27,7 +28,13 @@ export default function IndexCard({ symbol, label, price, changePct, noChart }: 
         style={{ padding: '12px 14px' }}
         onClick={() => { if (!noChart) setOpen(true) }}
       >
-        <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>{label}</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>{label}</p>
+          {/* 카드 본문은 내장 차트를 열고, 이 아이콘은 트레이딩뷰로 보낸다 */}
+          <TvLink symbol={symbol} style={{ border: 'none', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1 }}>
+            <span aria-label="트레이딩뷰에서 열기">↗</span>
+          </TvLink>
+        </div>
         <p className="num" style={{ margin: '4px 0 2px', fontSize: 20, fontWeight: 700 }}>
           {fmtPrice(price)}
         </p>

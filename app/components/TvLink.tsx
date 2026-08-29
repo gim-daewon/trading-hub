@@ -2,7 +2,11 @@
 import { useEffect, useState } from 'react'
 import { tvUrl, getLayoutId, setLayoutId, extractLayoutId } from '@/lib/tradingview'
 
-/** 티커를 누르면 트레이딩뷰 차트로 이동 */
+/**
+ * 티커를 누르면 트레이딩뷰 차트로 이동.
+ * 클릭 가능한 행·카드 안에 중첩되는 경우가 많아 이벤트 전파를 막는다
+ * (안 막으면 섹터 테이블 행을 눌렀을 때 바텀시트까지 같이 열린다).
+ */
 export function TvLink({ symbol, children, style }: {
   symbol: string
   children?: React.ReactNode
@@ -17,6 +21,7 @@ export function TvLink({ symbol, children, style }: {
       target="_blank"
       rel="noopener noreferrer"
       title={`트레이딩뷰에서 ${symbol} 보기`}
+      onClick={e => e.stopPropagation()}
       style={{
         color: 'inherit', textDecoration: 'none',
         borderBottom: '1px dotted var(--text-muted)',

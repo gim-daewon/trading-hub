@@ -49,14 +49,37 @@ const SYMBOL_MAP: Record<string, string> = {
   'CL=F': 'NYMEX:CL1!',
   'GC=F': 'COMEX:GC1!',
   'SI=F': 'COMEX:SI1!',
+  'HG=F': 'COMEX:HG1!',
+  'NG=F': 'NYMEX:NG1!',
   'BTC=F': 'CME:BTC1!',
   'ETH=F': 'CME:ETH1!',
+  // 글로벌 지수 (market 페이지)
+  '^N225': 'TVC:NI225',
+  '^HSI': 'TVC:HSI',
+  '^STOXX50E': 'TVC:SX5E',
+  '^DJI': 'TVC:DJI',
+  '^RUT': 'TVC:RUT',
+  // 변동성 파생
+  '^VVIX': 'CBOE:VVIX',
+  '^SKEW': 'CBOE:SKEW',
+  // 환율
+  'JPY=X': 'FX_IDC:USDJPY',
+  'EURUSD=X': 'FX:EURUSD',
+  'CNY=X': 'FX_IDC:USDCNY',
+}
+
+/** 매핑되지 않았고 야후 전용 표기(^ 또는 =)면 트레이딩뷰가 못 읽는다 */
+export function isMappable(symbol: string): boolean {
+  return !!SYMBOL_MAP[symbol] || !/[\^=]/.test(symbol)
 }
 
 export function toTvSymbol(symbol: string): string {
   if (SYMBOL_MAP[symbol]) return SYMBOL_MAP[symbol]
-  // 미국 보통주·ETF는 거래소 접두어 없이도 트레이딩뷰가 해석한다
-  return symbol.replace(/\..*$/, '')
+  // 미국 보통주·ETF는 거래소 접두어 없이도 트레이딩뷰가 해석한다.
+  // BRK.B 같은 클래스 표기는 하이픈이 트레이딩뷰 규칙이다.
+  if (!/[\^=]/.test(symbol)) return symbol.replace(/\./g, '.')
+  // 미매핑 야후 표기는 최선의 추정만 한다 (^ 제거)
+  return symbol.replace(/^\^/, '').replace(/=.*$/, '')
 }
 
 /** 종목 차트 URL. layoutId가 있으면 본인 차트로 연다 */

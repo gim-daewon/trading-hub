@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import PageHeader from '../components/PageHeader'
+import { TvLink } from '../components/TvLink'
 
 // 섹션 점프 바 높이만큼 스크롤 여백을 줘야 제목이 가리지 않는다
 const SECTION = { marginBottom: 28, scrollMarginTop: 60 } as const
@@ -264,14 +265,17 @@ function MacroStat({ label, value, prev, unit = '', fmt, alert }: {
   )
 }
 
-function QuoteCard({ sym, label, price, pct, pfx = '', dec = 2, note }: {
-  sym: string; label: string; price: number | null; pct: number | null; pfx?: string; dec?: number; note?: string
+function QuoteCard({ sym, ticker, label, price, pct, pfx = '', dec = 2, note }: {
+  sym: string; ticker?: string; label: string; price: number | null; pct: number | null; pfx?: string; dec?: number; note?: string
 }) {
   const up = pct !== null && pct >= 0
   return (
     <div style={{ background: 'var(--bg-base)', borderRadius: 8, padding: '10px 12px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 }}>
-        <span style={{ fontSize: 11, fontWeight: 800 }}>{sym}{note && <span style={{ fontSize: 9, color: 'var(--text-muted)', marginLeft: 4 }}>{note}</span>}</span>
+        <span style={{ fontSize: 11, fontWeight: 800 }}>
+          {ticker ? <TvLink symbol={ticker}>{sym}</TvLink> : sym}
+          {note && <span style={{ fontSize: 9, color: 'var(--text-muted)', marginLeft: 4 }}>{note}</span>}
+        </span>
         {pct !== null && <span style={{ fontSize: 11, fontFamily: 'monospace', color: up ? '#22c55e' : '#ef4444' }}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</span>}
       </div>
       <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: '0 0 2px' }}>{label}</p>
@@ -498,7 +502,7 @@ export default function MarketPage() {
         <SectionHead title="달러 & 환율" sub="Yahoo Finance · 5분 캐시" />
         {mktLoading ? <Skel n={5} cols={5} /> : (
           <div style={GRID5}>
-            <QuoteCard sym="DXY" label="달러인덱스" price={q?.['DX-Y.NYB']?.price ?? null} pct={q?.['DX-Y.NYB']?.changePct ?? null} dec={2} />
+            <QuoteCard ticker="DX-Y.NYB" sym="DXY" label="달러인덱스" price={q?.['DX-Y.NYB']?.price ?? null} pct={q?.['DX-Y.NYB']?.changePct ?? null} dec={2} />
             <QuoteCard sym="USD/JPY" label="달러/엔" price={q?.['JPY=X']?.price ?? null} pct={q?.['JPY=X']?.changePct ?? null} />
             <QuoteCard sym="USD/KRW" label="달러/원" price={q?.['KRW=X']?.price ?? null} pct={q?.['KRW=X']?.changePct ?? null} dec={1} />
             <QuoteCard sym="EUR/USD" label="유로/달러" price={q?.['EURUSD=X']?.price ?? null} pct={q?.['EURUSD=X']?.changePct ?? null} dec={4} />
@@ -513,10 +517,10 @@ export default function MarketPage() {
         <SectionHead title="원자재" sub="Yahoo Finance · 5분 캐시" />
         {mktLoading ? <Skel n={4} cols={4} /> : (
           <div style={GRID4}>
-            <QuoteCard sym="구리" label="HG=F (선물)" price={q?.['HG=F']?.price ?? null} pct={q?.['HG=F']?.changePct ?? null} note="경기선행" />
-            <QuoteCard sym="WTI" label="CL=F (선물)" price={q?.['CL=F']?.price ?? null} pct={q?.['CL=F']?.changePct ?? null} pfx="$" />
-            <QuoteCard sym="금" label="GC=F (선물)" price={q?.['GC=F']?.price ?? null} pct={q?.['GC=F']?.changePct ?? null} pfx="$" dec={0} />
-            <QuoteCard sym="천연가스" label="NG=F (선물)" price={q?.['NG=F']?.price ?? null} pct={q?.['NG=F']?.changePct ?? null} />
+            <QuoteCard ticker="HG=F" sym="구리" label="HG=F (선물)" price={q?.['HG=F']?.price ?? null} pct={q?.['HG=F']?.changePct ?? null} note="경기선행" />
+            <QuoteCard ticker="CL=F" sym="WTI" label="CL=F (선물)" price={q?.['CL=F']?.price ?? null} pct={q?.['CL=F']?.changePct ?? null} pfx="$" />
+            <QuoteCard ticker="GC=F" sym="금" label="GC=F (선물)" price={q?.['GC=F']?.price ?? null} pct={q?.['GC=F']?.changePct ?? null} pfx="$" dec={0} />
+            <QuoteCard ticker="NG=F" sym="천연가스" label="NG=F (선물)" price={q?.['NG=F']?.price ?? null} pct={q?.['NG=F']?.changePct ?? null} />
           </div>
         )}
         <GuideBox g={COM_G} />
@@ -527,10 +531,10 @@ export default function MarketPage() {
         <SectionHead title="글로벌 증시" sub="Yahoo Finance · 5분 캐시" />
         {mktLoading ? <Skel n={4} cols={4} /> : (
           <div style={GRID4}>
-            <QuoteCard sym="닛케이" label="^N225 (일본)" price={q?.['^N225']?.price ?? null} pct={q?.['^N225']?.changePct ?? null} dec={0} />
-            <QuoteCard sym="항셍" label="^HSI (홍콩)" price={q?.['^HSI']?.price ?? null} pct={q?.['^HSI']?.changePct ?? null} dec={0} />
-            <QuoteCard sym="유로스톡스" label="^STOXX50E (유럽)" price={q?.['^STOXX50E']?.price ?? null} pct={q?.['^STOXX50E']?.changePct ?? null} dec={0} />
-            <QuoteCard sym="EM ETF" label="EEM (MSCI EM)" price={q?.['EEM']?.price ?? null} pct={q?.['EEM']?.changePct ?? null} pfx="$" />
+            <QuoteCard ticker="^N225" sym="닛케이" label="^N225 (일본)" price={q?.['^N225']?.price ?? null} pct={q?.['^N225']?.changePct ?? null} dec={0} />
+            <QuoteCard ticker="^HSI" sym="항셍" label="^HSI (홍콩)" price={q?.['^HSI']?.price ?? null} pct={q?.['^HSI']?.changePct ?? null} dec={0} />
+            <QuoteCard ticker="^STOXX50E" sym="유로스톡스" label="^STOXX50E (유럽)" price={q?.['^STOXX50E']?.price ?? null} pct={q?.['^STOXX50E']?.changePct ?? null} dec={0} />
+            <QuoteCard ticker="EEM" sym="EM ETF" label="EEM (MSCI EM)" price={q?.['EEM']?.price ?? null} pct={q?.['EEM']?.changePct ?? null} pfx="$" />
           </div>
         )}
         <GuideBox g={GLB_G} />
