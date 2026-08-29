@@ -11,12 +11,22 @@
 
 import { fetchBars, computeFlow, persistence } from '../lib/flow.ts'
 
-const SUPABASE_URL = process.env.SUPABASE_URL
-const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY
+// 대시보드는 REST 엔드포인트(.../rest/v1/)만 보여주는 경우가 많다.
+// 어느 쪽을 넣어도 동작하도록 베이스 URL로 정규화한다.
+const normalize = u => String(u || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1$/, '')
+
+const SUPABASE_URL = normalize(process.env.SUPABASE_URL)
+const SERVICE_KEY  = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()
 if (!SUPABASE_URL || !SERVICE_KEY) {
   console.error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 가 필요합니다')
   process.exit(1)
 }
+if (!/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(SUPABASE_URL)) {
+  console.error(`SUPABASE_URL 형식이 이상하다: ${SUPABASE_URL}`)
+  console.error('기대 형식: https://<프로젝트ID>.supabase.co')
+  process.exit(1)
+}
+console.log(`Supabase: ${SUPABASE_URL}`)
 
 // Vercel 라우트(705종목)보다 넓게 잡는다
 const MIN_DOLLAR_VOL = 2e7   // $20M

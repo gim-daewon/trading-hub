@@ -137,8 +137,10 @@ function buildCategories(rows: ScreenerRow[]) {
 async function fromSupabase(): Promise<{
   rows: ScreenerRow[]; regime: Regime; spyChg20: number | null; universeSize: number; scannedAt: number
 } | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  // 대시보드가 REST 엔드포인트(.../rest/v1/)만 보여주는 경우가 있어 정규화한다
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
+    .replace(/\/+$/, '').replace(/\/rest\/v1$/, '')
+  const key = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '').trim()
   if (!url || !key) return null
 
   try {
