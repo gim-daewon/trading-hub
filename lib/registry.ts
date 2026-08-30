@@ -151,10 +151,11 @@ export interface NavSection {
 
 export const NAV_SECTIONS: NavSection[] = [
   { id: 'home',     label: '홈',           href: '/',         icon: '⌂' },
-  { id: 'market',   label: '시장',         href: '/market',   icon: '📈' },
+  { id: 'picks',    label: '추천',         href: '/picks',    icon: '⭐' },
   { id: 'sectors',  label: '섹터',         href: '/sectors',  icon: '🔥' },
-  { id: 'earnings', label: '실적',         href: '/earnings', icon: '📅' },
   { id: 'screener', label: '수급',         href: '/screener', icon: '💧' },
+  { id: 'market',   label: '시장',         href: '/market',   icon: '📈' },
+  { id: 'earnings', label: '실적',         href: '/earnings', icon: '📅' },
   { id: 'calendar', label: '캘린더',       href: '/calendar', icon: '📆' },
   { id: 'journal',  label: '매매일지',     href: '/journal',  icon: '📒', soon: true },
   { id: 'credit',   label: 'AI크레딧',     href: '/credit',   icon: '⚠',  soon: true },
