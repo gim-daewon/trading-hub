@@ -110,10 +110,8 @@ function buildCategories(rows: ScreenerRow[]) {
       momentum: top.filter(r => (r.chg20 ?? 0) >= 10).slice(0, 25),
       // 밴드로 잡아야 한다 — 상한만 두면 폭락 종목(-52% 등)이 "정체"로 잡힌다
       quiet: top.filter(r => (r.chg20 ?? 99) >= -5 && (r.chg20 ?? 99) < 2).slice(0, 25),
-      sustained: byFlow.filter(r => r.persistence === 'sustained').slice(0, 25),
-      turning: byFlow
-        .filter(r => (r.f60 ?? 0) < 0 && (r.f20 ?? 0) > 10 && (r.f5 ?? 0) > 10)
-        .slice(0, 25),
+      // 자금전환·지속매집은 6개 조합 중 1개에서만 상회해 삭제했다.
+      // 근거는 lib/screener-shared.ts 주석 참고.
     }
   }
   return out
@@ -235,7 +233,7 @@ export async function GET() {
   } catch (e) {
     // 500이면 ISR이 실패 응답을 12시간 물고 있을 수 있다
     const empty = {} as Record<TierId, Record<CatKey, ScreenerRow[]>>
-    for (const t of TIERS) empty[t.id] = { pullback: [], momentum: [], turning: [], sustained: [], quiet: [] }
+    for (const t of TIERS) empty[t.id] = { pullback: [], momentum: [], quiet: [] }
     return NextResponse.json({
       error: String(e),
       regime: 'up' as Regime, spyChg20: null, scanned: 0, universeSize: 0,

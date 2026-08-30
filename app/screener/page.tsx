@@ -113,9 +113,11 @@ export default function ScreenerPage() {
 
   useEffect(() => { load() }, [load])
 
-  // 국면에 맞는 카테고리를 기본 선택. 하락장에서는 자금전환이 대형주에서 가장 강했다
+  // 국면에 맞는 기본 탭.
+  // 눌림목이 6개 조합 중 5개를 넘겨 가장 넓게 통하므로 기본값으로 둔다.
+  // 하락 국면에서는 조용한매집이 대형·중형 하락장 각 56%로 보완한다.
   useEffect(() => {
-    if (data) setTab(data.regime === 'down' ? 'turning' : 'momentum')
+    if (data) setTab('pullback')
   }, [data?.regime])
 
   const rows = data?.categories?.[tier]?.[tab] ?? []

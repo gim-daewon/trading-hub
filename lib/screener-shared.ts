@@ -2,7 +2,7 @@
 
 export type Regime = 'up' | 'down'
 export type TierId = 'large' | 'mid' | 'small'
-export type CatKey = 'pullback' | 'momentum' | 'turning' | 'sustained' | 'quiet'
+export type CatKey = 'pullback' | 'momentum' | 'quiet'
 
 export interface Tier { id: TierId; label: string; min: number; max: number }
 
@@ -33,24 +33,18 @@ export const TIER_EVIDENCE: Record<TierId, Record<CatKey | 'base', CatEvidence>>
   large: {
     base:      { up: { avg: 0.35, md: -0.62, hit: 47, n: 50435 }, down: { avg: 0.90, md: 0.64, hit: 53, n: 25623 } },
     momentum:  { up: { avg: 1.65, md: 0.05, hit: 50, n: 3968 },   down: { avg: 1.08, md: 0.81, hit: 54, n: 2127 } },
-    turning:   { up: { avg: -0.01, md: -0.82, hit: 46, n: 2292 }, down: { avg: 1.42, md: 1.18, hit: 56, n: 947 } },
-    sustained: { up: { avg: 0.45, md: -0.69, hit: 47, n: 10766 }, down: { avg: 0.94, md: 0.78, hit: 53, n: 6412 } },
     quiet:     { up: { avg: -0.06, md: -0.48, hit: 47, n: 864 },  down: { avg: 1.96, md: 1.74, hit: 56, n: 266 } },
     pullback:  { up: { avg: 3.00, md: 1.90, hit: 58, n: 856 },    down: { avg: 1.20, md: 0.14, hit: 51, n: 344 } },
   },
   mid: {
     base:      { up: { avg: 1.33, md: -0.44, hit: 48, n: 57318 }, down: { avg: -0.06, md: -0.69, hit: 47, n: 29086 } },
     momentum:  { up: { avg: 2.90, md: -0.21, hit: 49, n: 5362 },  down: { avg: -0.08, md: -1.17, hit: 46, n: 2663 } },
-    turning:   { up: { avg: 0.22, md: -1.44, hit: 44, n: 2976 },  down: { avg: -0.86, md: -1.32, hit: 43, n: 1035 } },
-    sustained: { up: { avg: 1.55, md: -0.66, hit: 47, n: 11975 }, down: { avg: 0.42, md: -0.69, hit: 47, n: 6130 } },
     quiet:     { up: { avg: 0.34, md: -0.78, hit: 46, n: 769 },   down: { avg: 2.71, md: 1.24, hit: 56, n: 400 } },
     pullback:  { up: { avg: 3.50, md: 1.27, hit: 56, n: 943 },    down: { avg: 1.43, md: 0.24, hit: 51, n: 445 } },
   },
   small: {
     base:      { up: { avg: 2.42, md: -0.47, hit: 48, n: 35289 }, down: { avg: -1.11, md: -2.04, hit: 43, n: 17903 } },
     momentum:  { up: { avg: 4.60, md: -0.31, hit: 49, n: 3637 },  down: { avg: -1.53, md: -2.95, hit: 42, n: 1715 } },
-    turning:   { up: { avg: 1.42, md: -1.12, hit: 45, n: 1865 },  down: { avg: -1.84, md: -1.97, hit: 42, n: 671 } },
-    sustained: { up: { avg: 2.78, md: -1.17, hit: 46, n: 7608 },  down: { avg: -0.90, md: -2.20, hit: 44, n: 3629 } },
     quiet:     { up: { avg: 6.68, md: -1.61, hit: 45, n: 400 },   down: { avg: -0.80, md: -0.48, hit: 47, n: 243 } },
     pullback:  { up: { avg: 3.87, md: 0.72, hit: 53, n: 686 },    down: { avg: 2.01, md: 0.29, hit: 52, n: 313 } },
   },
@@ -70,10 +64,28 @@ export function verdictOf(p: Perf, base: Perf): { text: string; strong: boolean 
 export const CATS: { key: CatKey; label: string; rule: string }[] = [
   { key: 'pullback',  label: '눌림목 매집', rule: '볼린저 %B ≤ 0.2 (하단권) + 20일 순자금 상위 30%' },
   { key: 'momentum',  label: '모멘텀 매집', rule: '20일 순자금 상위 + 20일 상승 10% 이상' },
-  { key: 'turning',   label: '자금 전환',   rule: '60일 유출 → 20·5일 유입 전환' },
   { key: 'quiet',     label: '조용한 매집', rule: '20일 순자금 상위 + 20일 등락 −5~+2%' },
-  { key: 'sustained', label: '지속 매집',   rule: '5·20·60일 모두 유입' },
 ]
+
+/**
+ * 삭제한 카테고리 — 근거를 남긴다. "왜 없지?" 하고 다시 만들지 않도록.
+ *
+ * 판정 기준: 평균·중앙값·상회율 3개 모두 기준선 초과 = 상회.
+ * 시총 3구간 x 국면 2가지 = 6개 조합 중 몇 개를 넘겼는가:
+ *
+ *   눌림목      5/6  대형상승58 중형상승56 중형하락51 소형상승53 소형하락52
+ *   모멘텀      4/6  대형상승50 대형하락54 중형상승49 소형상승49
+ *   조용한매집   3/6  대형하락56 중형하락56 소형하락47
+ *   ─────────────── 이하 삭제 ───────────────
+ *   자금전환    1/6  대형하락56 만 상회. 나머지 5개 조합은 기준선 이하
+ *                   (중형하락 43%, 소형하락 42%로 특히 나쁨)
+ *   지속매집    1/6  대형하락53 만 상회. 평균은 기준선보다 약간 높지만
+ *                   중앙값·상회율이 기준선과 같아 우위가 없다
+ *
+ * 자금전환의 대형주 하락장 56%는 아까운 수치지만, 6개 중 1개만 통하는 조건을
+ * 상시 노출하면 나머지 5개 상황에서 오독을 부른다. 하락장 대비는 조용한매집이
+ * 2개 조합(대형·중형 하락장 각 56%)으로 더 넓게 커버한다.
+ */
 
 export const CAVEATS = [
   '생존 편향: 유니버스를 오늘 기준 시총·거래대금으로 뽑아 상장폐지 종목이 빠져 있다.',
