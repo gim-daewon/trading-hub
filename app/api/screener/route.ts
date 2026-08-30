@@ -12,7 +12,10 @@ import {
 // 그래서 단일 랭킹 대신 신호 카테고리 × 시총 구간으로 나누고,
 // 각 조합에 실제 측정된 성과를 그대로 붙여 내보낸다. UI가 이를 표시한다.
 
-export const revalidate = 43200  // 12시간
+// 스냅샷 읽기는 1~2초라 오래 캐시할 이유가 없다. 12시간으로 잡았더니
+// 스캔이 끝나도 최대 12시간 동안 옛 응답이 나갔다.
+// 라이브 스캔 폴백(7초)은 스냅샷이 없을 때만 도는 예외 경로다.
+export const revalidate = 600  // 10분
 
 const NASDAQ_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -118,7 +121,7 @@ async function fromSupabase() {
     const headers = { apikey: key, Authorization: `Bearer ${key}` }
     const snapRes = await fetch(
       `${url}/rest/v1/screener_snapshots?select=*&order=scanned_at.desc&limit=1`,
-      { headers, next: { revalidate: 3600 } }
+      { headers, next: { revalidate: 600 } }
     )
     if (!snapRes.ok) return null
     const [snap] = await snapRes.json()
@@ -136,7 +139,7 @@ async function fromSupabase() {
         `${url}/rest/v1/screener_rows?select=*&snapshot_id=eq.${snap.id}&order=id.asc`,
         {
           headers: { ...headers, Range: `${from}-${from + PAGE - 1}`, 'Range-Unit': 'items' },
-          next: { revalidate: 3600 },
+          next: { revalidate: 600 },
         }
       )
       if (!res.ok) break
