@@ -83,8 +83,17 @@ function buildCategories(rows: ScreenerRow[]) {
     // 구간별 상위 15% (최소 30) — 구간 크기가 달라 고정 개수는 불공평하다
     const topN = Math.max(30, Math.round(byFlow.length * 0.15))
     const top = byFlow.slice(0, topN)
+    // 백테스트는 수급 상위 30% 기준으로 측정했다. 근거와 화면을 일치시킨다
+    const flow30 = byFlow.slice(0, Math.max(30, Math.round(byFlow.length * 0.3)))
 
     out[tier.id] = {
+      // 볼린저 하단권 + 수급 상위 30%.
+      // 2년 백테스트에서 시총·국면 6개 조합 전부 기준선을 상회한 유일한 조건이다.
+      // 20일선 돌파를 추가하면 오히려 상회율이 44%로 떨어져 뺐다.
+      pullback: flow30
+        .filter(r => r.pctB !== null && r.pctB <= 0.2)
+        .sort((a, b) => (a.pctB ?? 9) - (b.pctB ?? 9))
+        .slice(0, 25),
       momentum: top.filter(r => (r.chg20 ?? 0) >= 10).slice(0, 25),
       // 밴드로 잡아야 한다 — 상한만 두면 폭락 종목(-52% 등)이 "정체"로 잡힌다
       quiet: top.filter(r => (r.chg20 ?? 99) >= -5 && (r.chg20 ?? 99) < 2).slice(0, 25),
@@ -141,7 +150,8 @@ async function fromSupabase() {
     type DbRow = {
       symbol: string; name: string | null; sector: string | null; market_cap: number | null
       f5: number | null; f20: number | null; f60: number | null
-      rvol: number | null; chg20: number | null; persistence: Persistence | null
+      rvol: number | null; chg20: number | null; pct_b: number | null
+      persistence: Persistence | null
     }
     const rows: ScreenerRow[] = (raw as DbRow[]).map(r => ({
       symbol: r.symbol,
@@ -152,6 +162,7 @@ async function fromSupabase() {
       f5: r.f5, f20: r.f20, f60: r.f60,
       rvol: r.rvol, chg20: r.chg20,
       avgDollarVol: null,
+      pctB: r.pct_b,
       persistence: r.persistence ?? 'unknown',
     }))
 
@@ -211,7 +222,7 @@ export async function GET() {
   } catch (e) {
     // 500이면 ISR이 실패 응답을 12시간 물고 있을 수 있다
     const empty = {} as Record<TierId, Record<CatKey, ScreenerRow[]>>
-    for (const t of TIERS) empty[t.id] = { momentum: [], turning: [], sustained: [], quiet: [] }
+    for (const t of TIERS) empty[t.id] = { pullback: [], momentum: [], turning: [], sustained: [], quiet: [] }
     return NextResponse.json({
       error: String(e),
       regime: 'up' as Regime, spyChg20: null, scanned: 0, universeSize: 0,

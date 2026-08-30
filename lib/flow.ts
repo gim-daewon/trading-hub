@@ -17,6 +17,8 @@ export interface FlowMetrics {
   chg20: number | null
   /** 20일 평균 일 거래대금 (USD) */
   avgDollarVol: number | null
+  /** 볼린저 %B (20,2) — 0=하단밴드, 0.5=중심선, 1=상단밴드 */
+  pctB: number | null
 }
 
 const YAHOO_HOSTS = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']
@@ -64,6 +66,21 @@ export function netFlow(bars: Bar[], days: number): number | null {
   return total === 0 ? null : ((up - down) / total) * 100
 }
 
+const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length
+
+/**
+ * 볼린저 %B (기간 20, 표준편차 2배).
+ * 표준편차는 모집단 기준(n으로 나눔) — 트레이딩뷰와 동일해야 차트와 대조된다.
+ */
+export function pctB(bars: Bar[], n = 20, k = 2): number | null {
+  if (bars.length < n) return null
+  const w = bars.slice(-n).map(b => b.c)
+  const m = mean(w)
+  const sd = Math.sqrt(mean(w.map(v => (v - m) ** 2)))
+  if (sd === 0) return null
+  return (bars[bars.length - 1].c - (m - k * sd)) / (2 * k * sd)
+}
+
 export function computeFlow(bars: Bar[]): FlowMetrics {
   const dollarVols = bars.map(b => b.c * b.v)
   const recent = dollarVols.slice(-21, -1)
@@ -80,6 +97,7 @@ export function computeFlow(bars: Bar[]): FlowMetrics {
     rvol: avg20 && last ? last / avg20 : null,
     chg20: c0 && cN ? ((cN - c0) / c0) * 100 : null,
     avgDollarVol: avg20,
+    pctB: pctB(bars),
   }
 }
 

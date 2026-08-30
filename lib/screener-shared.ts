@@ -2,7 +2,7 @@
 
 export type Regime = 'up' | 'down'
 export type TierId = 'large' | 'mid' | 'small'
-export type CatKey = 'momentum' | 'turning' | 'sustained' | 'quiet'
+export type CatKey = 'pullback' | 'momentum' | 'turning' | 'sustained' | 'quiet'
 
 export interface Tier { id: TierId; label: string; min: number; max: number }
 
@@ -36,6 +36,7 @@ export const TIER_EVIDENCE: Record<TierId, Record<CatKey | 'base', CatEvidence>>
     turning:   { up: { avg: -0.01, md: -0.82, hit: 46, n: 2292 }, down: { avg: 1.42, md: 1.18, hit: 56, n: 947 } },
     sustained: { up: { avg: 0.45, md: -0.69, hit: 47, n: 10766 }, down: { avg: 0.94, md: 0.78, hit: 53, n: 6412 } },
     quiet:     { up: { avg: -0.06, md: -0.48, hit: 47, n: 864 },  down: { avg: 1.96, md: 1.74, hit: 56, n: 266 } },
+    pullback:  { up: { avg: 3.00, md: 1.90, hit: 58, n: 856 },    down: { avg: 1.20, md: 0.14, hit: 51, n: 344 } },
   },
   mid: {
     base:      { up: { avg: 1.33, md: -0.44, hit: 48, n: 57318 }, down: { avg: -0.06, md: -0.69, hit: 47, n: 29086 } },
@@ -43,6 +44,7 @@ export const TIER_EVIDENCE: Record<TierId, Record<CatKey | 'base', CatEvidence>>
     turning:   { up: { avg: 0.22, md: -1.44, hit: 44, n: 2976 },  down: { avg: -0.86, md: -1.32, hit: 43, n: 1035 } },
     sustained: { up: { avg: 1.55, md: -0.66, hit: 47, n: 11975 }, down: { avg: 0.42, md: -0.69, hit: 47, n: 6130 } },
     quiet:     { up: { avg: 0.34, md: -0.78, hit: 46, n: 769 },   down: { avg: 2.71, md: 1.24, hit: 56, n: 400 } },
+    pullback:  { up: { avg: 3.50, md: 1.27, hit: 56, n: 943 },    down: { avg: 1.43, md: 0.24, hit: 51, n: 445 } },
   },
   small: {
     base:      { up: { avg: 2.42, md: -0.47, hit: 48, n: 35289 }, down: { avg: -1.11, md: -2.04, hit: 43, n: 17903 } },
@@ -50,6 +52,7 @@ export const TIER_EVIDENCE: Record<TierId, Record<CatKey | 'base', CatEvidence>>
     turning:   { up: { avg: 1.42, md: -1.12, hit: 45, n: 1865 },  down: { avg: -1.84, md: -1.97, hit: 42, n: 671 } },
     sustained: { up: { avg: 2.78, md: -1.17, hit: 46, n: 7608 },  down: { avg: -0.90, md: -2.20, hit: 44, n: 3629 } },
     quiet:     { up: { avg: 6.68, md: -1.61, hit: 45, n: 400 },   down: { avg: -0.80, md: -0.48, hit: 47, n: 243 } },
+    pullback:  { up: { avg: 3.87, md: 0.72, hit: 53, n: 686 },    down: { avg: 2.01, md: 0.29, hit: 52, n: 313 } },
   },
 }
 
@@ -65,6 +68,7 @@ export function verdictOf(p: Perf, base: Perf): { text: string; strong: boolean 
 }
 
 export const CATS: { key: CatKey; label: string; rule: string }[] = [
+  { key: 'pullback',  label: '눌림목 매집', rule: '볼린저 %B ≤ 0.2 (하단권) + 20일 순자금 상위 30%' },
   { key: 'momentum',  label: '모멘텀 매집', rule: '20일 순자금 상위 + 20일 상승 10% 이상' },
   { key: 'turning',   label: '자금 전환',   rule: '60일 유출 → 20·5일 유입 전환' },
   { key: 'quiet',     label: '조용한 매집', rule: '20일 순자금 상위 + 20일 등락 −5~+2%' },

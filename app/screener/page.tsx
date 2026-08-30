@@ -10,7 +10,7 @@ import {
 interface Row {
   symbol: string; name: string; sector: string; marketCap: number
   f5: number | null; f20: number | null; f60: number | null
-  rvol: number | null; chg20: number | null
+  rvol: number | null; chg20: number | null; pctB: number | null
 }
 interface Data {
   regime: Regime
@@ -223,7 +223,7 @@ export default function ScreenerPage() {
       {rows.length > 0 && (
         <div className="card" style={{ overflow: 'hidden' }}>
           <div className="overflow-x-table">
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 580 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11 }}>
                   <th style={{ textAlign: 'left', padding: '8px 10px' }}>종목</th>
@@ -231,6 +231,7 @@ export default function ScreenerPage() {
                   <th style={{ textAlign: 'right', padding: '8px 10px' }}>5일</th>
                   <th style={{ textAlign: 'right', padding: '8px 10px' }}>60일</th>
                   <th style={{ textAlign: 'right', padding: '8px 10px' }}>20일 등락</th>
+                  <th style={{ textAlign: 'right', padding: '8px 10px' }}>볼린저 %B</th>
                   <th style={{ textAlign: 'right', padding: '8px 10px' }}>시총</th>
                 </tr>
               </thead>
@@ -245,6 +246,16 @@ export default function ScreenerPage() {
                     <td className={`num ${cls(r.f5)}`} style={{ textAlign: 'right', padding: '9px 10px', fontSize: 12 }}>{sgn(r.f5)}%</td>
                     <td className={`num ${cls(r.f60)}`} style={{ textAlign: 'right', padding: '9px 10px', fontSize: 12 }}>{sgn(r.f60)}%</td>
                     <td className={`num ${cls(r.chg20)}`} style={{ textAlign: 'right', padding: '9px 10px', fontSize: 12 }}>{sgn(r.chg20, 1)}%</td>
+                    <td className="num" style={{
+                      textAlign: 'right', padding: '9px 10px', fontSize: 12,
+                      // 하단권(20% 이하)은 강조 — 눌림목 카테고리의 핵심 조건
+                      color: r.pctB == null ? 'var(--text-muted)'
+                        : r.pctB <= 0.2 ? 'var(--info)'
+                        : r.pctB >= 0.8 ? 'var(--warn)' : 'var(--text-secondary)',
+                      fontWeight: r.pctB != null && r.pctB <= 0.2 ? 700 : 400,
+                    }}>
+                      {r.pctB == null ? '—' : `${(r.pctB * 100).toFixed(0)}%`}
+                    </td>
                     <td className="num" style={{ textAlign: 'right', padding: '9px 10px', fontSize: 11, color: 'var(--text-muted)' }}>
                       ${(r.marketCap / 1e9).toFixed(1)}B
                     </td>

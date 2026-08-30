@@ -123,6 +123,7 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
       market_cap: u.marketCap,
       f5: m.f5, f20: m.f20, f60: m.f60,
       rvol: m.rvol, chg20: m.chg20,
+      pct_b: m.pctB,
       persistence: persistence(m),
     })
   }
