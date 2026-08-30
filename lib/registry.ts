@@ -154,6 +154,7 @@ export const NAV_SECTIONS: NavSection[] = [
   { id: 'picks',    label: '추천',         href: '/picks',    icon: '⭐' },
   { id: 'sectors',  label: '섹터',         href: '/sectors',  icon: '🔥' },
   { id: 'screener', label: '수급',         href: '/screener', icon: '💧' },
+  { id: 'tracking', label: '성과추적',     href: '/tracking', icon: '📊' },
   { id: 'market',   label: '시장',         href: '/market',   icon: '📈' },
   { id: 'earnings', label: '실적',         href: '/earnings', icon: '📅' },
   { id: 'calendar', label: '캘린더',       href: '/calendar', icon: '📆' },

@@ -6,6 +6,22 @@ export type CatKey = 'pullback' | 'momentum' | 'quiet'
 
 export interface Tier { id: TierId; label: string; min: number; max: number }
 
+/** 스크리너 한 종목. 진입가(price)는 사후 성과 추적에 쓴다 */
+export interface ScreenerRow {
+  symbol: string
+  name: string
+  sector: string
+  marketCap: number
+  tier: TierId | null
+  f5: number | null
+  f20: number | null
+  f60: number | null
+  rvol: number | null
+  chg20: number | null
+  pctB: number | null
+  price: number | null
+}
+
 // 시총 구간을 나눠야 하는 이유: 같은 지표라도 구간마다 결과가 정반대다.
 // 소형주 하락장은 기준선 자체가 -1.11%p, 상회율 43%로 뭘 사도 진다.
 export const TIERS: Tier[] = [
@@ -86,6 +102,39 @@ export const CATS: { key: CatKey; label: string; rule: string }[] = [
  * 상시 노출하면 나머지 5개 상황에서 오독을 부른다. 하락장 대비는 조용한매집이
  * 2개 조합(대형·중형 하락장 각 56%)으로 더 넓게 커버한다.
  */
+
+/**
+ * 시총 구간별로 따로 분류한다.
+ * 구간을 섞으면 소형주가 대형주 신호를 지운다 — "조용한 매집"이 전체 기준으로는
+ * -0.15%p(근거 없음)였는데 대형주만 보면 하락장 +1.96%p였다.
+ *
+ * 스크리너 화면과 성과 추적이 같은 규칙을 써야 비교가 성립하므로 여기 둔다.
+ */
+export function buildCategories<T extends ScreenerRow>(rows: T[]): Record<TierId, Record<CatKey, T[]>> {
+  const out = {} as Record<TierId, Record<CatKey, T[]>>
+
+  for (const tier of TIERS) {
+    const inTier = rows.filter(r => r.tier === tier.id)
+    const byFlow = [...inTier].sort((a, b) => (b.f20 ?? -999) - (a.f20 ?? -999))
+    // 구간별 상위 15% (최소 30) — 구간 크기가 달라 고정 개수는 불공평하다
+    const top = byFlow.slice(0, Math.max(30, Math.round(byFlow.length * 0.15)))
+    // 백테스트는 수급 상위 30% 기준으로 측정했다. 근거와 화면을 일치시킨다
+    const flow30 = byFlow.slice(0, Math.max(30, Math.round(byFlow.length * 0.3)))
+
+    out[tier.id] = {
+      // 볼린저 하단권 + 수급 상위 30%. 6개 조합 중 5개에서 기준선 상회.
+      // 임계값 0.2를 조이지 말 것 — 구간별 차이가 전부 노이즈다(z<1.96).
+      pullback: flow30
+        .filter(r => r.pctB !== null && r.pctB <= 0.2)
+        .sort((a, b) => (a.pctB ?? 9) - (b.pctB ?? 9))
+        .slice(0, 25),
+      momentum: top.filter(r => (r.chg20 ?? 0) >= 10).slice(0, 25),
+      // 밴드로 잡아야 한다 — 상한만 두면 폭락 종목(-52% 등)이 "정체"로 잡힌다
+      quiet: top.filter(r => (r.chg20 ?? 99) >= -5 && (r.chg20 ?? 99) < 2).slice(0, 25),
+    }
+  }
+  return out
+}
 
 export const CAVEATS = [
   '생존 편향: 유니버스를 오늘 기준 시총·거래대금으로 뽑아 상장폐지 종목이 빠져 있다.',

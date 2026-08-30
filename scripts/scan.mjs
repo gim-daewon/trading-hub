@@ -96,10 +96,11 @@ console.log(`유니버스 ${list.length}종목 (거래대금 $${MIN_DOLLAR_VOL /
 
 // 시장 국면 — 카테고리별 성과가 국면에 따라 갈리므로 같이 저장한다
 const spyBars = await barsWithRetry('SPY')
-let regime = 'up', spyChg20 = null
+let regime = 'up', spyChg20 = null, spyPrice = null
 if (spyBars && spyBars.length >= 21) {
   const a = spyBars[spyBars.length - 21].c, b = spyBars[spyBars.length - 1].c
   spyChg20 = ((b - a) / a) * 100
+  spyPrice = b
   regime = spyChg20 >= 0 ? 'up' : 'down'
 }
 console.log(`국면 ${regime} (SPY 20일 ${spyChg20?.toFixed(2) ?? '?'}%)`)
@@ -124,6 +125,7 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
       f5: m.f5, f20: m.f20, f60: m.f60,
       rvol: m.rvol, chg20: m.chg20,
       pct_b: m.pctB,
+      price: bars[bars.length - 1].c,   // 진입가 — 사후 성과 추적용
       persistence: persistence(m),
     })
   }
@@ -140,6 +142,7 @@ if (out.length < list.length * 0.5) {
 const [snap] = await sb('screener_snapshots', 'POST', {
   regime,
   spy_chg20: spyChg20,
+  spy_price: spyPrice,
   universe_size: list.length,
   scanned_count: out.length,
   min_dollar_vol: MIN_DOLLAR_VOL,

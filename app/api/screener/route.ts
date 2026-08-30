@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { fetchBars, computeFlow, mapLimit, persistence, type FlowMetrics, type Persistence } from '@/lib/flow'
+import { fetchBars, computeFlow, mapLimit } from '@/lib/flow'
 import {
-  TIERS, tierOf, TIER_EVIDENCE, CAVEATS,
-  type Regime, type TierId, type CatKey,
+  TIERS, tierOf, TIER_EVIDENCE, CAVEATS, buildCategories,
+  type Regime, type TierId, type CatKey, type ScreenerRow,
 } from '@/lib/screener-shared'
 
 // 수급 스크리너.
@@ -28,15 +28,6 @@ const NASDAQ_HEADERS = {
 // 넓은 유니버스(2,700종목)는 GitHub Actions 스냅샷이 담당한다.
 const LIVE_MIN_DOLLAR_VOL = 1e8
 const LIVE_MIN_MARKET_CAP = 1e10
-
-export interface ScreenerRow extends FlowMetrics {
-  symbol: string
-  name: string
-  sector: string
-  marketCap: number
-  tier: TierId | null
-  persistence: Persistence
-}
 
 const toNum = (s: unknown) => parseFloat(String(s).replace(/[$,%]/g, '')) || 0
 
@@ -70,51 +61,6 @@ async function marketRegime(): Promise<{ regime: Regime; spyChg20: number | null
   const cN = bars[bars.length - 1].c
   const chg = ((cN - c0) / c0) * 100
   return { regime: chg >= 0 ? 'up' : 'down', spyChg20: chg }
-}
-
-/**
- * 시총 구간별로 따로 분류한다.
- * 구간을 섞으면 소형주가 대형주 신호를 지운다 — 실제로 "조용한 매집"이
- * 전체 기준으로는 -0.15%p(근거 없음)였는데, 대형주만 보면 하락장 +1.96%p였다.
- */
-function buildCategories(rows: ScreenerRow[]) {
-  const out = {} as Record<TierId, Record<CatKey, ScreenerRow[]>>
-
-  for (const tier of TIERS) {
-    const inTier = rows.filter(r => r.tier === tier.id)
-    const byFlow = [...inTier].sort((a, b) => (b.f20 ?? -999) - (a.f20 ?? -999))
-    // 구간별 상위 15% (최소 30) — 구간 크기가 달라 고정 개수는 불공평하다
-    const topN = Math.max(30, Math.round(byFlow.length * 0.15))
-    const top = byFlow.slice(0, topN)
-    // 백테스트는 수급 상위 30% 기준으로 측정했다. 근거와 화면을 일치시킨다
-    const flow30 = byFlow.slice(0, Math.max(30, Math.round(byFlow.length * 0.3)))
-
-    out[tier.id] = {
-      // 볼린저 하단권 + 수급 상위 30%.
-      // 2년 백테스트에서 시총·국면 6개 조합 전부 기준선을 상회한 유일한 조건이다.
-      // 20일선 돌파를 추가하면 오히려 상회율이 44%로 떨어져 뺐다.
-      //
-      // 임계값 0.2를 조이지 말 것. 겹치지 않는 구간으로 잘라 재보면:
-      //   %B<=0        54.9% (n=898,  ±3.3%p)
-      //   0~0.1        54.4% (n=992,  ±3.1%p)
-      //   0.1~0.2      53.8% (n=1697, ±2.4%p)
-      //   0.2~0.3      51.5% (n=2459, ±2.0%p)
-      //   기준선        48.0%
-      // 인접 구간 차이는 z=0.20/0.32/1.47로 전부 노이즈다(오차범위가 차이보다 크다).
-      // "하단권이냐 아니냐"는 유의하지만 "얼마나 깊으냐"는 구분되지 않는다.
-      // 조이면 정확도는 그대로인데 후보만 줄어 고를 여지가 사라진다.
-      pullback: flow30
-        .filter(r => r.pctB !== null && r.pctB <= 0.2)
-        .sort((a, b) => (a.pctB ?? 9) - (b.pctB ?? 9))
-        .slice(0, 25),
-      momentum: top.filter(r => (r.chg20 ?? 0) >= 10).slice(0, 25),
-      // 밴드로 잡아야 한다 — 상한만 두면 폭락 종목(-52% 등)이 "정체"로 잡힌다
-      quiet: top.filter(r => (r.chg20 ?? 99) >= -5 && (r.chg20 ?? 99) < 2).slice(0, 25),
-      // 자금전환·지속매집은 6개 조합 중 1개에서만 상회해 삭제했다.
-      // 근거는 lib/screener-shared.ts 주석 참고.
-    }
-  }
-  return out
 }
 
 /** GitHub Actions가 저장한 스냅샷. 없으면 null → 호출부가 라이브 스캔으로 폴백 */
@@ -162,7 +108,7 @@ async function fromSupabase() {
       symbol: string; name: string | null; sector: string | null; market_cap: number | null
       f5: number | null; f20: number | null; f60: number | null
       rvol: number | null; chg20: number | null; pct_b: number | null
-      persistence: Persistence | null
+      price: number | null
     }
     const rows: ScreenerRow[] = (raw as DbRow[]).map(r => ({
       symbol: r.symbol,
@@ -172,9 +118,8 @@ async function fromSupabase() {
       tier: tierOf(r.market_cap ?? 0),
       f5: r.f5, f20: r.f20, f60: r.f60,
       rvol: r.rvol, chg20: r.chg20,
-      avgDollarVol: null,
       pctB: r.pct_b,
-      persistence: r.persistence ?? 'unknown',
+      price: r.price,
     }))
 
     return {
@@ -224,7 +169,11 @@ export async function GET() {
       if (!bars || bars.length < 65) return null
       const m = computeFlow(bars)
       if (m.f20 === null) return null
-      return { ...u, tier: tierOf(u.marketCap), ...m, persistence: persistence(m) }
+      return {
+        ...u, tier: tierOf(u.marketCap),
+        f5: m.f5, f20: m.f20, f60: m.f60, rvol: m.rvol, chg20: m.chg20, pctB: m.pctB,
+        price: bars[bars.length - 1].c,
+      }
     })
 
     return NextResponse.json(
