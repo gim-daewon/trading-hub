@@ -106,11 +106,22 @@ export async function GET() {
       { headers, next: { revalidate: 600 } }
     )
     if (!snapRes.ok) throw new Error(`snapshots ${snapRes.status}`)
-    const snaps: Snap[] = await snapRes.json()
+    const allSnaps: Snap[] = await snapRes.json()
+
+    // 하루에 여러 번 스캔되는 경우가 있다(스키마 변경 후 수동 실행 등).
+    // "스냅샷 1개 = 1거래일" 가정이 깨지므로 날짜별 최신 것만 남긴다.
+    const seen = new Set<string>()
+    const snaps = allSnaps.filter(s => {
+      const d = new Date(s.scanned_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+      if (seen.has(d)) return false
+      seen.add(d)
+      return true
+    })
+
     if (snaps.length < 2) {
       return NextResponse.json({
-        horizons: [], snapshotCount: snaps.length,
-        note: '스냅샷이 2개 이상 쌓여야 추적이 시작된다. 하루 1회 스캔이므로 내일부터 보인다.',
+        horizons: [], snapshotCount: snaps.length, rawCount: allSnaps.length,
+        note: '거래일 기준 스냅샷이 2개 이상 쌓여야 추적이 시작된다. 평일 1회 스캔이므로 내일부터 보인다.',
       })
     }
 
@@ -127,7 +138,7 @@ export async function GET() {
 
     const out = []
     for (const h of HORIZONS) {
-      // h 거래일 전 스냅샷 — 스캔은 평일 1회이므로 인덱스가 곧 거래일 수
+      // h 거래일 전 스냅샷 (날짜 중복 제거 후이므로 인덱스가 곧 거래일 수)
       const past = snaps[h]
       if (!past || past.spy_price == null || latest.spy_price == null) continue
 
@@ -171,6 +182,7 @@ export async function GET() {
     return NextResponse.json({
       horizons: out,
       snapshotCount: snaps.length,
+      rawCount: allSnaps.length,
       latestAt: latest.scanned_at,
       evidence: TIER_EVIDENCE,
       note: out.length === 0
