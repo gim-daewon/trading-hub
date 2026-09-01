@@ -148,7 +148,7 @@ export default function TrackingPage() {
           <p style={{ margin: '0 0 4px', fontWeight: 700 }}>읽는 법</p>
           <div>· 큰 숫자 = 절대 수익률 (실제 손익)</div>
           <div>· SPY ±%p = 같은 기간 SPY 대비 초과수익 (백테스트와 같은 기준)</div>
-          <div>· 상회 % = SPY를 이긴 종목 비율. 백테스트 기대치는 눌림목 53~58%</div>
+          <div>· 상회 % = SPY를 이긴 종목 비율. 10년 구간 실측 기대치는 50~57%로 동전 던지기에 가깝다</div>
           <div>· 스캔은 평일 1회라 스냅샷 1개 = 1거래일이다</div>
         </div>
       )}

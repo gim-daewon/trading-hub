@@ -44,6 +44,12 @@ export type CatEvidence = Record<Regime, Perf>
  *
  * 평균(avg)은 극단값에 쉽게 끌려간다. 중앙값(md)과 상회율(hit)을 같이 봐야 한다.
  * 예: 소형주 quiet 상승장은 평균 +6.68%p인데 중앙값 -1.61%p, 상회율 45%다.
+ *
+ * ── 중요 ──────────────────────────────────────────────────────────────
+ * 이 값은 "개별 거래를 전부 뭉친" 수치다. 20일 창을 5일 간격으로 썼기 때문에
+ * 표본이 서로 겹치고, 후보가 많이 나온 시기와 대박 종목이 과대반영된다.
+ * 실제 매매는 구간 단위로 이뤄지므로 판정의 근거로는 PERIOD_EVIDENCE를 써야 한다.
+ * 여기 값은 "시총 구간·국면별로 어떻게 갈리는가"를 보는 참고용으로만 남긴다.
  */
 export const TIER_EVIDENCE: Record<TierId, Record<CatKey | 'base', CatEvidence>> = {
   large: {
@@ -66,6 +72,75 @@ export const TIER_EVIDENCE: Record<TierId, Record<CatKey | 'base', CatEvidence>>
   },
 }
 
+export interface PeriodPerf {
+  /** 겹치지 않는 20거래일 구간 수 */
+  periods: number
+  /** 구간별 초과수익의 평균 */
+  avg: number
+  /** 중앙값 — 평균보다 이쪽이 실제 감각에 가깝다 */
+  med: number
+  /** 초과수익이 양수였던 구간 비율(%) */
+  pos: number
+  /** 상위 2개 구간을 뺀 평균. 극단값 의존 여부를 본다 */
+  trimmed: number
+  /** 최고 구간 초과수익. 이게 크면 소수 구간이 전체를 만든 것이다 */
+  max: number
+}
+
+/**
+ * 10년치를 겹치지 않는 20거래일 구간으로 잘라 측정한 값. 이게 판정의 근거다.
+ *
+ * TIER_EVIDENCE(개별 거래 뭉침)와 결론이 갈렸고, 이쪽이 맞다:
+ *   - 구간이 겹치지 않아 표본이 독립이다
+ *   - 구간마다 균등가중이라 후보가 많은 시기가 과대반영되지 않는다
+ *   - 실제 매매 단위(한 번 사서 20일 보유)와 형태가 같다
+ *
+ * 결과가 앞선 판단을 뒤집었다. 2년 뭉친 기준으로는 눌림목이 6개 조합 중 5개를
+ * 넘겨 최고였는데, 구간 단위로 보면 눌림목은 중앙값 +0.10%p에 최고구간이
+ * +46.06%p다 — 소수 구간이 전부를 만들었다. 모멘텀이 더 견고하다.
+ *
+ * 그리고 어느 것도 통계적으로 유의하지 않다. 양수비율이 50%를 유의하게 넘으려면
+ * z >= 1.96이 필요한데(z = (p-0.5)/sqrt(0.25/n)), 최고인 모멘텀도 z = 1.64다.
+ */
+export const PERIOD_EVIDENCE: Record<CatKey | 'flow30', PeriodPerf> = {
+  momentum: { periods: 120, avg: 0.73, med:  1.02, pos: 57.5, trimmed:  0.57, max: 10.28 },
+  pullback: { periods: 118, avg: 0.76, med:  0.10, pos: 51.7, trimmed:  0.22, max: 46.06 },
+  quiet:    { periods: 119, avg: 0.45, med: -0.27, pos: 47.1, trimmed:  0.17, max: 19.70 },
+  // 참고: 수급 상위 30%만 걸러낸 넓은 필터. 각 카테고리의 출발점이다
+  flow30:   { periods: 120, avg: 0.36, med:  0.14, pos: 52.5, trimmed:  0.22, max:  9.89 },
+}
+
+/**
+ * 기각한 조건 — 다시 만들지 않도록 근거를 남긴다.
+ *
+ * 눌림목 + 주봉 추세 필터(주가 > 20주 SMA):
+ *   2년 뭉친 기준으로는 상회율 53.5%로 좋아 보였는데, 10년 구간 단위로 재보니
+ *   110구간 중 51개(46%)만 양수, 중앙값 -0.44%p, 상위2제외 -0.37%p였다.
+ *   표본이 적어서 생긴 착시였다. 구현하지 않는다.
+ *
+ * 주봉 기준 신호 전체(순자금·볼린저를 주봉으로 계산): 상회율 50%로 무의미.
+ * 인트라데이(1h/4h) 신호: 정확히 50%.
+ * 볼린저 하단 손절: 진입가가 밴드 위에 있어 86% 확률로 발동한다. 성과를 깎는다.
+ */
+const z = (p: PeriodPerf) => (p.pos / 100 - 0.5) / Math.sqrt(0.25 / p.periods)
+
+/**
+ * 구간 단위 실측으로 판정한다.
+ *
+ * "기준선 상회" 같은 단정을 쓰지 않는다. 통계적으로 증명된 게 하나도 없다.
+ * 화면에는 무엇이 덜 나쁜지만 표시하고, 판단은 사용자가 한다.
+ */
+export function periodVerdict(cat: CatKey): { text: string; tone: 'ok' | 'weak' | 'none'; note: string } {
+  const p = PERIOD_EVIDENCE[cat]
+  const outlier = p.max >= 20      // 최고 구간이 이만큼 크면 소수 구간이 전체를 만든 것이다
+  const note = outlier ? `최고 구간 +${p.max.toFixed(1)}%p — 극단값 의존` : ''
+
+  if (Math.abs(z(p)) >= 1.96) return { text: '통계적 우위 확인', tone: 'ok', note }
+  if (p.pos > 50 && p.trimmed > 0 && !outlier) return { text: '약한 우위 (유의하지 않음)', tone: 'ok', note }
+  if (p.pos > 50) return { text: '우위 불확실', tone: 'weak', note }
+  return { text: '우위 없음', tone: 'none', note }
+}
+
 /** 평균·중앙값·상회율을 모두 기준선과 비교해 판정한다 (평균만 보면 속는다) */
 export function verdictOf(p: Perf, base: Perf): { text: string; strong: boolean } {
   const beatsAvg = p.avg > base.avg
@@ -85,6 +160,10 @@ export const CATS: { key: CatKey; label: string; rule: string }[] = [
 
 /**
  * 삭제한 카테고리 — 근거를 남긴다. "왜 없지?" 하고 다시 만들지 않도록.
+ *
+ * 주의: 아래 순위는 2년 뭉친 기준이고, 10년 구간 단위(PERIOD_EVIDENCE)에서
+ * 눌림목과 모멘텀의 순서가 뒤집혔다. 삭제 판단의 근거로는 여전히 유효하지만
+ * (자금전환·지속매집은 어느 기준으로도 1/6이었다) 남은 셋의 서열은 믿지 말 것.
  *
  * 판정 기준: 평균·중앙값·상회율 3개 모두 기준선 초과 = 상회.
  * 시총 3구간 x 국면 2가지 = 6개 조합 중 몇 개를 넘겼는가:
@@ -122,7 +201,7 @@ export function buildCategories<T extends ScreenerRow>(rows: T[]): Record<TierId
     const flow30 = byFlow.slice(0, Math.max(30, Math.round(byFlow.length * 0.3)))
 
     out[tier.id] = {
-      // 볼린저 하단권 + 수급 상위 30%. 6개 조합 중 5개에서 기준선 상회.
+      // 볼린저 하단권 + 수급 상위 30%. 구간 단위로는 양수 52%로 우위가 불확실하다.
       // 임계값 0.2를 조이지 말 것 — 구간별 차이가 전부 노이즈다(z<1.96).
       pullback: flow30
         .filter(r => r.pctB !== null && r.pctB <= 0.2)
@@ -137,8 +216,9 @@ export function buildCategories<T extends ScreenerRow>(rows: T[]): Record<TierId
 }
 
 export const CAVEATS = [
-  '생존 편향: 유니버스를 오늘 기준 시총·거래대금으로 뽑아 상장폐지 종목이 빠져 있다.',
-  '표본 중복: 20일 구간을 5일 간격으로 사용해 독립 표본은 실질 1/4 수준이다.',
-  '2년치 83개 리밸런스뿐이라 통계적 결론을 내릴 수 없다.',
-  '평균은 소수 극단값에 끌려간다. 중앙값과 상회율을 같이 봐야 한다.',
+  '통계적으로 유의한 조건이 하나도 없다. 10년 120구간에서 가장 나은 모멘텀도 양수 57%, z=1.64로 기준(1.96)에 못 미친다.',
+  '생존 편향: 유니버스를 오늘 기준 시총·거래대금으로 뽑아 상장폐지 종목이 빠져 있다. 10년 전 상장폐지 종목이 통째로 없다.',
+  '눌림목은 최고 구간 하나가 +46%p다. 그 구간을 빼면 우위가 +0.22%p로 줄어든다.',
+  '거래비용·슬리피지를 반영하지 않았다. 20일마다 전량 교체하면 이 정도 차이는 비용에 먹힌다.',
+  '순자금은 실제 순매수가 아니라 상승일·하락일 거래대금을 비교한 대리지표다.',
 ]

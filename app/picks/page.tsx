@@ -3,17 +3,18 @@ import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import { TvLink } from '../components/TvLink'
 import {
-  TIERS, TIER_EVIDENCE, verdictOf,
+  TIERS, TIER_EVIDENCE, PERIOD_EVIDENCE, periodVerdict,
   type TierId, type CatKey, type Regime, type Perf,
 } from '@/lib/screener-shared'
 
-// 눌림목 매집만 보여주는 화면.
+// 눌림목 조건에 걸린 종목만 모아 보는 화면.
 //
-// 스크리너의 5개 카테고리 중 유일하게 2년 백테스트에서
-// 시총 3구간 x 국면 2가지 = 6개 조합 전부 기준선을 상회한 조건이다.
-// 나머지는 국면·구간에 따라 뒤집혔다.
+// 원래는 "추천 종목"이었다. 2년 백테스트에서 눌림목이 시총 3구간 x 국면 2가지
+// 6개 조합 전부 기준선을 넘긴 유일한 조건이었기 때문이다.
 //
-// 그래도 "추천"을 단정하지 않는다. 상회율 최고가 58%다.
+// 그 근거는 10년 구간 단위 재검증에서 무너졌다 — 118구간 중 양수 61개(52%),
+// 중앙값 +0.10%p, 최고 구간 하나가 +46%p였다. 소수 구간이 전부를 만들었다.
+// 그래서 "추천"을 떼고 후보 목록으로 성격을 되돌렸다.
 
 interface Row {
   symbol: string; name: string; sector: string; marketCap: number
@@ -33,17 +34,14 @@ interface Data {
 
 const sgn = (v: number | null, d = 0) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(d)}`
 
+/** 시총 구간별 참고값. 판정은 구간 단위(PERIOD_EVIDENCE)로만 하므로 배지를 달지 않는다 */
 function EvidenceLine({ tier, regime }: { tier: TierId; regime: Regime }) {
   const p: Perf = TIER_EVIDENCE[tier].pullback[regime]
   const b: Perf = TIER_EVIDENCE[tier].base[regime]
-  const v = verdictOf(p, b)
   return (
-    <span style={{ fontSize: 10, color: 'var(--text-muted)', display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
-      <span className={`pill ${v.strong ? 'pill-up' : 'pill-stale'}`}>{v.text}</span>
-      <span className="num">
-        2년 실측 {sgn(p.avg, 2)}%p · 중앙값 {sgn(p.md, 2)} · 상회율 {p.hit}%
-        <span style={{ opacity: 0.65 }}> (기준선 {sgn(b.avg, 2)}%p · {b.hit}%)</span>
-      </span>
+    <span className="num" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+      참고 · 2년 뭉친 값 {sgn(p.avg, 2)}%p · 중앙값 {sgn(p.md, 2)} · 상회율 {p.hit}%
+      <span style={{ opacity: 0.65 }}> (기준선 {sgn(b.avg, 2)}%p · {b.hit}%)</span>
     </span>
   )
 }
@@ -111,7 +109,7 @@ export default function PicksPage() {
   return (
     <div style={{ padding: 16, maxWidth: 760, margin: '0 auto' }}>
       <PageHeader
-        title="추천 종목"
+        title="눌림목 후보"
         fetchedAt={data?.fetchedAt}
         onRefresh={load}
         loading={loading}
@@ -127,17 +125,20 @@ export default function PicksPage() {
 
       <div className="card" style={{ padding: '12px 14px', marginBottom: 14, fontSize: 11, lineHeight: 1.6 }}>
         <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-          눌림목 매집 — 볼린저 하단권 + 수급 상위
+          눌림목 — 볼린저 하단권 + 수급 상위
         </p>
         <p style={{ margin: 0, color: 'var(--text-muted)' }}>
           조건: <b>볼린저 %B ≤ 0.2</b>(20일선 아래로 밀린 상태) + <b>20일 순자금 상위 30%</b>
           <br />
-          스크리너 5개 조건 중 <b style={{ color: 'var(--up)' }}>유일하게</b> 2년 백테스트에서
-          시총 3구간 × 국면 2가지 <b>6개 조합 전부</b> 기준선을 상회했다.
+          10년 실측: 겹치지 않는 20거래일 {PERIOD_EVIDENCE.pullback.periods}구간 중
+          양수 <b>{PERIOD_EVIDENCE.pullback.pos.toFixed(0)}%</b> ·
+          중앙값 <b>{sgn(PERIOD_EVIDENCE.pullback.med, 2)}%p</b>
           <br />
           <span style={{ color: 'var(--warn)' }}>
-            다만 상회율 최고가 58%다. 확실한 게 아니라 <b>확률이 약간 나은 후보</b>일 뿐이고,
-            매수 판단은 직접 해야 한다.
+            <b>{periodVerdict('pullback').text}.</b> 최고 구간 하나가
+            +{PERIOD_EVIDENCE.pullback.max.toFixed(0)}%p이고, 그걸 빼면 우위가
+            {' '}{sgn(PERIOD_EVIDENCE.pullback.trimmed, 2)}%p로 줄어든다.
+            평소엔 거의 차이가 없다는 뜻이다. <b>오를 종목 목록이 아니라 살펴볼 후보 목록</b>으로 쓸 것.
           </span>
         </p>
       </div>

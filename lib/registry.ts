@@ -151,7 +151,7 @@ export interface NavSection {
 
 export const NAV_SECTIONS: NavSection[] = [
   { id: 'home',     label: '홈',           href: '/',         icon: '⌂' },
-  { id: 'picks',    label: '추천',         href: '/picks',    icon: '⭐' },
+  { id: 'picks',    label: '눌림목',       href: '/picks',    icon: '⭐' },
   { id: 'sectors',  label: '섹터',         href: '/sectors',  icon: '🔥' },
   { id: 'screener', label: '수급',         href: '/screener', icon: '💧' },
   { id: 'tracking', label: '성과추적',     href: '/tracking', icon: '📊' },

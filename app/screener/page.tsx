@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import { TvLink, TvLayoutSetting } from '../components/TvLink'
 import {
-  TIERS, CATS, TIER_EVIDENCE, verdictOf,
+  TIERS, CATS, TIER_EVIDENCE, PERIOD_EVIDENCE, periodVerdict,
   type TierId, type CatKey, type Regime, type Perf,
 } from '@/lib/screener-shared'
 
@@ -45,52 +45,77 @@ function Bar({ v }: { v: number | null }) {
   )
 }
 
-/** 해당 시총 구간·국면에서 실제로 측정된 성과. 판정을 크게 앞세운다. */
+const TONE = {
+  ok:   { color: 'var(--text-secondary)', border: 'var(--text-muted)' },
+  weak: { color: 'var(--warn)',           border: 'var(--warn)' },
+  none: { color: 'var(--down)',           border: 'var(--down)' },
+} as const
+
+/**
+ * 10년 구간 단위 실측을 앞세운다.
+ *
+ * 예전에는 2년 뭉친 값으로 "기준선 상회"를 초록색으로 크게 띄웠는데,
+ * 구간 단위로 재보니 유의한 조건이 하나도 없었다. 초록 배지는 없앴다.
+ * 시총·국면별 값은 참고로 아래에 접어둔다.
+ */
 function EvidenceBox({ tier, cat, regime }: { tier: TierId; cat: CatKey; regime: Regime }) {
+  const q = PERIOD_EVIDENCE[cat]
+  const v = periodVerdict(cat)
+  const tone = TONE[v.tone]
+
   const p: Perf = TIER_EVIDENCE[tier][cat][regime]
   const b: Perf = TIER_EVIDENCE[tier].base[regime]
-  const v = verdictOf(p, b)
 
   return (
     <div style={{
       background: 'var(--bg-base)',
-      border: `1px solid ${v.strong ? 'rgba(34,197,94,0.35)' : 'var(--border)'}`,
-      borderLeft: `3px solid ${v.strong ? 'var(--up)' : 'var(--text-muted)'}`,
+      border: '1px solid var(--border)',
+      borderLeft: `3px solid ${tone.border}`,
       borderRadius: 8, padding: '10px 12px', marginBottom: 10, fontSize: 11,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-        <span style={{
-          fontSize: 13, fontWeight: 800,
-          color: v.strong ? 'var(--up)' : 'var(--text-muted)',
-        }}>{v.text}</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: tone.color }}>{v.text}</span>
         <span style={{ color: 'var(--text-muted)' }}>
-          {TIERS.find(t => t.id === tier)?.label} · {regime === 'up' ? 'SPY 상승 구간' : 'SPY 하락 구간'} · 2년 실측
+          10년 · 겹치지 않는 20거래일 {q.periods}구간
         </span>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(76px, 1fr))', gap: 8 }}>
         {[
-          { k: '평균 초과', v: `${sgn(p.avg, 2)}%p`, base: `${sgn(b.avg, 2)}`, hl: p.avg > b.avg },
-          { k: '중앙값',    v: `${sgn(p.md, 2)}%p`,  base: `${sgn(b.md, 2)}`,  hl: p.md > b.md },
-          { k: 'SPY 상회율', v: `${p.hit}%`,          base: `${b.hit}%`,        hl: p.hit >= b.hit },
-          { k: '표본',      v: p.n.toLocaleString(), base: '',                 hl: false },
+          { k: '양수 구간',  v: `${q.pos.toFixed(0)}%`,        hl: q.pos > 50 },
+          { k: '중앙값',     v: `${sgn(q.med, 2)}%p`,          hl: q.med > 0 },
+          { k: '상위2 제외', v: `${sgn(q.trimmed, 2)}%p`,      hl: q.trimmed > 0 },
+          { k: '최고 구간',  v: `${sgn(q.max, 1)}%p`,          hl: false },
         ].map(x => (
           <div key={x.k}>
             <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>{x.k}</div>
-            <div className="num" style={{ fontSize: 13, fontWeight: 700, color: x.hl ? 'var(--up)' : 'var(--text-secondary)' }}>
+            <div className="num" style={{ fontSize: 13, fontWeight: 700, color: x.hl ? 'var(--text-primary)' : 'var(--text-muted)' }}>
               {x.v}
             </div>
-            {x.base && <div className="num" style={{ fontSize: 9, color: 'var(--text-muted)' }}>기준 {x.base}</div>}
           </div>
         ))}
       </div>
 
-      {p.avg > b.avg && p.md <= b.md && (
+      {v.note && (
         <p style={{ margin: '8px 0 0', color: 'var(--warn)', lineHeight: 1.5 }}>
-          평균은 기준선을 넘지만 중앙값은 못 넘는다. 소수 대박 종목이 평균을 끌어올린 것이므로,
-          몇 종목만 골라 사면 손해 볼 확률이 더 높다.
+          {v.note}. 그 구간을 빼면 우위가 {sgn(q.trimmed, 2)}%p로 줄어든다 —
+          평소에는 거의 차이가 없고 어쩌다 한 번 크게 벌었다는 뜻이다.
         </p>
       )}
+
+      <details style={{ marginTop: 8 }}>
+        <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 10 }}>
+          시총·국면별 참고값 (개별 거래 뭉침 — 표본이 겹쳐 과대평가된다)
+        </summary>
+        <div className="num" style={{ marginTop: 6, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+          {TIERS.find(t => t.id === tier)?.label} · {regime === 'up' ? 'SPY 상승' : 'SPY 하락'} 구간 ·
+          2년 · 표본 {p.n.toLocaleString()}
+          <br />
+          평균 {sgn(p.avg, 2)}%p (기준 {sgn(b.avg, 2)}) ·
+          중앙값 {sgn(p.md, 2)} (기준 {sgn(b.md, 2)}) ·
+          상회율 {p.hit}% (기준 {b.hit}%)
+        </div>
+      </details>
     </div>
   )
 }
@@ -113,28 +138,17 @@ export default function ScreenerPage() {
 
   useEffect(() => { load() }, [load])
 
-  // 국면에 맞는 기본 탭.
-  // 눌림목이 6개 조합 중 5개를 넘겨 가장 넓게 통하므로 기본값으로 둔다.
-  // 하락 국면에서는 조용한매집이 대형·중형 하락장 각 56%로 보완한다.
-  useEffect(() => {
-    if (data) setTab('pullback')
-  }, [data?.regime])
-
   const rows = data?.categories?.[tier]?.[tab] ?? []
 
   // 근거가 약한 카테고리를 뒤로 민다 — 지우지는 않는다.
   // 지우면 "왜 없지?" 하고 나중에 또 만들게 되지만, 근거와 함께 남으면 그게 기록이 된다.
-  const orderedCats = useMemo(() => {
-    if (!data) return CATS
-    return [...CATS].sort((a, b) => {
-      const s = (k: CatKey) => {
-        const p = TIER_EVIDENCE[tier][k][data.regime]
-        const base = TIER_EVIDENCE[tier].base[data.regime]
-        return verdictOf(p, base).strong ? 0 : 1
-      }
-      return s(a.key) - s(b.key)
-    })
-  }, [data, tier])
+  //
+  // 정렬 기준을 시총·국면별 값에서 10년 구간 단위 양수비율로 바꿨다.
+  // 구간 단위로 재보니 순서가 뒤집혔다 — 모멘텀 57% > 눌림목 52% > 조용한매집 47%.
+  const orderedCats = useMemo(
+    () => [...CATS].sort((a, b) => PERIOD_EVIDENCE[b.key].pos - PERIOD_EVIDENCE[a.key].pos),
+    []
+  )
 
   return (
     <div style={{ padding: 16, maxWidth: 900, margin: '0 auto' }}>
@@ -154,9 +168,11 @@ export default function ScreenerPage() {
       />
 
       <div className="card" style={{ padding: '10px 12px', marginBottom: 14, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-        <b style={{ color: 'var(--warn)' }}>이건 추천이 아니라 필터다.</b> 순자금은 실제 순매수가 아니라
-        상승일·하락일 거래대금 비교로 만든 <b>대리지표</b>다(미국은 기관 순매수를 실시간 공개하지 않는다).
-        <br />시총 구간마다 결과가 정반대라 <b>구간별로 따로 측정</b>했다. 각 탭의 실측치를 보고 직접 판단할 것.
+        <b style={{ color: 'var(--warn)' }}>이건 예측이 아니라 탐색 도구다.</b> 2,700종목을 수십 개로 좁혀줄 뿐,
+        오를 종목을 고르지 않는다. 10년 120구간으로 재보니 <b>통계적으로 유의한 조건이 하나도 없었다</b>
+        (가장 나은 모멘텀도 양수 57%, z=1.64로 기준 1.96 미달).
+        <br />순자금은 실제 순매수가 아니라 상승일·하락일 거래대금 비교로 만든 <b>대리지표</b>다
+        (미국은 기관 순매수를 실시간 공개하지 않는다).
         <div style={{ marginTop: 8 }}><TvLayoutSetting /></div>
       </div>
 
@@ -183,9 +199,7 @@ export default function ScreenerPage() {
         {orderedCats.map(c => {
           const n = data?.categories?.[tier]?.[c.key]?.length ?? 0
           const active = tab === c.key
-          const strong = data
-            ? verdictOf(TIER_EVIDENCE[tier][c.key][data.regime], TIER_EVIDENCE[tier].base[data.regime]).strong
-            : false
+          const strong = periodVerdict(c.key).tone === 'ok'
           return (
             <button key={c.key} onClick={() => setTab(c.key)} style={{
               flexShrink: 0, minHeight: 38, padding: '0 14px', borderRadius: 19,
