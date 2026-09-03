@@ -16,10 +16,16 @@ interface SectorData {
   label: string
   etf: string
   color: string
+  group?: string
+  broad: boolean
   price: number | null
   change: number | null
   changePct: number | null
   rs1d: number | null
+  /** 거래일별 누적 등락률 (5·20·60·120) */
+  periods: Record<string, number | null>
+  /** 같은 기간의 SPY 대비 초과수익 */
+  rs: Record<string, number | null>
   ts: number
 }
 
@@ -27,15 +33,39 @@ interface SpyData { price: number; changePct: number }
 
 type ViewMode = 'heatmap' | 'table'
 
-function heatColor(pct: number | null): string {
+/**
+ * 순환 관측 기간. 10년·47섹터·겹치지 않는 113구간 실측으로 골랐다.
+ *
+ * 상위 섹터를 따라가는 건 어느 기간도 유의하지 않다(최고 54%, z=0.85).
+ * 유의한 신호는 하나뿐이다 — 120일 하위 섹터는 63%의 구간에서 계속 뒤처졌다
+ * (양수 37%, z=-2.77). 그래서 120일을 반드시 노출한다.
+ *
+ * 20일은 가장 쓸모없었다(상위 49% / 하위 43%). 그래도 남긴 이유는
+ * 수급 스크리너가 20일 기준이라 화면끼리 맞춰 보기 위해서다.
+ */
+const PERIODS = [
+  { key: '1',   label: '1일',   note: '오늘 무엇이 움직였나' },
+  { key: '5',   label: '5일',   note: '단기 순환. 예측력은 없다 (54%, 유의 안 함)' },
+  { key: '20',  label: '20일',  note: '스크리너와 같은 창. 순환 신호로는 가장 약했다 (49%)' },
+  { key: '60',  label: '60일',  note: '중기 추세 (50%, 유의 안 함)' },
+  { key: '120', label: '120일', note: '하위권이 계속 뒤처진다 (양수 37%, z=-2.77 · 유의)' },
+] as const
+type PeriodKey = typeof PERIODS[number]['key']
+
+// 기간이 길수록 등락 폭이 커진다. 1일 기준 색을 120일에 그대로 쓰면 전부 진해진다.
+// 기간별로 문턱을 비례 확대해 색 강도가 같은 의미를 갖게 한다.
+const SCALE: Record<PeriodKey, number> = { '1': 1, '5': 2, '20': 4, '60': 7, '120': 10 }
+
+function heatColor(pct: number | null, k: PeriodKey = '1'): string {
   if (pct === null) return '#1e293b'
-  if (pct >  3)  return '#14532d'
-  if (pct >  1.5) return '#166534'
-  if (pct >  0.5) return '#15803d'
-  if (pct >  0)   return '#1a3d2b'
-  if (pct > -0.5) return '#2d1a1a'
-  if (pct > -1.5) return '#7f1d1d'
-  if (pct > -3)   return '#991b1b'
+  const v = pct / SCALE[k]
+  if (v >  3)  return '#14532d'
+  if (v >  1.5) return '#166534'
+  if (v >  0.5) return '#15803d'
+  if (v >  0)   return '#1a3d2b'
+  if (v > -0.5) return '#2d1a1a'
+  if (v > -1.5) return '#7f1d1d'
+  if (v > -3)   return '#991b1b'
   return '#6b0000'
 }
 
@@ -78,6 +108,9 @@ export default function SectorsPage() {
   const [error, setError]       = useState<string | null>(null)
   const [fetchedAt, setFetchedAt] = useState<number | null>(null)
   const [view, setView]         = useState<ViewMode>('heatmap')
+  const [period, setPeriod]     = useState<PeriodKey>('1')
+  // 그룹은 기본 접힘. 47개를 한 번에 펴면 폰에서 스크롤이 끝나지 않는다
+  const [openGroups, setOpen]   = useState<Set<string>>(new Set())
   const [selected, setSelected]     = useState<SectorData | null>(null)
   const [holdings, setHoldings]     = useState<Holding[]>([])
   const [holdLoading, setHoldLoad]  = useState(false)
@@ -132,7 +165,62 @@ export default function SectorsPage() {
       .finally(() => setFlowLoad(false))
   }, [selected])
 
-  const sorted = [...sectors].sort((a, b) => (b.changePct ?? -999) - (a.changePct ?? -999))
+  // 선택한 기간의 등락률. 1일은 changePct, 나머지는 periods에서 꺼낸다
+  const pctOf = useCallback(
+    (s: SectorData) => period === '1' ? s.changePct : (s.periods?.[period] ?? null),
+    [period]
+  )
+  const rsOf = useCallback(
+    (s: SectorData) => period === '1' ? s.rs1d : (s.rs?.[period] ?? null),
+    [period]
+  )
+  const byPct = useCallback(
+    (list: SectorData[]) => [...list].sort((a, b) => (pctOf(b) ?? -999) - (pctOf(a) ?? -999)),
+    [pctOf]
+  )
+
+  const sorted = byPct(sectors)
+  const broad  = byPct(sectors.filter(s => s.broad))
+  // 그룹 순서는 registry의 SECTOR_GROUPS를 따른다. 그룹 안에서만 등락순 정렬
+  const groups = sectors.filter(s => !s.broad).reduce<{ label: string; items: SectorData[] }[]>((acc, s) => {
+    const g = s.group ?? '기타'
+    const hit = acc.find(x => x.label === g)
+    if (hit) hit.items.push(s); else acc.push({ label: g, items: [s] })
+    return acc
+  }, []).map(g => ({ ...g, items: byPct(g.items) }))
+
+  const toggleGroup = (label: string) => setOpen(prev => {
+    const next = new Set(prev)
+    if (next.has(label)) next.delete(label); else next.add(label)
+    return next
+  })
+
+  const HeatCell = ({ s, small }: { s: SectorData; small?: boolean }) => {
+    const v = pctOf(s), r = rsOf(s)
+    return (
+      <div
+        className="heat-cell"
+        style={{ background: heatColor(v, period), minHeight: small ? 80 : 100 }}
+        onClick={() => setSelected(selected?.id === s.id ? null : s)}
+      >
+        <span style={{ fontSize: small ? 12 : 13, fontWeight: 700, color: '#fff', letterSpacing: '0.02em' }}>
+          {s.etf}
+        </span>
+        <span style={{
+          fontSize: small ? 10 : 12, color: '#ffffffbb',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%',
+        }}>{s.label}</span>
+        <span className="num" style={{ fontSize: small ? 15 : 18, fontWeight: 800, color: '#fff', marginTop: 4 }}>
+          {pctLabel(v, 1)}
+        </span>
+        {r !== null && (
+          <span style={{ fontSize: 10, color: '#ffffff88' }}>
+            vs SPY {r >= 0 ? '+' : ''}{r.toFixed(1)}pp
+          </span>
+        )}
+      </div>
+    )
+  }
 
   return (
     <>
@@ -168,46 +256,100 @@ export default function SectorsPage() {
         ))}
       </div>
 
+      {/* 순환 관측 기간 */}
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 8, paddingBottom: 2 }}>
+        {PERIODS.map(p => {
+          const active = period === p.key
+          return (
+            <button key={p.key} onClick={() => setPeriod(p.key)} style={{
+              flexShrink: 0, minHeight: 38, padding: '0 14px', borderRadius: 10, cursor: 'pointer',
+              border: `1px solid ${active ? 'var(--info)' : 'var(--border)'}`,
+              background: active ? 'rgba(59,130,246,0.15)' : 'var(--bg-card)',
+              color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+              fontSize: 12, fontWeight: active ? 700 : 400, whiteSpace: 'nowrap',
+            }}>{p.label}</button>
+          )
+        })}
+      </div>
+      <p style={{ margin: '0 0 14px', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+        {PERIODS.find(p => p.key === period)?.note}
+        {period === '120' && (
+          <>
+            <br />
+            <span style={{ color: 'var(--warn)' }}>
+              10년 113구간 실측에서 유의한 신호는 이것 하나였다. 다만 방향은 <b>회피</b>다 —
+              하위권을 피하는 데 쓰지, 상위권을 따라가는 근거는 되지 않는다.
+            </span>
+          </>
+        )}
+      </p>
+
       {error && (
         <div style={{ background: '#7f1d1d22', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 14px', marginBottom: 16, color: 'var(--down)', fontSize: 13 }}>
           {error} — <button onClick={load} style={{ color: 'var(--info)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>재시도</button>
         </div>
       )}
 
-      {/* ── 히트맵 뷰 ── */}
+      {/* ── 히트맵 뷰 — 대분류 11개를 위에, 세부 36개를 접이식 그룹으로 ── */}
       {view === 'heatmap' && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
-          gap: 8,
-        }}>
-          {loading
-            ? Array.from({ length: 30 }).map((_, i) => (
-                <div key={i} style={{ height: 100, borderRadius: 8, background: 'var(--bg-card)', animation: 'pulse 1.5s infinite' }} />
-              ))
-            : sorted.map(s => (
-                <div
-                  key={s.id}
-                  className="heat-cell"
-                  style={{ background: heatColor(s.changePct), minHeight: 100 }}
-                  onClick={() => setSelected(selected?.id === s.id ? null : s)}
-                >
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: '0.02em' }}>
-                    {s.etf}
-                  </span>
-                  <span style={{ fontSize: 12, color: '#ffffffbb' }}>{s.label}</span>
-                  <span className="num" style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginTop: 4 }}>
-                    {pctLabel(s.changePct, 1)}
-                  </span>
-                  {s.rs1d !== null && (
-                    <span style={{ fontSize: 11, color: '#ffffff88' }}>
-                      vs SPY {s.rs1d >= 0 ? '+' : ''}{s.rs1d.toFixed(1)}pp
-                    </span>
+        loading ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 8 }}>
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} style={{ height: 100, borderRadius: 8, background: 'var(--bg-card)', animation: 'pulse 1.5s infinite' }} />
+            ))}
+          </div>
+        ) : (
+          <>
+            <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
+              GICS 대분류 {broad.length}
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 8, marginBottom: 20 }}>
+              {broad.map(s => <HeatCell key={s.id} s={s} />)}
+            </div>
+
+            <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
+              세부 섹터 {sectors.length - broad.length} · 눌러서 펼치기
+            </p>
+            {groups.map(g => {
+              const open = openGroups.has(g.label)
+              // 접힌 상태에서도 그룹 안에서 뭐가 제일 세고 약한지는 보여준다
+              const best = g.items[0], worst = g.items[g.items.length - 1]
+              return (
+                <div key={g.label} style={{ marginBottom: 8 }}>
+                  <button
+                    onClick={() => toggleGroup(g.label)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                      minHeight: 44, padding: '0 12px', borderRadius: 10, cursor: 'pointer',
+                      background: 'var(--bg-card)', border: '1px solid var(--border)',
+                      color: 'var(--text-primary)', fontSize: 13, textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 10 }}>{open ? '▾' : '▸'}</span>
+                    <span style={{ fontWeight: 700 }}>{g.label}</span>
+                    <span className="num" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{g.items.length}</span>
+                    {!open && best && (
+                      <span style={{ marginLeft: 'auto', fontSize: 11, display: 'flex', gap: 8 }}>
+                        <span className="num up">{best.etf} {pctLabel(pctOf(best), 1)}</span>
+                        {worst && worst.id !== best.id && (
+                          <span className="num down">{worst.etf} {pctLabel(pctOf(worst), 1)}</span>
+                        )}
+                      </span>
+                    )}
+                  </button>
+                  {open && (
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+                      gap: 6, marginTop: 6, paddingLeft: 4,
+                    }}>
+                      {g.items.map(s => <HeatCell key={s.id} s={s} small />)}
+                    </div>
                   )}
                 </div>
-              ))
-          }
-        </div>
+              )
+            })}
+          </>
+        )
       )}
 
       {/* ── 테이블 뷰 ── */}
@@ -218,15 +360,16 @@ export default function SectorsPage() {
               <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 12 }}>
                 <th style={{ textAlign: 'left',  padding: '6px 8px' }}>섹터</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px' }}>ETF</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>가격</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>1D</th>
+                {PERIODS.map(p => (
+                  <th key={p.key} style={{ textAlign: 'right', padding: '6px 8px' }}>{p.label}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {loading
                 ? Array.from({ length: 30 }).map((_, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                      {Array.from({ length: 4 }).map((_, j) => (
+                      {Array.from({ length: PERIODS.length + 2 }).map((_, j) => (
                         <td key={j} style={{ padding: '10px 8px' }}>
                           <div style={{ height: 14, borderRadius: 4, background: 'var(--bg-card)' }} />
                         </td>
@@ -252,12 +395,15 @@ export default function SectorsPage() {
                       <td style={{ textAlign: 'right', padding: '10px 8px', color: 'var(--text-secondary)' }} className="num">
                         <TvLink symbol={s.etf} />
                       </td>
-                      <td style={{ textAlign: 'right', padding: '10px 8px' }} className="num">
-                        {s.price ? `$${s.price.toFixed(2)}` : '—'}
-                      </td>
-                      <td style={{ textAlign: 'right', padding: '10px 8px' }}>
-                        <PctBadge v={s.changePct} />
-                      </td>
+                      {PERIODS.map(p => (
+                        <td key={p.key} style={{
+                          textAlign: 'right', padding: '10px 8px',
+                          // 선택한 기간을 강조해 정렬 기준이 어디인지 보이게 한다
+                          background: period === p.key ? 'var(--bg-hover)' : undefined,
+                        }}>
+                          <PctBadge v={p.key === '1' ? s.changePct : (s.periods?.[p.key] ?? null)} />
+                        </td>
+                      ))}
                     </tr>
                   ))
               }

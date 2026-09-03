@@ -6,6 +6,10 @@ export interface SectorMeta {
   label: string
   etf: string   // SPDR ETF ticker
   color: string // tailwind bg class for heatmap
+  /** GICS 11개 대분류인가. 히트맵 상단 줄에 따로 배치한다 */
+  broad?: boolean
+  /** 세부 섹터가 속한 접이식 그룹 */
+  group?: string
 }
 
 // 라벨은 ETF의 실제 보유종목과 일치해야 한다.
@@ -246,3 +250,43 @@ export const getEarningsAssets = () =>
 
 export const getSectorEtfs = () =>
   SECTORS.map(s => ASSETS.find(a => a.id === s.etf)).filter(Boolean) as Asset[]
+
+// ── 히트맵 2단 구성 ─────────────────────────────────────────────────────
+//
+// 47개를 평면으로 깔면 폰 한 화면에 안 들어온다.
+// 위: GICS 11개 대분류 (시장 전체 흐름)
+// 아래: 세부 섹터를 그룹으로 묶어 접었다 편다
+//
+// 대분류/세부는 SECTORS 배열을 건드리지 않고 여기서만 정한다.
+// 섹터를 추가할 때 이 목록에 안 넣으면 '기타'로 떨어진다(누락돼도 화면에선 보인다).
+const BROAD_IDS: SectorId[] = [
+  'tech', 'financial', 'healthcare', 'energy', 'materials', 'industrial',
+  'consumer', 'staples', 'communication', 'utilities', 'realestate',
+]
+
+export const SECTOR_GROUPS: { label: string; ids: SectorId[] }[] = [
+  { label: '전력·원자력',   ids: ['dc_utilities', 'grid', 'nuclear_power', 'nuclear', 'cleanenergy'] },
+  { label: '반도체·AI',     ids: ['ai', 'semiconductor', 'fabless', 'quantum'] },
+  { label: '소프트웨어',    ids: ['software', 'cloud', 'cybersecurity'] },
+  { label: '산업·운송',     ids: ['defense', 'space', 'infrastructure', 'transport', 'airlines', 'robotics', 'automotive'] },
+  { label: '자원·채굴',     ids: ['metals', 'goldminer', 'rareearth'] },
+  { label: '금융·금리민감', ids: ['banks', 'regional_banks', 'insurance', 'fintech', 'homebuilder'] },
+  { label: '헬스케어',      ids: ['biotech', 'health_device'] },
+  { label: '소비',          ids: ['leisure', 'ecommerce', 'food'] },
+  { label: '미디어·통신',   ids: ['media', 'telecom'] },
+  { label: '디지털자산',    ids: ['bitcoin_etf', 'neo_cloud'] },
+]
+
+const GROUP_OF = new Map<SectorId, string>(
+  SECTOR_GROUPS.flatMap(g => g.ids.map(id => [id, g.label] as const))
+)
+for (const s of SECTORS) {
+  s.broad = BROAD_IDS.includes(s.id)
+  if (!s.broad) s.group = GROUP_OF.get(s.id) ?? '기타'
+}
+
+export const BROAD_SECTORS = SECTORS.filter(s => s.broad)
+export const DETAIL_GROUPS = [
+  ...SECTOR_GROUPS.map(g => ({ label: g.label, sectors: SECTORS.filter(s => s.group === g.label) })),
+  { label: '기타', sectors: SECTORS.filter(s => s.group === '기타') },
+].filter(g => g.sectors.length > 0)
