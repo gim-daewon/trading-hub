@@ -52,27 +52,13 @@ const PERIODS = [
 ] as const
 type PeriodKey = typeof PERIODS[number]['key']
 
-// 기간이 길수록 등락 폭이 커진다. 1일 기준 색을 120일에 그대로 쓰면 전부 진해진다.
-// 기간별로 문턱을 비례 확대해 색 강도가 같은 의미를 갖게 한다.
-const SCALE: Record<PeriodKey, number> = { '1': 1, '5': 2, '20': 4, '60': 7, '120': 10 }
-
-function heatColor(pct: number | null, k: PeriodKey = '1'): string {
-  if (pct === null) return '#1e293b'
-  const v = pct / SCALE[k]
-  if (v >  3)  return '#14532d'
-  if (v >  1.5) return '#166534'
-  if (v >  0.5) return '#15803d'
-  if (v >  0)   return '#1a3d2b'
-  if (v > -0.5) return '#2d1a1a'
-  if (v > -1.5) return '#7f1d1d'
-  if (v > -3)   return '#991b1b'
-  return '#6b0000'
-}
-
 function pctLabel(v: number | null, decimals = 2): string {
   if (v === null) return '—'
   return `${v >= 0 ? '+' : ''}${v.toFixed(decimals)}%`
 }
+
+/** 색 클래스는 언제나 값의 부호에서 나온다 */
+const cls = (v: number | null) => v == null ? 'flat' : v > 0 ? 'up' : v < 0 ? 'down' : 'flat'
 
 function PctBadge({ v }: { v: number | null }) {
   if (v === null) return <span className="flat">—</span>
@@ -202,29 +188,75 @@ export default function SectorsPage() {
     return next
   })
 
-  const HeatCell = ({ s, small }: { s: SectorData; small?: boolean }) => {
+  /**
+   * 순위 행 — 한 줄에 한 섹터.
+   *
+   * 카드 그리드에서 바꿨다. 섹터 화면을 보는 이유는 "무엇이 시장보다 센가"인데
+   * 2열 카드로는 11개를 보려고 여섯 줄을 스크롤해야 하고, 그 사이 1등이 뭐였는지
+   * 잊는다. 순위는 세로 나열이 가장 잘 읽힌다.
+   *
+   * 막대 = vs SPY (시장 대비 강도), 숫자 = 절대 등락.
+   * 둘을 분리해야 "헬스케어 +0.1%인데 vs SPY -0.8pp"가 헷갈리지 않는다.
+   */
+  const Row = ({ s, maxAbs }: { s: SectorData; maxAbs: number }) => {
     const v = pctOf(s), r = rsOf(s)
+    const w = maxAbs > 0 && r != null ? Math.min(Math.abs(r) / maxAbs, 1) * 50 : 0
+    const pos = (r ?? 0) >= 0
     return (
-      <div
-        className="heat-cell"
-        style={{ background: heatColor(v, period), minHeight: small ? 80 : 100 }}
+      <button
         onClick={() => setSelected(selected?.id === s.id ? null : s)}
+        style={{
+          width: '100%', display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) 64px 62px',
+          alignItems: 'center', gap: 8, minHeight: 44, padding: '0 10px',
+          background: selected?.id === s.id ? 'var(--bg-hover)' : 'transparent',
+          border: 'none', borderBottom: '1px solid var(--border)',
+          cursor: 'pointer', textAlign: 'left', color: 'var(--text-primary)',
+        }}
       >
-        <span style={{ fontSize: small ? 12 : 13, fontWeight: 700, color: '#fff', letterSpacing: '0.02em' }}>
-          {s.etf}
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
+          <span className="num" style={{ fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{s.etf}</span>
+          <span style={{
+            fontSize: 11, color: 'var(--text-muted)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{s.label}</span>
         </span>
-        <span style={{
-          fontSize: small ? 10 : 12, color: '#ffffffbb',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%',
-        }}>{s.label}</span>
-        <span className="num" style={{ fontSize: small ? 15 : 18, fontWeight: 800, color: '#fff', marginTop: 4 }}>
-          {pctLabel(v, 1)}
+
+        {/* 중앙선이 SPY. 오른쪽으로 뻗으면 시장 상회, 왼쪽이면 하회 */}
+        <span style={{ position: 'relative', height: 16 }}>
+          <span style={{
+            position: 'absolute', left: '50%', top: 0, bottom: 0,
+            width: 1, background: 'var(--border)',
+          }} />
+          {r != null && (
+            <span style={{
+              position: 'absolute', top: 4, height: 8, borderRadius: 2,
+              width: `${w}%`,
+              left: pos ? '50%' : undefined,
+              right: pos ? undefined : '50%',
+              background: pos ? 'var(--up)' : 'var(--down)',
+            }} />
+          )}
         </span>
-        {r !== null && (
-          <span style={{ fontSize: 10, color: '#ffffff88' }}>
-            vs SPY {r >= 0 ? '+' : ''}{r.toFixed(1)}pp
+
+        <span style={{ textAlign: 'right' }}>
+          <span className={`num ${cls(v)}`} style={{ fontSize: 13, fontWeight: 700, display: 'block' }}>
+            {pctLabel(v, 1)}
           </span>
-        )}
+          <span className="num" style={{ fontSize: 9, color: 'var(--text-muted)', display: 'block' }}>
+            {r == null ? '' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}pp`}
+          </span>
+        </span>
+      </button>
+    )
+  }
+
+  /** 목록 하나를 순위로 그린다. 막대 스케일은 그 목록 안에서 정규화한다 */
+  const RankList = ({ items }: { items: SectorData[] }) => {
+    const maxAbs = Math.max(...items.map(s => Math.abs(rsOf(s) ?? 0)), 0.1)
+    return (
+      <div style={{ borderTop: '1px solid var(--border)' }}>
+        {items.map(s => <Row key={s.id} s={s} maxAbs={maxAbs} />)}
       </div>
     )
   }
@@ -336,11 +368,16 @@ export default function SectorsPage() {
           </div>
         ) : (
           <>
-            <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
-              GICS 대분류 {broad.length}
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 8, marginBottom: 20 }}>
-              {broad.map(s => <HeatCell key={s.id} s={s} />)}
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', margin: '0 0 6px' }}>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
+                GICS 대분류 {broad.length}
+              </p>
+              <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)' }}>
+                막대 = SPY 대비 · 숫자 = 등락
+              </p>
+            </div>
+            <div className="card" style={{ overflow: 'hidden', marginBottom: 20 }}>
+              <RankList items={broad} />
             </div>
 
             <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
@@ -364,21 +401,27 @@ export default function SectorsPage() {
                     <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 10 }}>{open ? '▾' : '▸'}</span>
                     <span style={{ fontWeight: 700 }}>{g.label}</span>
                     <span className="num" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{g.items.length}</span>
+                    {/* 색은 반드시 값의 부호를 따른다.
+                        최고=초록·최저=빨강으로 하드코딩했더니 둘 다 양수인 그룹에서
+                        "IBIT +5.0%"가 빨갛게 나왔다. 순위는 위치로, 부호는 색으로 구분한다 */}
                     {!open && best && (
-                      <span style={{ marginLeft: 'auto', fontSize: 11, display: 'flex', gap: 8 }}>
-                        <span className="num up">{best.etf} {pctLabel(pctOf(best), 1)}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 11, display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                        <span className={`num ${cls(pctOf(best))}`}>
+                          <span style={{ color: 'var(--text-muted)', marginRight: 3 }}>▲</span>
+                          {best.etf} {pctLabel(pctOf(best), 1)}
+                        </span>
                         {worst && worst.id !== best.id && (
-                          <span className="num down">{worst.etf} {pctLabel(pctOf(worst), 1)}</span>
+                          <span className={`num ${cls(pctOf(worst))}`}>
+                            <span style={{ color: 'var(--text-muted)', marginRight: 3 }}>▼</span>
+                            {worst.etf} {pctLabel(pctOf(worst), 1)}
+                          </span>
                         )}
                       </span>
                     )}
                   </button>
                   {open && (
-                    <div style={{
-                      display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
-                      gap: 6, marginTop: 6, paddingLeft: 4,
-                    }}>
-                      {g.items.map(s => <HeatCell key={s.id} s={s} small />)}
+                    <div className="card" style={{ overflow: 'hidden', marginTop: 4 }}>
+                      <RankList items={g.items} />
                     </div>
                   )}
                 </div>
@@ -445,28 +488,6 @@ export default function SectorsPage() {
               }
             </tbody>
           </table>
-        </div>
-      )}
-
-      {/* 범례 */}
-      {view === 'heatmap' && (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 14, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>강도:</span>
-          {[
-            { label: '+3%↑', bg: '#14532d' },
-            { label: '+1%',  bg: '#15803d' },
-            { label: '보합', bg: '#1a3d2b' },
-            { label: '-1%',  bg: '#7f1d1d' },
-            { label: '-3%↓', bg: '#6b0000' },
-          ].map(c => (
-            <span key={c.label} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              fontSize: 10, color: 'var(--text-muted)',
-            }}>
-              <span style={{ width: 12, height: 12, borderRadius: 2, background: c.bg, display: 'inline-block' }} />
-              {c.label}
-            </span>
-          ))}
         </div>
       )}
 
