@@ -110,6 +110,8 @@ export default function SectorsPage() {
   const [period, setPeriod]     = useState<PeriodKey>('1')
   // 그룹은 기본 접힘. 47개를 한 번에 펴면 폰에서 스크롤이 끝나지 않는다
   const [openGroups, setOpen]   = useState<Set<string>>(new Set())
+  // 이동 뷰의 개별 섹터 목록. 그룹이 더 잘 읽혀서 기본은 접어둔다
+  const [showMoveDetail, setShowMoveDetail] = useState(false)
   const [selected, setSelected]     = useState<SectorData | null>(null)
   const [holdings, setHoldings]     = useState<Holding[]>([])
   const [holdLoading, setHoldLoad]  = useState(false)
@@ -554,16 +556,36 @@ export default function SectorsPage() {
             ))}
           </div>
 
-          <p style={{ margin: '0 0 6px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
-            개별 섹터 {moves.length}
-          </p>
-          <div className="card" style={{ overflow: 'hidden' }}>
+          {/* 개별 섹터는 접어둔다. 그룹 단위가 훨씬 잘 읽힌다 —
+              헬스케어가 통째로 60일 1위에서 5일 11위로 빠진 게
+              개별로는 XBI/IHI로 흩어져 잘 안 보였다. */}
+          <button
+            onClick={() => setShowMoveDetail(v => !v)}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+              minHeight: 44, padding: '0 12px', borderRadius: 10, cursor: 'pointer',
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              color: 'var(--text-primary)', fontSize: 12, textAlign: 'left',
+              marginBottom: showMoveDetail ? 6 : 0,
+            }}
+          >
+            <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 10 }}>{showMoveDetail ? '▾' : '▸'}</span>
+            <span style={{ fontWeight: 700 }}>개별 섹터</span>
+            <span className="num" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{moves.length}</span>
+            {!showMoveDetail && moves[0] && (
+              <span style={{ marginLeft: 'auto', fontSize: 11, display: 'flex', gap: 10 }}>
+                <span className="num up">↑{moves[0].delta} {moves[0].s.etf}</span>
+                <span className="num down">↓{Math.abs(moves[moves.length - 1].delta)} {moves[moves.length - 1].s.etf}</span>
+              </span>
+            )}
+          </button>
+          <div className="card" style={{ overflow: 'hidden', display: showMoveDetail ? 'block' : 'none' }}>
             <div style={{
               display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 52px 52px 64px',
               gap: 6, padding: '6px 10px', fontSize: 10, color: 'var(--text-muted)',
               borderBottom: '1px solid var(--border)',
             }}>
-              <span>섹터</span>
+              <span>개별 ETF</span>
               <span style={{ textAlign: 'right' }}>{shortKey === '1' ? '1일' : `${shortKey}일`}</span>
               <span style={{ textAlign: 'right' }}>{longKey}일</span>
               <span style={{ textAlign: 'right' }}>이동</span>
