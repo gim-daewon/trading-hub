@@ -22,10 +22,18 @@ export const SECTORS: SectorMeta[] = [
   { id: 'cleanenergy',   label: '신재생(글로벌)', etf: 'ICLN', color: '#16a34a' },
   // URNM = Sprott Uranium Miners. 카메코·물리적우라늄·NexGen이고 발전사는 없다
   { id: 'nuclear',       label: '우라늄 채굴', etf: 'URNM', color: '#fbbf24' },
+  // URA는 채굴에 더해 OKLO(SMR) 5.5%, LEU(농축) 3.5%를 담아 URNM과 성격이 다르다
+  { id: 'nuclear_power', label: '원자력(SMR·농축)', etf: 'URA', color: '#eab308' },
+  // GRID는 슈나이더·ABB·E.ON 등 유럽 비중이 40%대다. 미국 전력망 펀드가 아니다
+  { id: 'grid',          label: '전력망·전력장비(글로벌)', etf: 'GRID', color: '#a16207' },
   // ── 소재·자원 ────────────────────────────────────────────────────────
   { id: 'materials',     label: '소재',      etf: 'XLB',  color: '#78716c' },
   // REMX 상위에 리튬(ALB·SQM·필바라)이 크다. 희토류만이 아니다
   { id: 'rareearth',     label: '희토류·전략금속', etf: 'REMX', color: '#84cc16' },
+  // XME 최대 비중이 LEU(우라늄 농축) 5.1%다. 철강·금은·우라늄이 섞인 혼합 펀드다
+  { id: 'metals',        label: '금속·채굴(철강·금은)', etf: 'XME', color: '#a8a29e' },
+  // GDX는 캐나다 상장(AEM·ABX·WPM·FNV)이 30% 넘는다
+  { id: 'goldminer',     label: '금광',      etf: 'GDX',  color: '#ca8a04' },
   // ── 산업·운송 ────────────────────────────────────────────────────────
   { id: 'industrial',    label: '산업재',    etf: 'XLI',  color: '#64748b' },
   // ITA = U.S. Aerospace & Defense. GE(항공엔진)가 22%로 최대 비중이다
@@ -33,6 +41,11 @@ export const SECTORS: SectorMeta[] = [
   // UFO는 위성 사업자·지상장비까지 포함하는 '우주경제'다. ITA와 겹치지 않는다
   { id: 'space',         label: '위성·우주', etf: 'UFO',  color: '#1e293b' },
   { id: 'transport',     label: '운송',      etf: 'IYT',  color: '#0891b2' },
+  { id: 'airlines',      label: '항공사',    etf: 'JETS', color: '#0e7490' },
+  // PAVE는 철도(CSX·UNP·NSC)가 10% 넘어 IYT 운송과 일부 겹친다
+  { id: 'infrastructure', label: '미국 인프라', etf: 'PAVE', color: '#57534e' },
+  // BOTZ는 키엔스 10.6%·ABB 9.3%·화낙 9.1%로 일본·유럽이 중심이다
+  { id: 'robotics',      label: '로보틱스(일본·유럽)', etf: 'BOTZ', color: '#7c2d12' },
   // DRIV는 테크 37% > 소비재 28%다. 완성차 펀드가 아니라 자율주행 테마다
   { id: 'automotive',    label: '자율주행·EV', etf: 'DRIV', color: '#14b8a6' },
   // ── 소비재 ───────────────────────────────────────────────────────────
@@ -53,9 +66,14 @@ export const SECTORS: SectorMeta[] = [
   { id: 'neo_cloud',     label: '채굴·AI데이터센터', etf: 'WGMI', color: '#6d28d9' },
   // ── 금융 ─────────────────────────────────────────────────────────────
   { id: 'banks',         label: '은행',      etf: 'KBE',  color: '#065f46' },
+  // KRE 급락은 신용 스트레스 신호다. SVB(2023-03) 때 SPY +2.2%인데 KRE -27.2%였다.
+  // 반대로 2022 금리 약세장에선 KRE가 SPY를 +5.9%p 이겼다 — 금리와 신용을 구분해준다
+  { id: 'regional_banks', label: '지역은행',  etf: 'KRE',  color: '#047857' },
   { id: 'fintech',       label: '핀테크',    etf: 'FINX', color: '#0d9488' },
   { id: 'insurance',     label: '보험',      etf: 'KIE',  color: '#155e75' },
   // ── 테크 ─────────────────────────────────────────────────────────────
+  // AIQ 최대 비중이 SK하이닉스 6.3%, 삼성전자 4.8%로 한국이 11%다
+  { id: 'ai',            label: 'AI(하이닉스·삼성 포함)', etf: 'AIQ', color: '#312e81' },
   { id: 'fabless',       label: '팹리스',    etf: 'SMHX', color: '#4f46e5' },
   // SMH 최대 비중이 NVDA 20.8%다. 장비 전용이 아니라 반도체 종합이다
   { id: 'semiconductor', label: '반도체 종합', etf: 'SMH',  color: '#8b5cf6' },
@@ -75,6 +93,8 @@ export const SECTORS: SectorMeta[] = [
   // 나머지 2/3는 일반 규제 유틸리티다. 'DC전력'은 과장이었다
   { id: 'dc_utilities',  label: '전력(액티브)', etf: 'UTES', color: '#334155' },
   { id: 'realestate',    label: '리츠',      etf: 'XLRE', color: '#ec4899' },
+  // ITB는 DHI 16.4% + PHM 10.5%로 상위 편중이 크다. 금리 민감도가 가장 높은 섹터다
+  { id: 'homebuilder',   label: '주택건설',  etf: 'ITB',  color: '#be185d' },
 ]
 
 // ── 워치리스트 (여기에 한 줄 추가 = 앱 전체 자동 반영) ─────────────────
@@ -138,6 +158,21 @@ export const ASSETS: Asset[] = [
   { id: 'XLU',  label: '유틸리티 일반',     type: 'etf', source: 'finnhub', sector: 'utilities' },
   { id: 'UTES', label: '전력 액티브 (CEG·VST)', type: 'etf', source: 'finnhub', sector: 'dc_utilities' },
   { id: 'XLRE', label: '부동산·리츠',       type: 'etf', source: 'finnhub', sector: 'realestate' },
+  { id: 'ITB',  label: '주택건설 (DHI·PHM)', type: 'etf', source: 'finnhub', sector: 'homebuilder' },
+  // 전력·원자력
+  { id: 'URA',  label: '원자력 SMR·농축 (OKLO·LEU)', type: 'etf', source: 'finnhub', sector: 'nuclear_power' },
+  { id: 'GRID', label: '전력망 글로벌 (슈나이더·ABB)', type: 'etf', source: 'finnhub', sector: 'grid' },
+  // 자원
+  { id: 'XME',  label: '금속·채굴 (LEU·NUE·NEM)', type: 'etf', source: 'finnhub', sector: 'metals' },
+  { id: 'GDX',  label: '금광 (NEM·AEM·ABX)', type: 'etf', source: 'finnhub', sector: 'goldminer' },
+  // 산업 추가
+  { id: 'JETS', label: '항공사 (UAL·AAL·DAL)', type: 'etf', source: 'finnhub', sector: 'airlines' },
+  { id: 'PAVE', label: '미국 인프라 (PWR·CSX)', type: 'etf', source: 'finnhub', sector: 'infrastructure' },
+  { id: 'BOTZ', label: '로보틱스 (키엔스·ABB·화낙)', type: 'etf', source: 'finnhub', sector: 'robotics' },
+  // 금융 추가
+  { id: 'KRE',  label: '지역은행 (신용스트레스)', type: 'etf', source: 'finnhub', sector: 'regional_banks' },
+  // 테크 추가
+  { id: 'AIQ',  label: 'AI (하이닉스·삼성 11%)', type: 'etf', source: 'finnhub', sector: 'ai' },
 
   // 매크로
   { id: '^VIX',  label: '공포지수 VIX',    type: 'macro', source: 'yahoo' },
