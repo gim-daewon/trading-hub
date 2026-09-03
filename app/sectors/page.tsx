@@ -32,7 +32,7 @@ interface SectorData {
 
 interface SpyData { price: number; changePct: number }
 
-type ViewMode = 'heatmap' | 'table'
+type ViewMode = 'heatmap' | 'table' | 'move'
 
 /**
  * 순환 관측 기간. 10년·47섹터·겹치지 않는 113구간 실측으로 골랐다.
@@ -186,6 +186,21 @@ export default function SectorsPage() {
     .sort((a, b) => (a.periods['120'] as number) - (b.periods['120'] as number))
     .slice(0, 5)
 
+  // 순위 이동 — 단기(5일) 순위 vs 중기(60일) 순위.
+  // 시점별 과거 순위를 저장하지 않아도 되고, 최근 강해진 섹터가 위로 온다.
+  const moves = (() => {
+    const rank = (key: string) => {
+      const ok = sectors.filter(x => x.rs?.[key] != null)
+      const sortedK = [...ok].sort((a, b) => (b.rs[key] as number) - (a.rs[key] as number))
+      return new Map(sortedK.map((x, i) => [x.id, i + 1]))
+    }
+    const r5 = rank('5'), r60 = rank('60')
+    return sectors
+      .filter(x => r5.has(x.id) && r60.has(x.id))
+      .map(x => ({ s: x, short: r5.get(x.id)!, long: r60.get(x.id)!, delta: r60.get(x.id)! - r5.get(x.id)! }))
+      .sort((a, b) => b.delta - a.delta)
+  })()
+
   const toggleGroup = (label: string) => setOpen(prev => {
     const next = new Set(prev)
     if (next.has(label)) next.delete(label); else next.add(label)
@@ -284,7 +299,7 @@ export default function SectorsPage() {
 
       {/* 뷰/정렬 토글 */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {(['heatmap', 'table'] as ViewMode[]).map(v => (
+        {(['heatmap', 'table', 'move'] as ViewMode[]).map(v => (
           <button
             key={v}
             onClick={() => setView(v)}
@@ -294,7 +309,7 @@ export default function SectorsPage() {
               color: view === v ? '#fff' : 'var(--text-secondary)', cursor: 'pointer',
             }}
           >
-            {v === 'heatmap' ? '순위' : '기간 비교'}
+            {v === 'heatmap' ? '순위' : v === 'table' ? '기간 비교' : '이동'}
           </button>
         ))}
       </div>
@@ -354,11 +369,18 @@ export default function SectorsPage() {
               </button>
             ))}
           </div>
-          <span style={{ color: 'var(--text-muted)' }}>
+          <div style={{ color: 'var(--text-muted)' }}>
+            <b>기다리면 돌아오지 않는다.</b> 보유기간을 늘려도 회복이 없다 (10년 실측):
+            <div className="num" style={{
+              margin: '4px 0 6px', padding: '6px 8px', borderRadius: 6,
+              background: 'var(--bg-base)', fontSize: 10, lineHeight: 1.6,
+            }}>
+              20일 보유 양수 40% · 60일 38% · 120일 33% · <b>250일 22%</b>
+            </div>
             검증된 범위는 <b>섹터 ETF를 사는 경우</b>다. 이 섹터에 속한 개별 종목까지
             피하라는 뜻은 아니다 — 눌림목 후보에 이 필터를 걸어본 결과 효과가 없었다
             (양수비율 52%로 동일, 중앙값은 오히려 하락).
-          </span>
+          </div>
         </div>
       )}
 
@@ -436,6 +458,67 @@ export default function SectorsPage() {
       )}
 
       {/* ── 테이블 뷰 ── */}
+      {/* ── 이동 뷰 — 순환을 '관찰'만 한다 ──
+          순환 순서를 예측하는 건 근거가 없다(기각 기록 참고: 110쌍 중 단일검정
+          통과 6쌍인데 우연 기대치도 6쌍). 그래서 앞으로 어디가 오를지는 말하지 않고,
+          "지금 어디서 어디로 옮겨가는 중인가"만 보여준다.
+
+          단기(5일) 순위와 중기(60일) 순위의 차이를 쓴다. 시점별 과거 순위를
+          따로 저장할 필요가 없고, 최근 순위가 중기 순위보다 높으면 돈이 들어오는 중이다. */}
+      {view === 'move' && !loading && (
+        <>
+          <div className="card" style={{
+            padding: '10px 12px', marginBottom: 12, fontSize: 11,
+            color: 'var(--text-muted)', lineHeight: 1.6,
+          }}>
+            <b style={{ color: 'var(--warn)' }}>이건 예측이 아니라 관찰이다.</b>
+            5일 순위가 60일 순위보다 높으면 최근 자금이 들어오는 중이다.
+            <b> 다음에 어디가 오를지는 말하지 않는다</b> — 섹터 순환 순서는 10년 검정에서
+            우연 수준이었다 (110쌍 중 유의 6쌍 = 우연 기대치 6쌍).
+          </div>
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 52px 52px 64px',
+              gap: 6, padding: '6px 10px', fontSize: 10, color: 'var(--text-muted)',
+              borderBottom: '1px solid var(--border)',
+            }}>
+              <span>섹터</span>
+              <span style={{ textAlign: 'right' }}>5일</span>
+              <span style={{ textAlign: 'right' }}>60일</span>
+              <span style={{ textAlign: 'right' }}>이동</span>
+            </div>
+            {moves.map(m => (
+              <button
+                key={m.s.id}
+                onClick={() => setSelected(m.s)}
+                style={{
+                  width: '100%', display: 'grid',
+                  gridTemplateColumns: 'minmax(0,1fr) 52px 52px 64px',
+                  gap: 6, alignItems: 'center', minHeight: 44, padding: '0 10px',
+                  background: 'transparent', border: 'none',
+                  borderBottom: '1px solid var(--border)',
+                  cursor: 'pointer', textAlign: 'left', color: 'var(--text-primary)',
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
+                  <span className="num" style={{ fontSize: 12, fontWeight: 700 }}>{m.s.etf}</span>
+                  <span style={{
+                    fontSize: 10, color: 'var(--text-muted)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{m.s.label}</span>
+                </span>
+                <span className="num" style={{ fontSize: 12, textAlign: 'right', color: 'var(--text-secondary)' }}>{m.short}위</span>
+                <span className="num" style={{ fontSize: 12, textAlign: 'right', color: 'var(--text-muted)' }}>{m.long}위</span>
+                <span className={`num ${m.delta > 0 ? 'up' : m.delta < 0 ? 'down' : 'flat'}`}
+                      style={{ fontSize: 12, fontWeight: 700, textAlign: 'right' }}>
+                  {m.delta === 0 ? '—' : `${m.delta > 0 ? '↑' : '↓'}${Math.abs(m.delta)}`}
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       {view === 'table' && (
         <div className="overflow-x-table">
           {/* 기간을 한눈에 비교하려고 남긴 뷰다.
