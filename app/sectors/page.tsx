@@ -189,6 +189,13 @@ export default function SectorsPage() {
     return acc
   }, []).map(g => ({ ...g, items: byPct(g.items) }))
 
+  // 120일 하위 5개. 실측에서 유의했던 유일한 신호라 기간 탭과 무관하게 항상 계산한다.
+  // 백테스트가 "하위 3~5개"를 봤으므로 5개로 맞춘다.
+  const laggards = [...sectors]
+    .filter(s => s.periods?.['120'] != null)
+    .sort((a, b) => (a.periods['120'] as number) - (b.periods['120'] as number))
+    .slice(0, 5)
+
   const toggleGroup = (label: string) => setOpen(prev => {
     const next = new Set(prev)
     if (next.has(label)) next.delete(label); else next.add(label)
@@ -287,6 +294,35 @@ export default function SectorsPage() {
       {error && (
         <div style={{ background: '#7f1d1d22', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 14px', marginBottom: 16, color: 'var(--down)', fontSize: 13 }}>
           {error} — <button onClick={load} style={{ color: 'var(--info)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>재시도</button>
+        </div>
+      )}
+
+      {/* 120일 부진 섹터 — 유일하게 유의했던 신호라 항상 보여준다 */}
+      {laggards.length > 0 && (
+        <div className="card" style={{
+          padding: '10px 12px', marginBottom: 14, fontSize: 11, lineHeight: 1.6,
+          borderLeft: '3px solid var(--warn)',
+        }}>
+          <b style={{ color: 'var(--warn)' }}>120일 부진 섹터 {laggards.length}</b>
+          <span style={{ color: 'var(--text-muted)' }}> — 10년 113구간에서 63%가 다음 20일에도 뒤처졌다 (z=-2.77)</span>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0 6px' }}>
+            {laggards.map(s => (
+              <button key={s.id} onClick={() => setSelected(s)} style={{
+                minHeight: 32, padding: '0 10px', borderRadius: 8, cursor: 'pointer',
+                background: 'var(--bg-base)', border: '1px solid var(--border)',
+                color: 'var(--text-secondary)', fontSize: 11, whiteSpace: 'nowrap',
+              }}>
+                <span className="num" style={{ fontWeight: 700 }}>{s.etf}</span>
+                <span style={{ color: 'var(--text-muted)' }}> {s.label} </span>
+                <span className="num down">{pctLabel(s.periods?.['120'] ?? null, 1)}</span>
+              </button>
+            ))}
+          </div>
+          <span style={{ color: 'var(--text-muted)' }}>
+            검증된 범위는 <b>섹터 ETF를 사는 경우</b>다. 이 섹터에 속한 개별 종목까지
+            피하라는 뜻은 아니다 — 눌림목 후보에 이 필터를 걸어본 결과 효과가 없었다
+            (양수비율 52%로 동일, 중앙값은 오히려 하락).
+          </span>
         </div>
       )}
 
