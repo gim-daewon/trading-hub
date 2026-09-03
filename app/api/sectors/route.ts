@@ -53,14 +53,32 @@ async function fetchYahoo(symbol: string): Promise<YahooQuote | null> {
         if (!meta) continue
         const price = meta.regularMarketPrice ?? meta.previousClose ?? meta.chartPreviousClose
         if (price == null) continue
-        const prevClose = meta.previousClose ?? meta.chartPreviousClose ?? price
+
+        // 최근 봉이 비어 있는 티커를 걸러낸다.
+        //
+        // null을 그냥 필터링하면 "전 거래일"이 조용히 데이터가 마지막으로 있던 날로
+        // 밀린다. PBS가 실제로 그랬다 — 2026-07-17 이후 34거래일이 전부 null인데
+        // 마지막 종가 $61.15와 현재가 $33.06을 비교해 "1일 -46.6%"가 떴고,
+        // 그 값이 120일 부진 섹터 1위까지 차지했다.
+        //
+        // 틀린 숫자를 보여주느니 값을 안 보여주는 게 낫다.
+        const rawCloses: (number | null)[] = result?.indicators?.quote?.[0]?.close ?? []
+        let lastValid = -1
+        for (let i = 0; i < rawCloses.length; i++) if (rawCloses[i] != null) lastValid = i
+        if (lastValid < 0) continue
+        // 3거래일까지는 봐준다(휴장·데이터 지연). 그 이상이면 죽은 티커로 본다
+        if (rawCloses.length - 1 - lastValid > 3) return null
+
+        const closes = rawCloses.slice(0, lastValid + 1).filter((c): c is number => c != null)
+
+        // chartPreviousClose를 쓰면 안 된다. 이건 "range 시작 직전 종가"라서
+        // range=1y에서는 1년 전 값이 온다. 실제로 이걸로 1일 등락에 1년 수익률이
+        // 표시되는 버그를 냈다(SPY +20.0%, SMH +91.9%).
+        // meta.previousClose는 인트라데이 interval에서만 채워지므로 여기선 비어 있다.
+        // 일봉 배열의 끝에서 두 번째가 전 거래일 종가다.
+        const prevClose = closes.length >= 2 ? closes[closes.length - 2] : price
         const change    = price - prevClose
         const changePct = prevClose !== 0 ? (change / prevClose) * 100 : 0
-
-        // null 종가(거래정지일 등)를 걸러야 n일 전 시점이 밀리지 않는다
-        const closes: number[] = (result?.indicators?.quote?.[0]?.close ?? []).filter(
-          (c: number | null): c is number => c != null
-        )
         const periods: Record<number, number | null> = {}
         for (const n of PERIODS) {
           const past = closes[closes.length - 1 - n]

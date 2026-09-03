@@ -24,7 +24,7 @@ export type SectorId =
   // 테크
   | 'tech' | 'ai' | 'fabless' | 'semiconductor' | 'cloud' | 'software' | 'cybersecurity'
   // 커뮤니케이션
-  | 'communication' | 'telecom' | 'media'
+  | 'communication' | 'telecom'
   // 유틸리티·부동산
   | 'utilities' | 'dc_utilities' | 'realestate'
   // 테마

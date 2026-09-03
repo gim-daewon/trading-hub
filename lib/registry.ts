@@ -89,8 +89,10 @@ export const SECTORS: SectorMeta[] = [
   { id: 'communication', label: '커뮤니케이션', etf: 'XLC',  color: '#3b82f6' },
   // IYZ는 CSCO 23% + ANET 12%로 테크가 52%다. 통신서비스가 아니라 통신장비다
   { id: 'telecom',       label: '통신장비',  etf: 'IYZ',  color: '#0284c7' },
-  // PBS = Invesco Next Gen Media and Gaming. META·NFLX·SPOT이고 '전통'이 아니다
-  { id: 'media',         label: '미디어·게이밍', etf: 'PBS',  color: '#7dd3fc' },
+  // 미디어 섹터를 뺐다. PBS는 2026-07-17 이후 일봉이 안 나오고(34거래일 null)
+  // 마지막 20거래일 거래대금이 $0.2M이었다. 대체 후보도 전부 유동성 미달이다
+  // (ESPO $1.4M · HERO $0.6M · GAMR $0.1M). XLC가 META 16.6%·NFLX·DIS·EA·TTWO를
+  // 이미 담고 있으므로 미디어 노출이 사라지지는 않는다.
   // ── 유틸리티·부동산 ──────────────────────────────────────────────────
   { id: 'utilities',     label: '유틸리티',  etf: 'XLU',  color: '#94a3b8' },
   // UTES는 CEG·TLN·VST가 32%로 DC 노출이 가장 큰 유틸 ETF이긴 하나
@@ -157,7 +159,6 @@ export const ASSETS: Asset[] = [
   // 커뮤니케이션
   { id: 'XLC',  label: '커뮤니케이션 (META·GOOGL)', type: 'etf', source: 'finnhub', sector: 'communication' },
   { id: 'IYZ',  label: '통신장비 (CSCO·ANET)', type: 'etf', source: 'finnhub', sector: 'telecom' },
-  { id: 'PBS',  label: '미디어·게이밍',     type: 'etf', source: 'finnhub', sector: 'media' },
   // 유틸리티·부동산
   { id: 'XLU',  label: '유틸리티 일반',     type: 'etf', source: 'finnhub', sector: 'utilities' },
   { id: 'UTES', label: '전력 액티브 (CEG·VST)', type: 'etf', source: 'finnhub', sector: 'dc_utilities' },
@@ -273,7 +274,7 @@ export const SECTOR_GROUPS: { label: string; ids: SectorId[] }[] = [
   { label: '금융·금리민감', ids: ['banks', 'regional_banks', 'insurance', 'fintech', 'homebuilder'] },
   { label: '헬스케어',      ids: ['biotech', 'health_device'] },
   { label: '소비',          ids: ['leisure', 'ecommerce', 'food'] },
-  { label: '미디어·통신',   ids: ['media', 'telecom'] },
+  { label: '미디어·통신',   ids: ['telecom'] },
   { label: '디지털자산',    ids: ['bitcoin_etf', 'neo_cloud'] },
 ]
 
