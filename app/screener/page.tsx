@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import PageHeader from '../components/PageHeader'
+import MetricGuide from '../components/MetricGuide'
 import { TvLink, TvLayoutSetting } from '../components/TvLink'
 import {
   TIERS, CATS, TIER_EVIDENCE, PERIOD_EVIDENCE, periodVerdict,
@@ -216,9 +217,10 @@ export default function ScreenerPage() {
         })}
       </div>
 
-      <p style={{ margin: '0 0 10px', fontSize: 11, color: 'var(--text-muted)' }}>
+      <p style={{ margin: '0 0 6px', fontSize: 11, color: 'var(--text-muted)' }}>
         조건: {CATS.find(c => c.key === tab)?.rule}
       </p>
+      <MetricGuide show={['flow', 'pctB', 'rvol']} />
 
       {data && <EvidenceBox tier={tier} cat={tab} regime={data.regime} />}
 

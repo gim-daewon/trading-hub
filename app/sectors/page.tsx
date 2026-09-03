@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import PageHeader from '../components/PageHeader'
 import { TvLink, TvLayoutSetting } from '../components/TvLink'
+import { upShare } from '../components/MetricGuide'
 
 interface Holding {
   symbol: string
@@ -59,17 +60,6 @@ function pctLabel(v: number | null, decimals = 2): string {
 
 /** 색 클래스는 언제나 값의 부호에서 나온다 */
 const cls = (v: number | null) => v == null ? 'flat' : v > 0 ? 'up' : v < 0 ? 'down' : 'flat'
-
-/**
- * 순자금 비율을 사람이 읽는 문장으로 바꾼다.
- *
- * f = (오른날 − 내린날) / 전체 × 100 이므로, 오른 날 비중은 (100 + f) / 2 다.
- * "+38%"보다 "거래대금 69%가 오른 날"이 훨씬 빨리 읽힌다.
- */
-function upShare(f: number | null): string {
-  if (f == null) return ''
-  return `거래대금 ${((100 + f) / 2).toFixed(0)}%가 오른 날`
-}
 
 function PctBadge({ v }: { v: number | null }) {
   if (v === null) return <span className="flat">—</span>

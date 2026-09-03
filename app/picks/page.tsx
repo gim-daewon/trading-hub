@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
+import MetricGuide from '../components/MetricGuide'
 import { TvLink } from '../components/TvLink'
 import {
   TIERS, TIER_EVIDENCE, PERIOD_EVIDENCE, periodVerdict,
@@ -142,6 +143,8 @@ export default function PicksPage() {
           </span>
         </p>
       </div>
+
+      <MetricGuide show={['flow', 'pctB']} />
 
       {err && <div className="card" style={{ padding: 16, color: 'var(--down)', fontSize: 13 }}>{err}</div>}
 
