@@ -1,7 +1,10 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
-import { TIERS, CATS, type TierId, type CatKey, type Regime } from '@/lib/screener-shared'
+import {
+  TIERS, CATS, STOPPING_RULE,
+  type TierId, type CatKey, type Regime,
+} from '@/lib/screener-shared'
 
 // 스크리너에 뜬 종목이 실제로 올랐는지 사후 확인.
 // 백테스트(과거 되짚기)와 달리 생존편향·표본중복이 없다.
@@ -14,6 +17,8 @@ interface Result {
 interface Horizon {
   days: number; from: string; to: string; regime: Regime; spyRet: number
   byCat: Record<CatKey, Record<string, Result | null>>
+  /** 상위 50개까지 넓힌 표본. 화면에 안 뜬 종목이 섞이므로 따로 본다 */
+  byCatExt: Record<CatKey, Result | null>
 }
 interface Data {
   horizons: Horizon[]
@@ -82,6 +87,30 @@ export default function TrackingPage() {
         </span>
       </div>
 
+      {/* 중단 기준을 결과보다 위에 둔다.
+          결과를 본 뒤에 기준을 정하면 자기합리화가 된다. 먼저 못 박아놓고
+          나중에 이 화면을 열었을 때 기준이 그대로인지 확인할 수 있게 한다. */}
+      <details className="card" style={{ padding: '11px 13px', marginBottom: 14, fontSize: 11 }}>
+        <summary style={{ cursor: 'pointer', color: 'var(--warn)', fontWeight: 700 }}>
+          중단 기준 — {STOPPING_RULE.decideAfter} 이후 판단
+        </summary>
+        <div style={{ marginTop: 8, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+          <b style={{ color: 'var(--text-secondary)' }}>결과를 보기 전(2026-09-04)에 미리 정한 규칙이다.</b>
+          <br />
+          판정 대상은 <b>SPY 상회율</b>이다. 절대 상승률은 시장이 오르면 같이 오르므로
+          지표의 값어치를 재지 못한다.
+          <div className="num" style={{
+            margin: '6px 0', padding: '8px 10px', borderRadius: 8,
+            background: 'var(--bg-base)', color: 'var(--text-secondary)', fontSize: 11,
+          }}>
+            카테고리 상회율 &lt; {STOPPING_RULE.dropBelowHitPct}% → 그 카테고리 화면에서 내림<br />
+            세 카테고리 모두 &lt; {STOPPING_RULE.demoteAllBelowHitPct}% → 스크리너를 필터 전용으로 격하<br />
+            최소 표본 {STOPPING_RULE.minSamples}건 이상일 때만 판단
+          </div>
+          {STOPPING_RULE.notes.map((n, i) => <div key={i}>· {n}</div>)}
+        </div>
+      </details>
+
       {err && <div className="card" style={{ padding: 16, color: 'var(--down)', fontSize: 13 }}>{err}</div>}
 
       {loading && !data && (
@@ -138,6 +167,25 @@ export default function TrackingPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            {/* 확장 표본은 표 밖에 따로 둔다. 위 숫자와 섞이면
+                "내가 본 것의 성적"이라는 의미가 흐려진다 */}
+            <div style={{
+              padding: '8px 10px', borderTop: '1px solid var(--border)',
+              fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.7,
+            }}>
+              <b>참고 · 상위 50개로 넓힌 표본</b>{' '}
+              <span style={{ opacity: 0.8 }}>(화면에 안 뜬 26~50위 포함. 표본을 늘려 방향만 본다)</span>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 3 }}>
+                {CATS.map(c => {
+                  const e = h.byCatExt?.[c.key]
+                  return (
+                    <span key={c.key} className="num">
+                      {c.label} {e ? `상회 ${e.hit.toFixed(0)}% · ${e.n}종목` : '—'}
+                    </span>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </section>

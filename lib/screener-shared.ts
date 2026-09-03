@@ -201,7 +201,15 @@ export const CATS: { key: CatKey; label: string; rule: string }[] = [
  *
  * 스크리너 화면과 성과 추적이 같은 규칙을 써야 비교가 성립하므로 여기 둔다.
  */
-export function buildCategories<T extends ScreenerRow>(rows: T[]): Record<TierId, Record<CatKey, T[]>> {
+export function buildCategories<T extends ScreenerRow>(
+  rows: T[],
+  /**
+   * 카테고리당 상위 몇 개까지 담을지. 화면은 25개를 보여준다.
+   * 성과 추적은 표본을 늘리려고 50개까지 볼 수 있는데, 그 값은
+   * "화면에 뜬 것"이 아니므로 반드시 따로 표시해야 한다.
+   */
+  limit = 25,
+): Record<TierId, Record<CatKey, T[]>> {
   const out = {} as Record<TierId, Record<CatKey, T[]>>
 
   for (const tier of TIERS) {
@@ -218,10 +226,10 @@ export function buildCategories<T extends ScreenerRow>(rows: T[]): Record<TierId
       pullback: flow30
         .filter(r => r.pctB !== null && r.pctB <= 0.2)
         .sort((a, b) => (a.pctB ?? 9) - (b.pctB ?? 9))
-        .slice(0, 25),
-      momentum: top.filter(r => (r.chg20 ?? 0) >= 10).slice(0, 25),
+        .slice(0, limit),
+      momentum: top.filter(r => (r.chg20 ?? 0) >= 10).slice(0, limit),
       // 밴드로 잡아야 한다 — 상한만 두면 폭락 종목(-52% 등)이 "정체"로 잡힌다
-      quiet: top.filter(r => (r.chg20 ?? 99) >= -5 && (r.chg20 ?? 99) < 2).slice(0, 25),
+      quiet: top.filter(r => (r.chg20 ?? 99) >= -5 && (r.chg20 ?? 99) < 2).slice(0, limit),
     }
   }
   return out
@@ -234,3 +242,32 @@ export const CAVEATS = [
   '거래비용·슬리피지를 반영하지 않았다. 20일마다 전량 교체하면 이 정도 차이는 비용에 먹힌다.',
   '순자금은 실제 순매수가 아니라 상승일·하락일 거래대금을 비교한 대리지표다.',
 ]
+
+
+/**
+ * 중단 기준 (stopping rule).
+ *
+ * 결과를 본 뒤에 기준을 정하면 자기합리화가 된다. 그래서 먼저 적어둔다.
+ * 2026-09-04 작성, 첫 추적 데이터가 쌓이기 전이다.
+ *
+ * 판단 시점: 추적 시작(2026-09-08) 후 3개월 — 2026-12-08 이후.
+ * 그 전에는 표본이 부족하므로 중간 결과로 판단하지 않는다.
+ *
+ * 판정 대상은 SPY 상회율(hit)이다. 절대 상승률은 시장이 오르면 같이 오르므로
+ * 지표의 값어치를 재지 못한다. 백테스트도 전부 SPY 대비였다.
+ */
+export const STOPPING_RULE = {
+  decideAfter: '2026-12-08',
+  /** 이 아래면 해당 카테고리를 화면에서 내린다 */
+  dropBelowHitPct: 45,
+  /** 세 카테고리 모두 이 아래면 스크리너를 '필터 전용'으로 격하한다 */
+  demoteAllBelowHitPct: 50,
+  /** 판단에 필요한 최소 표본 (카테고리별 누적 종목-관측 수) */
+  minSamples: 300,
+  notes: [
+    '상회율 45% 미만 = 동전 던지기보다 나쁘다. 그 카테고리는 내린다.',
+    '세 카테고리 모두 50% 미만 = 지표군 자체에 우위가 없다. 화면은 남기되 "종목을 좁혀주는 필터"로만 쓰고 카테고리 구분과 순서를 없앤다.',
+    '한 카테고리라도 55% 이상이면서 표본 300 이상이면 유지한다.',
+    '중간 결과로 기준을 바꾸지 않는다. 바꾸려면 왜 바꾸는지를 먼저 적는다.',
+  ],
+} as const

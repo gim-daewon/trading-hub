@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import {
-  TIERS, CATS, tierOf, buildCategories, TIER_EVIDENCE,
+  TIERS, CATS, tierOf, buildCategories, TIER_EVIDENCE, STOPPING_RULE,
   type TierId, type CatKey, type Regime, type ScreenerRow,
 } from '@/lib/screener-shared'
 
@@ -18,7 +18,14 @@ import {
 
 export const revalidate = 600
 
-const HORIZONS = [5, 10, 20]   // 거래일. 백테스트가 20일 기준이라 거기 맞춘다
+// 거래일. 20일은 백테스트 기준이라 필수, 60일은 섹터 검정에서 보유기간별로
+// 결과가 갈려서 추가했다. 60거래일치가 쌓이려면 약 3개월 걸린다.
+const HORIZONS = [5, 10, 20, 60]
+
+// 화면에 뜬 개수(25)와, 표본을 늘린 확장 집합(50)을 따로 잰다.
+// 확장 표본은 통계적 힘을 위한 참고치일 뿐 "내가 본 것의 성적"이 아니다.
+const SHOWN_LIMIT = 25
+const EXTENDED_LIMIT = 50
 
 interface DbRow {
   symbol: string; name: string | null; sector: string | null; market_cap: number | null
@@ -160,28 +167,29 @@ export async function GET() {
       const rows = await readRows(url, headers, past.id)
       if (!rows.length) continue
       const spyRet = ((latest.spy_price - past.spy_price) / past.spy_price) * 100
-      const cats = buildCategories(rows)
+      const cats = buildCategories(rows, SHOWN_LIMIT)
+      const catsExt = buildCategories(rows, EXTENDED_LIMIT)
+
+      // 진입가와 현재가를 심볼로 이어 수익률 쌍을 만든다
+      const toPairs = (list: ScreenerRow[]) => list
+        .filter(r => r.price && nowPrice.has(r.symbol))
+        .map(r => {
+          const ret = ((nowPrice.get(r.symbol)! - r.price!) / r.price!) * 100
+          return { ret, ex: ret - spyRet }
+        })
 
       const byCat: Record<string, Record<string, Result | null>> = {}
+      // 확장 표본(50개)은 따로 담는다. 화면에 안 뜬 종목이 섞이므로
+      // "내가 본 것의 성적"과 절대 합치면 안 된다
+      const byCatExt: Record<string, Result | null> = {}
+
       for (const c of CATS) {
         byCat[c.key] = {}
         for (const t of TIERS) {
-          const pairs = cats[t.id][c.key]
-            .filter(r => r.price && nowPrice.has(r.symbol))
-            .map(r => {
-              const ret = ((nowPrice.get(r.symbol)! - r.price!) / r.price!) * 100
-              return { ret, ex: ret - spyRet }
-            })
-          byCat[c.key][t.id] = summarize(pairs)
+          byCat[c.key][t.id] = summarize(toPairs(cats[t.id][c.key]))
         }
-        // 구간 합산
-        const all = TIERS.flatMap(t => cats[t.id][c.key])
-          .filter(r => r.price && nowPrice.has(r.symbol))
-          .map(r => {
-            const ret = ((nowPrice.get(r.symbol)! - r.price!) / r.price!) * 100
-            return { ret, ex: ret - spyRet }
-          })
-        byCat[c.key].all = summarize(all)
+        byCat[c.key].all = summarize(toPairs(TIERS.flatMap(t => cats[t.id][c.key])))
+        byCatExt[c.key] = summarize(toPairs(TIERS.flatMap(t => catsExt[t.id][c.key])))
       }
 
       out.push({
@@ -191,6 +199,7 @@ export async function GET() {
         regime: past.regime,
         spyRet,
         byCat,
+        byCatExt,
       })
     }
 
@@ -202,6 +211,9 @@ export async function GET() {
       tradingDays: snaps.map(x => new Date(x.scanned_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })),
       latestAt: latest.scanned_at,
       evidence: TIER_EVIDENCE,
+      // 중단 기준을 응답에 실어 화면에서 "언제 무엇을 근거로 접는지" 보이게 한다
+      stoppingRule: STOPPING_RULE,
+      limits: { shown: SHOWN_LIMIT, extended: EXTENDED_LIMIT },
       note: out.length === 0
         ? '아직 비교할 과거 스냅샷이 부족하다. 스캔이 쌓이면 5일치부터 보인다.'
         : null,
