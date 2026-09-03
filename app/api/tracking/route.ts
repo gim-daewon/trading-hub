@@ -43,13 +43,20 @@ function sbUrl() {
 }
 
 async function readRows(url: string, headers: HeadersInit, snapshotId: number): Promise<ScreenerRow[]> {
-  // PostgREST는 한 번에 1,000행만 준다
+  // PostgREST 페이징: offset+limit 쿼리 파라미터만 쓴다.
+  //
+  // Range 헤더는 쓰지 않는다. 두 가지 문제가 겹친다:
+  //  1) offset과 같이 주면 결과가 깨진다 (offset=1000 + Range 0-999 -> 4행)
+  //  2) Next의 fetch 캐시는 URL로만 중복 제거해서, 헤더만 다른 요청이
+  //   같은 응답으로 합쳐진다 -> 1페이지가 반복돼 중복 행이 쌓인다
+  // 실측: offset=0/1000/2000 + limit=1000 -> 1000 + 1000 + 124 = 2124행 (정확)
   const PAGE = 1000
   const raw: DbRow[] = []
   for (let from = 0; from < 10000; from += PAGE) {
     const res = await fetch(
-      `${url}/rest/v1/screener_rows?select=*&snapshot_id=eq.${snapshotId}&order=id.asc`,
-      { headers: { ...headers, Range: `${from}-${from + PAGE - 1}`, 'Range-Unit': 'items' }, next: { revalidate: 600 } }
+      `${url}/rest/v1/screener_rows?select=*&snapshot_id=eq.${snapshotId}` +
+      `&order=id.asc&offset=${from}&limit=${PAGE}`,
+      { headers, next: { revalidate: 600 } }
     )
     if (!res.ok) break
     const page = await res.json()

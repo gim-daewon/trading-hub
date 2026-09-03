@@ -86,15 +86,20 @@ async function fromSupabase() {
 
     // PostgREST는 한 번에 최대 1,000행만 준다 (limit 파라미터로 안 뚫린다).
     // Range 헤더로 페이지를 넘겨 전부 가져온다.
+    // PostgREST 페이징: offset+limit 쿼리 파라미터만 쓴다.
+    //
+    // Range 헤더는 쓰지 않는다. 두 가지 문제가 겹친다:
+    //  1) offset과 같이 주면 결과가 깨진다 (offset=1000 + Range 0-999 -> 4행)
+    //  2) Next의 fetch 캐시는 URL로만 중복 제거해서, 헤더만 다른 요청이
+    //     같은 응답으로 합쳐진다 -> 1페이지가 반복돼 중복 행이 쌓인다
+    // 실측: offset=0/1000/2000 + limit=1000 -> 1000 + 1000 + 124 = 2124행 (정확)
     const PAGE = 1000
     const raw: unknown[] = []
     for (let from = 0; from < 10000; from += PAGE) {
       const res = await fetch(
-        `${url}/rest/v1/screener_rows?select=*&snapshot_id=eq.${snap.id}&order=id.asc`,
-        {
-          headers: { ...headers, Range: `${from}-${from + PAGE - 1}`, 'Range-Unit': 'items' },
-          next: { revalidate: 600 },
-        }
+        `${url}/rest/v1/screener_rows?select=*&snapshot_id=eq.${snap.id}` +
+        `&order=id.asc&offset=${from}&limit=${PAGE}`,
+        { headers, next: { revalidate: 600 } }
       )
       if (!res.ok) break
       const page = await res.json()
@@ -129,13 +134,22 @@ async function fromSupabase() {
       universeSize: snap.universe_size,
       scannedAt: new Date(snap.scanned_at).getTime(),
     }
-  } catch {
+  } catch (e) {
+    // 조용히 삼키면 원인을 못 찾는다. 실제로 이것 때문에
+    // "왜 라이브로 떨어지지"를 코드만 보고는 알 수 없었다.
+    console.error('[screener] 스냅샷 조회 실패 — 라이브로 폴백:', e)
     return null
   }
 }
 
+/**
+ * scannedAt과 fetchedAt은 다른 값이다.
+ *   scannedAt  = 스캔이 돌아 이 목록이 만들어진 시각 (하루 1회, 평일)
+ *   fetchedAt  = 이 응답을 만든 시각 (캐시 10분)
+ * 화면에는 scannedAt을 보여줘야 한다. "언제 기준 목록인가"가 사용자에게 필요한 정보다.
+ */
 function payload(rows: ScreenerRow[], regime: Regime, spyChg20: number | null,
-                 universeSize: number, source: 'snapshot' | 'live', fetchedAt: number) {
+                 universeSize: number, source: 'snapshot' | 'live', scannedAt: number) {
   const tierCounts = {} as Record<TierId, number>
   for (const t of TIERS) tierCounts[t.id] = rows.filter(r => r.tier === t.id).length
 
@@ -148,7 +162,8 @@ function payload(rows: ScreenerRow[], regime: Regime, spyChg20: number | null,
     categories: buildCategories(rows),
     evidence: TIER_EVIDENCE,
     caveats: CAVEATS,
-    fetchedAt,
+    scannedAt,
+    fetchedAt: Date.now(),
   }
 }
 

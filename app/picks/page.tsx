@@ -29,6 +29,7 @@ interface Data {
   source: 'snapshot' | 'live'
   categories: Record<TierId, Record<CatKey, Row[]>>
   caveats: string[]
+  scannedAt?: number
   fetchedAt: number
   error?: string
 }
@@ -119,6 +120,13 @@ export default function PicksPage() {
             <span className={`pill ${data.source === 'snapshot' ? 'pill-up' : 'pill-stale'}`}>
               {data.source === 'snapshot' ? `스냅샷 ${data.scanned.toLocaleString()}` : `라이브 ${data.scanned}`}
             </span>
+            {data.scannedAt && (
+              <span className="num" title="스캔이 돌아 이 목록이 만들어진 시각. 평일 1회 갱신된다">
+                {new Date(data.scannedAt).toLocaleString('ko-KR', {
+                  timeZone: 'America/New_York', month: 'numeric', day: 'numeric',
+                })} 종가 기준
+              </span>
+            )}
             <span>{data.regime === 'up' ? '상승 국면' : '하락 국면'} (SPY 20일 {sgn(data.spyChg20, 1)}%)</span>
           </span>
         )}
