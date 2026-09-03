@@ -108,20 +108,35 @@ export async function GET() {
     if (!snapRes.ok) throw new Error(`snapshots ${snapRes.status}`)
     const allSnaps: Snap[] = await snapRes.json()
 
-    // 하루에 여러 번 스캔되는 경우가 있다(스키마 변경 후 수동 실행 등).
-    // "스냅샷 1개 = 1거래일" 가정이 깨지므로 날짜별 최신 것만 남긴다.
+    // "스냅샷 1개 = 1거래일"이 성립해야 snaps[5]를 '5거래일 전'으로 쓸 수 있다.
+    // 세 가지를 걸러야 그 가정이 유지된다:
+    //
+    //  1) 같은 날 여러 번 스캔 (스키마 변경 후 수동 실행 등)
+    //  2) 주말 수동 실행 — 실제로 있었다(2026-08-29 토, 08-30 일).
+    //     그대로 두면 '5거래일 전'이 실제로는 3거래일 전이 된다
+    //  3) spy_price가 없는 초기 스냅샷 (컬럼 추가 전)
+    //
+    // 휴장일은 요일로 못 거른다. 대신 직전 스냅샷과 spy_price가 같으면
+    // 그 사이에 거래가 없었다는 뜻이므로 같이 제외한다.
     const seen = new Set<string>()
-    const snaps = allSnaps.filter(s => {
-      const d = new Date(s.scanned_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-      if (seen.has(d)) return false
-      seen.add(d)
+    const deduped = allSnaps.filter(s => {
+      if (s.spy_price == null) return false
+      const et = new Date(s.scanned_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+      if (seen.has(et)) return false
+      // en-CA는 YYYY-MM-DD를 준다. UTC 정오로 파싱해 시간대 밀림을 막는다
+      const dow = new Date(`${et}T12:00:00Z`).getUTCDay()
+      if (dow === 0 || dow === 6) return false
+      seen.add(et)
       return true
     })
+
+    // 최신순 정렬이므로 뒤쪽이 과거다. 값이 같으면 휴장으로 보고 과거 쪽을 버린다
+    const snaps = deduped.filter((s, i) => i === 0 || s.spy_price !== deduped[i - 1].spy_price)
 
     if (snaps.length < 2) {
       return NextResponse.json({
         horizons: [], snapshotCount: snaps.length, rawCount: allSnaps.length,
-        note: '거래일 기준 스냅샷이 2개 이상 쌓여야 추적이 시작된다. 평일 1회 스캔이므로 내일부터 보인다.',
+        note: `거래일 기준 스냅샷이 2개 이상 쌓여야 추적이 시작된다 (현재 ${snaps.length}개). 평일 1회 스캔이므로 내일부터 보인다.`,
       })
     }
 
@@ -138,7 +153,7 @@ export async function GET() {
 
     const out = []
     for (const h of HORIZONS) {
-      // h 거래일 전 스냅샷 (날짜 중복 제거 후이므로 인덱스가 곧 거래일 수)
+      // snaps는 거래일 1개씩으로 정리돼 있으므로 인덱스가 곧 거래일 수다
       const past = snaps[h]
       if (!past || past.spy_price == null || latest.spy_price == null) continue
 
@@ -183,6 +198,8 @@ export async function GET() {
       horizons: out,
       snapshotCount: snaps.length,
       rawCount: allSnaps.length,
+      // 어느 horizon이 언제부터 보이는지 화면에서 알 수 있게 한다
+      tradingDays: snaps.map(x => new Date(x.scanned_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })),
       latestAt: latest.scanned_at,
       evidence: TIER_EVIDENCE,
       note: out.length === 0

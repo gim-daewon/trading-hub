@@ -53,6 +53,18 @@ const PERIODS = [
 ] as const
 type PeriodKey = typeof PERIODS[number]['key']
 
+/**
+ * 이동 뷰의 단기·장기 짝. 선택한 기간이 단기, 그보다 긴 게 장기다.
+ * 120일은 비교할 더 긴 기간이 없어 20일 대 120일로 되돌린다.
+ */
+const MOVE_PAIR: Record<PeriodKey, [PeriodKey, PeriodKey]> = {
+  '1':   ['1', '20'],
+  '5':   ['5', '60'],
+  '20':  ['20', '120'],
+  '60':  ['60', '120'],
+  '120': ['20', '120'],
+}
+
 function pctLabel(v: number | null, decimals = 2): string {
   if (v === null) return '—'
   return `${v >= 0 ? '+' : ''}${v.toFixed(decimals)}%`
@@ -186,18 +198,53 @@ export default function SectorsPage() {
     .sort((a, b) => (a.periods['120'] as number) - (b.periods['120'] as number))
     .slice(0, 5)
 
-  // 순위 이동 — 단기(5일) 순위 vs 중기(60일) 순위.
-  // 시점별 과거 순위를 저장하지 않아도 되고, 최근 강해진 섹터가 위로 온다.
+  // 순위 이동 — 단기 순위 vs 장기 순위.
+  //
+  // 기간 탭과 연동한다. 선택한 기간이 '단기'가 되고 그보다 긴 기간이 '장기'다.
+  // 시점별 과거 순위를 저장하지 않아도 되는 구현이라 스냅샷이 필요 없다.
+  // (120일을 고르면 비교 대상이 없으므로 20일 대 120일로 되돌린다)
+  const [shortKey, longKey] = MOVE_PAIR[period]
+
+  const rankBy = useCallback((list: SectorData[], key: string) => {
+    const get = (x: SectorData) => key === '1' ? x.rs1d : (x.rs?.[key] ?? null)
+    const ok = list.filter(x => get(x) != null)
+    const sortedK = [...ok].sort((a, b) => (get(b) as number) - (get(a) as number))
+    return new Map(sortedK.map((x, i) => [x.id, i + 1]))
+  }, [])
+
   const moves = (() => {
-    const rank = (key: string) => {
-      const ok = sectors.filter(x => x.rs?.[key] != null)
-      const sortedK = [...ok].sort((a, b) => (b.rs[key] as number) - (a.rs[key] as number))
-      return new Map(sortedK.map((x, i) => [x.id, i + 1]))
-    }
-    const r5 = rank('5'), r60 = rank('60')
+    const rs = rankBy(sectors, shortKey), rl = rankBy(sectors, longKey)
     return sectors
-      .filter(x => r5.has(x.id) && r60.has(x.id))
-      .map(x => ({ s: x, short: r5.get(x.id)!, long: r60.get(x.id)!, delta: r60.get(x.id)! - r5.get(x.id)! }))
+      .filter(x => rs.has(x.id) && rl.has(x.id))
+      .map(x => ({ s: x, short: rs.get(x.id)!, long: rl.get(x.id)!, delta: rl.get(x.id)! - rs.get(x.id)! }))
+      .sort((a, b) => b.delta - a.delta)
+  })()
+
+  // 그룹 단위 이동 — 개별 ETF보다 테마 전체의 이동이 크게 보인다.
+  // 실제로 원자력·전력 계열(URNM·URA·XLU·UTES)이 통째로 부진한 게 개별로는 흩어져 보였다.
+  // 그룹 값은 구성 ETF 상대수익의 중앙값이다 (평균은 한 종목에 끌려간다).
+  const groupMoves = (() => {
+    const all = [...groups.map(g => ({ label: g.label, items: g.items })),
+                 { label: 'GICS 대분류', items: broad }]
+    const val = (items: SectorData[], key: string) => {
+      const xs = items
+        .map(x => key === '1' ? x.rs1d : (x.rs?.[key] ?? null))
+        .filter((v): v is number => v != null)
+        .sort((a, b) => a - b)
+      if (!xs.length) return null
+      const h = xs.length >> 1
+      return xs.length % 2 ? xs[h] : (xs[h - 1] + xs[h]) / 2
+    }
+    const rows = all
+      .map(g => ({ label: g.label, n: g.items.length, s: val(g.items, shortKey), l: val(g.items, longKey) }))
+      .filter(g => g.s != null && g.l != null)
+    const rk = (key: 's' | 'l') => {
+      const sortedK = [...rows].sort((a, b) => (b[key] as number) - (a[key] as number))
+      return new Map(sortedK.map((x, i) => [x.label, i + 1]))
+    }
+    const rs = rk('s'), rl = rk('l')
+    return rows
+      .map(g => ({ ...g, short: rs.get(g.label)!, long: rl.get(g.label)!, delta: rl.get(g.label)! - rs.get(g.label)! }))
       .sort((a, b) => b.delta - a.delta)
   })()
 
@@ -471,11 +518,45 @@ export default function SectorsPage() {
             padding: '10px 12px', marginBottom: 12, fontSize: 11,
             color: 'var(--text-muted)', lineHeight: 1.6,
           }}>
-            <b style={{ color: 'var(--warn)' }}>이건 예측이 아니라 관찰이다.</b>
-            5일 순위가 60일 순위보다 높으면 최근 자금이 들어오는 중이다.
+            <b style={{ color: 'var(--warn)' }}>이건 예측이 아니라 관찰이다.</b>{' '}
+            <b>{shortKey === '1' ? '1일' : `${shortKey}일`}</b> 순위가{' '}
+            <b>{longKey}일</b> 순위보다 높으면 최근 자금이 들어오는 중이다.
             <b> 다음에 어디가 오를지는 말하지 않는다</b> — 섹터 순환 순서는 10년 검정에서
             우연 수준이었다 (110쌍 중 유의 6쌍 = 우연 기대치 6쌍).
+            <br />
+            <span style={{ opacity: 0.8 }}>위 기간 탭을 바꾸면 비교 기준도 같이 바뀐다.</span>
           </div>
+
+          {/* 그룹 단위 — 개별 ETF로는 흩어져 보이는 테마 이동을 잡는다 */}
+          <p style={{ margin: '0 0 6px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
+            테마 그룹 (구성 ETF 상대수익 중앙값)
+          </p>
+          <div className="card" style={{ overflow: 'hidden', marginBottom: 16 }}>
+            {groupMoves.map(g => (
+              <div key={g.label} style={{
+                display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 52px 52px 64px',
+                gap: 6, alignItems: 'center', minHeight: 40, padding: '0 10px',
+                borderBottom: '1px solid var(--border)',
+              }}>
+                <span style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {g.label}
+                  </span>
+                  <span className="num" style={{ fontSize: 10, color: 'var(--text-muted)' }}>{g.n}</span>
+                </span>
+                <span className="num" style={{ fontSize: 12, textAlign: 'right', color: 'var(--text-secondary)' }}>{g.short}위</span>
+                <span className="num" style={{ fontSize: 12, textAlign: 'right', color: 'var(--text-muted)' }}>{g.long}위</span>
+                <span className={`num ${g.delta > 0 ? 'up' : g.delta < 0 ? 'down' : 'flat'}`}
+                      style={{ fontSize: 12, fontWeight: 700, textAlign: 'right' }}>
+                  {g.delta === 0 ? '—' : `${g.delta > 0 ? '↑' : '↓'}${Math.abs(g.delta)}`}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <p style={{ margin: '0 0 6px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
+            개별 섹터 {moves.length}
+          </p>
           <div className="card" style={{ overflow: 'hidden' }}>
             <div style={{
               display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 52px 52px 64px',
@@ -483,8 +564,8 @@ export default function SectorsPage() {
               borderBottom: '1px solid var(--border)',
             }}>
               <span>섹터</span>
-              <span style={{ textAlign: 'right' }}>5일</span>
-              <span style={{ textAlign: 'right' }}>60일</span>
+              <span style={{ textAlign: 'right' }}>{shortKey === '1' ? '1일' : `${shortKey}일`}</span>
+              <span style={{ textAlign: 'right' }}>{longKey}일</span>
               <span style={{ textAlign: 'right' }}>이동</span>
             </div>
             {moves.map(m => (
