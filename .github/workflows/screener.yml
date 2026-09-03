@@ -27,3 +27,13 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/scan.mjs
+
+      # 죽은 티커 점검. 야후는 상장폐지 종목에도 몇 년 전 시세를 정상값처럼
+      # 계속 주기 때문에 사람 눈으로는 못 찾는다. 실제로 419개 중 15개가
+      # 고장나 있었고(ANSS·CYBR·HOLX 등 피인수, 삼성/하이닉스 .KQ 오표기)
+      # 그중 하나는 섹터 화면에서 "120일 부진 1위"를 차지하고 있었다.
+      #
+      # 스캔을 막지는 않는다(continue-on-error). 경고만 띄우고 사람이 판단한다.
+      - name: 워치리스트 헬스체크
+        continue-on-error: true
+        run: node scripts/healthcheck.mjs
