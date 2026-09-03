@@ -60,6 +60,17 @@ function pctLabel(v: number | null, decimals = 2): string {
 /** 색 클래스는 언제나 값의 부호에서 나온다 */
 const cls = (v: number | null) => v == null ? 'flat' : v > 0 ? 'up' : v < 0 ? 'down' : 'flat'
 
+/**
+ * 순자금 비율을 사람이 읽는 문장으로 바꾼다.
+ *
+ * f = (오른날 − 내린날) / 전체 × 100 이므로, 오른 날 비중은 (100 + f) / 2 다.
+ * "+38%"보다 "거래대금 69%가 오른 날"이 훨씬 빨리 읽힌다.
+ */
+function upShare(f: number | null): string {
+  if (f == null) return ''
+  return `거래대금 ${((100 + f) / 2).toFixed(0)}%가 오른 날`
+}
+
 function PctBadge({ v }: { v: number | null }) {
   if (v === null) return <span className="flat">—</span>
   const cls = v > 0 ? 'up' : v < 0 ? 'down' : 'flat'
@@ -160,9 +171,12 @@ export default function SectorsPage() {
     (s: SectorData) => period === '1' ? s.rs1d : (s.rs?.[period] ?? null),
     [period]
   )
+  // 정렬도 vs SPY 기준이다. 막대가 vs SPY인데 절대 등락순으로 세우면
+  // 순서와 막대 길이가 어긋난다(XLK +1.0%/+0.1pp 가 XLRE +1.0%/+0.0pp 위인데 막대는 같아 보임).
+  // 섹터를 보는 목적도 "무엇이 시장보다 센가"이므로 상대강도가 맞는 기준이다.
   const byPct = useCallback(
-    (list: SectorData[]) => [...list].sort((a, b) => (pctOf(b) ?? -999) - (pctOf(a) ?? -999)),
-    [pctOf]
+    (list: SectorData[]) => [...list].sort((a, b) => (rsOf(b) ?? -999) - (rsOf(a) ?? -999)),
+    [rsOf]
   )
 
   const sorted = byPct(sectors)
@@ -290,7 +304,7 @@ export default function SectorsPage() {
               color: view === v ? '#fff' : 'var(--text-secondary)', cursor: 'pointer',
             }}
           >
-            {v === 'heatmap' ? '히트맵' : '테이블'}
+            {v === 'heatmap' ? '순위' : '기간 비교'}
           </button>
         ))}
       </div>
@@ -433,14 +447,20 @@ export default function SectorsPage() {
 
       {/* ── 테이블 뷰 ── */}
       {view === 'table' && (
-        <div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+        <div className="overflow-x-table">
+          {/* 기간을 한눈에 비교하려고 남긴 뷰다.
+              섹터명을 별도 열에 두니 "채굴·AI데이터센터"가 다섯 줄로 쪼개졌다.
+              ETF를 주 라벨로 올리고 이름은 아래 작은 글씨 + 줄바꿈 금지로 바꿨다.
+              첫 열은 가로 스크롤 중에도 고정돼 어느 섹터인지 놓치지 않는다. */}
+          <table style={{ borderCollapse: 'collapse', fontSize: 13, minWidth: 520 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 12 }}>
-                <th style={{ textAlign: 'left',  padding: '6px 8px' }}>섹터</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>ETF</th>
+              <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11 }}>
+                <th style={{
+                  textAlign: 'left', padding: '6px 8px', position: 'sticky', left: 0,
+                  background: 'var(--bg-base)', zIndex: 1, minWidth: 132,
+                }}>섹터</th>
                 {PERIODS.map(p => (
-                  <th key={p.key} style={{ textAlign: 'right', padding: '6px 8px' }}>{p.label}</th>
+                  <th key={p.key} style={{ textAlign: 'right', padding: '6px 10px', whiteSpace: 'nowrap' }}>{p.label}</th>
                 ))}
               </tr>
             </thead>
@@ -448,7 +468,7 @@ export default function SectorsPage() {
               {loading
                 ? Array.from({ length: 30 }).map((_, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                      {Array.from({ length: PERIODS.length + 2 }).map((_, j) => (
+                      {Array.from({ length: PERIODS.length + 1 }).map((_, j) => (
                         <td key={j} style={{ padding: '10px 8px' }}>
                           <div style={{ height: 14, borderRadius: 4, background: 'var(--bg-card)' }} />
                         </td>
@@ -465,18 +485,22 @@ export default function SectorsPage() {
                       }}
                       onClick={() => setSelected(selected?.id === s.id ? null : s)}
                     >
-                      <td style={{ padding: '10px 8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color, flexShrink: 0 }} />
-                          {s.label}
+                      <td style={{
+                        padding: '8px', position: 'sticky', left: 0, zIndex: 1,
+                        background: selected?.id === s.id ? 'var(--bg-hover)' : 'var(--bg-base)',
+                        minWidth: 132, maxWidth: 132,
+                      }}>
+                        <div className="num" style={{ fontSize: 12, fontWeight: 700 }}>
+                          <TvLink symbol={s.etf} />
                         </div>
-                      </td>
-                      <td style={{ textAlign: 'right', padding: '10px 8px', color: 'var(--text-secondary)' }} className="num">
-                        <TvLink symbol={s.etf} />
+                        <div style={{
+                          fontSize: 10, color: 'var(--text-muted)',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>{s.label}</div>
                       </td>
                       {PERIODS.map(p => (
                         <td key={p.key} style={{
-                          textAlign: 'right', padding: '10px 8px',
+                          textAlign: 'right', padding: '8px 10px', whiteSpace: 'nowrap',
                           // 선택한 기간을 강조해 정렬 기준이 어디인지 보이게 한다
                           background: period === p.key ? 'var(--bg-hover)' : undefined,
                         }}>
@@ -563,34 +587,64 @@ export default function SectorsPage() {
             {/* 구성종목 자금 흐름 — ETF 거래량은 유통시장 손바뀜이라
                 어느 종목에 돈이 갔는지 못 본다. 종목별로 내려가야 분화가 보인다. */}
             <div style={{ marginBottom: 16 }}>
-              <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                구성종목 자금 흐름 · 20일
+              <p style={{ margin: '0 0 6px', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                구성종목 자금 흐름 · 최근 20일
               </p>
+              {/* 사용자 피드백: "ETF 레벨이라거나 퍼센트가 무슨 말인지 모르겠다".
+                  숫자만 띄우고 정의를 어디에도 안 적어놨다. 화면에서 바로 읽히게 한다. */}
+              <details style={{ marginBottom: 8 }}>
+                <summary style={{ cursor: 'pointer', fontSize: 11, color: 'var(--info)' }}>
+                  이 숫자가 무슨 뜻인가?
+                </summary>
+                <div style={{
+                  marginTop: 6, padding: '8px 10px', borderRadius: 8,
+                  background: 'var(--bg-base)', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.7,
+                }}>
+                  최근 20일 거래대금을 <b>오른 날</b>과 <b>내린 날</b>로 나눠 비교한 값이다.
+                  <br />
+                  <span className="num">(오른 날 거래대금 − 내린 날 거래대금) ÷ 전체 × 100</span>
+                  <br /><br />
+                  <b>+38%</b>면 거래대금의 <b>69%가 오른 날</b>에 발생했다는 뜻이다.
+                  0%면 반반, −38%면 69%가 내린 날에 몰렸다.
+                  <br /><br />
+                  <span style={{ color: 'var(--warn)' }}>
+                    이건 순매수가 아니다. 거래대금은 매수와 매도가 이미 상쇄된 총량이라
+                    누가 샀는지는 알 수 없다. 미국은 기관 순매수를 실시간 공개하지 않아
+                    이게 무료로 얻을 수 있는 <b>대리지표</b>다.
+                  </span>
+                </div>
+              </details>
               {flowLoading ? (
                 <div style={{ height: 88, borderRadius: 8, background: 'var(--bg-surface)', opacity: 0.6, animation: 'pulse 1.5s infinite' }} />
               ) : !flow || flow.constituents.length === 0 ? (
                 <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>자금 데이터 없음</p>
               ) : (
                 <>
+                  {/* 각 칸에 "그래서 뭔데"를 한 줄로 붙인다. 숫자만으로는 안 읽힌다 */}
                   <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1, minWidth: 96, background: 'var(--bg-surface)', borderRadius: 8, padding: '8px 10px' }}>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>ETF 레벨</div>
-                      <div className={`num ${(flow.etfFlow?.f20 ?? 0) >= 0 ? 'up' : 'down'}`} style={{ fontSize: 15, fontWeight: 700 }}>
+                    <div style={{ flex: 1, minWidth: 104, background: 'var(--bg-surface)', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>ETF 자체 거래</div>
+                      <div className={`num ${cls(flow.etfFlow?.f20 ?? null)}`} style={{ fontSize: 15, fontWeight: 700 }}>
                         {flow.etfFlow?.f20 == null ? '—' : `${flow.etfFlow.f20 >= 0 ? '+' : ''}${flow.etfFlow.f20.toFixed(0)}%`}
                       </div>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{upShare(flow.etfFlow?.f20 ?? null)}</div>
                     </div>
-                    <div style={{ flex: 1, minWidth: 96, background: 'var(--bg-surface)', borderRadius: 8, padding: '8px 10px' }}>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>비중가중</div>
-                      <div className={`num ${(flow.weightedF20 ?? 0) >= 0 ? 'up' : 'down'}`} style={{ fontSize: 15, fontWeight: 700 }}>
+                    <div style={{ flex: 1, minWidth: 104, background: 'var(--bg-surface)', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>구성종목 (비중 반영)</div>
+                      <div className={`num ${cls(flow.weightedF20)}`} style={{ fontSize: 15, fontWeight: 700 }}>
                         {flow.weightedF20 == null ? '—' : `${flow.weightedF20 >= 0 ? '+' : ''}${flow.weightedF20.toFixed(0)}%`}
                       </div>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{upShare(flow.weightedF20)}</div>
                     </div>
-                    <div style={{ flex: 1, minWidth: 96, background: 'var(--bg-surface)', borderRadius: 8, padding: '8px 10px' }}>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>유입 / 유출</div>
+                    <div style={{ flex: 1, minWidth: 104, background: 'var(--bg-surface)', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>매집 / 분산</div>
                       <div className="num" style={{ fontSize: 15, fontWeight: 700 }}>
                         <span className="up">{flow.inflow}</span>
                         <span style={{ color: 'var(--text-muted)' }}> / </span>
                         <span className="down">{flow.outflow}</span>
+                      </div>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+                        {flow.inflow + flow.outflow}종목 중
                       </div>
                     </div>
                   </div>
