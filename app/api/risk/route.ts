@@ -1,28 +1,35 @@
 import { NextResponse } from 'next/server'
 import { fetchBars } from '@/lib/flow'
 
-// 위험 신호 5개.
+// 위험 신호 6개.
 //
 // 이건 예측이 아니라 "지금 시장이 어떤 상태인가"에 대한 현상 기술이다.
 // 하루 뒤를 맞히지 못한다 — 자체 백테스트에서 예측 신호는 검증할수록 사라졌다.
 // 대신 2026-08-28처럼 지수(-0.25%)만 보면 안 보이는 내부 붕괴를 드러내는 게 목적이다.
 // 그날 실측: 개별종목 20%가 -3% 이하, 소형주 평균 -2.47%, 필수소비만 +1.16%.
 //
-// ── 기각한 신호: KRE(지역은행) 상대 약세 ────────────────────────────────
-// "KRE가 SPY보다 N%p 뒤처지면 신용 스트레스 경고"를 6번째 신호등으로 넣으려다
-// 10년 백테스트에서 반증됐다. 방향이 정반대였다:
+// ── KRE(지역은행) 상대 약세 — 한 번 기각했다가 되살렸다 ─────────────────
+// 처음엔 "이후 20일 SPY 수익률"로 재고 기각했다. 그건 예측력 기준인데,
+// 이 대시보드는 스스로 예측이 아니라 현상 기술이라고 선언한다. 기준이 틀렸다.
 //
-//   임계값        점등비율   이후 20일 SPY 평균   양수%
-//   기준선(전체)     -         +1.14%           69%
-//   -5%p 이하     20.5%      +1.30%           69%
-//   -8%p 이하      9.2%      +2.43%           79%
-//   -10%p 이하     5.1%      +3.50%           83%
+// 다시 잰 기준: KRE 상대 약세가 '지금 신용 스트레스가 있다'를 정확히 기술하는가.
+// 정답지는 HYG/IEF 비율(하이일드/국채)의 20일 변화다.
+// 이 대용치는 실제 하이일드 OAS와 상관 -0.66이다(n=731).
 //
-// 경고가 아니라 반대 신호다. 낙폭 예측도 무의미했다(기준선 -2.42% vs 점등 -2.5~-3.4%,
-// -5% 이상 낙폭 비율 16% vs 17~20%). 5일 스프레드로 '붕괴 시작'을 잡아도 마찬가지였다.
+// 10년 2,492일 실측. "스트레스" = HYG/IEF 20일 하락폭 상위 10%:
+//   KRE-SPY 20일   점등비율   점등시 스트레스   기준선(10%) 대비
+//    -5%p 이하      20.5%        20%            2.0배
+//    -8%p 이하       9.1%        28%            2.8배
+//   -10%p 이하       5.0%        39%            3.9배
+//   -15%p 이하       1.6%        85%            8.5배
+//   -20%p 이하       0.8%        90%            9.0배
 //
-// 이유: SVB 때 KRE -27.2%는 사태가 터진 뒤 찍힌 값이다. 선행이 아니라 동행·후행이고
-// 그 시점은 대개 바닥 근처다. KRE는 히트맵에서 사후 확인용으로만 쓴다.
+// 동행 상관 0.39, 5일 선행 0.27, 10일 0.14, 20일 0.02 — 선행성은 거의 없다.
+// 그래서 "앞으로 나빠진다"가 아니라 "지금 신용 쪽이 아프다"로만 읽어야 한다.
+//
+// 처음 검증이 반대 결론을 낸 이유: 하이일드 스프레드 표본이 3년(2023-09~)뿐이라
+// SVB(2023-03)와 코로나가 통째로 빠져 있었다. 그 구간엔 진짜 신용 사건이 없어서
+// 가장 깊은 KRE 약세가 전부 노이즈였다. 표본 기간을 먼저 확인했어야 했다.
 
 export const revalidate = 900  // 15분
 
@@ -91,9 +98,9 @@ function ret(bars: { c: number }[] | null, days: number): number | null {
 
 export async function GET(req: Request) {
   const origin = new URL(req.url).origin
-  const [bd, spy, iwm, xlp, xlu, xly, xlk, vix, macroRes] = await Promise.all([
+  const [bd, spy, iwm, kre, xlp, xlu, xly, xlk, vix, macroRes] = await Promise.all([
     breadth(),
-    fetchBars('SPY'), fetchBars('IWM'),
+    fetchBars('SPY'), fetchBars('IWM'), fetchBars('KRE'),
     fetchBars('XLP'), fetchBars('XLU'), fetchBars('XLY'), fetchBars('XLK'),
     fetchBars('^VIX'),
     fetch(`${origin}/api/macro`, { next: { revalidate: 43200 } })
@@ -152,6 +159,23 @@ export async function GET(req: Request) {
       level: hy.value >= 450 ? 'alert' : hy.value >= 380 || (chg ?? 0) >= 25 ? 'warn' : 'ok',
       value: `${hy.value.toFixed(0)}bp`,
       detail: chg == null ? '' : `직전 대비 ${chg >= 0 ? '+' : ''}${chg.toFixed(0)}bp`,
+    })
+  }
+
+  // 6. 지역은행 상대강도 — 지수에 안 잡히는 신용 스트레스를 드러낸다.
+  //    SVB(2023-03) 때 SPY +2.2%인데 KRE -27.2%였다. 지수만 보면 안 보인다.
+  //    임계값은 위 표에서 골랐다: -8%p(2.8배)에서 주의, -15%p(8.5배)에서 경보.
+  const kre20 = ret(kre, 20), spy20 = ret(spy, 20)
+  if (kre20 != null && spy20 != null) {
+    const gapKre = kre20 - spy20
+    signals.push({
+      id: 'regional_banks',
+      label: '지역은행 상대강도',
+      level: gapKre <= -15 ? 'alert' : gapKre <= -8 ? 'warn' : 'ok',
+      value: `${gapKre >= 0 ? '+' : ''}${gapKre.toFixed(1)}%p`,
+      detail: gapKre <= -15 ? '10년 실측: 이 수준에서 85%가 실제 신용 스트레스'
+            : gapKre <= -8  ? '10년 실측: 이 수준에서 28% (기준선 10%)'
+            : `KRE 20일 ${pct(kre20)} vs SPY ${pct(spy20)}`,
     })
   }
 
