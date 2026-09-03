@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isStaleQuote } from '@/lib/yahoo-meta'
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -24,6 +25,7 @@ async function fetchQuote(symbol: string): Promise<{ price: number | null; chang
       const json = await res.json()
       const meta = json?.chart?.result?.[0]?.meta
       if (!meta) continue
+      if (isStaleQuote(meta)) return { price: null, changePct: null }
       const price = meta.regularMarketPrice ?? meta.previousClose ?? null
       if (price === null) continue
       const prev = meta.previousClose ?? meta.chartPreviousClose ?? price

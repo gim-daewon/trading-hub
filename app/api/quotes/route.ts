@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isStaleQuote } from '@/lib/yahoo-meta'
 
 const FINNHUB_KEY = process.env.FINNHUB_API_KEY ?? ''
 const YAHOO_BASE  = 'https://query1.finance.yahoo.com/v8/finance/chart'
@@ -32,6 +33,8 @@ async function fetchYahoo(symbol: string) {
   const json = await res.json()
   const meta = json.chart?.result?.[0]?.meta
   if (!meta) throw new Error(`Yahoo ${symbol}: no data`)
+  // 상장폐지 티커는 몇 년 전 시세를 정상값처럼 계속 준다
+  if (isStaleQuote(meta)) throw new Error(`Yahoo ${symbol}: 시세가 오래됨 (상장폐지 의심)`)
   const price     = meta.regularMarketPrice ?? 0
   const prevClose = meta.previousClose ?? meta.chartPreviousClose ?? price
   const change    = price - prevClose

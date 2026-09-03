@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isStaleQuote } from '@/lib/yahoo-meta'
 import { STATIC_HOLDINGS } from '@/lib/etf-holdings-static'
 
 const UA     = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
@@ -81,6 +82,7 @@ async function fetchPrice(symbol: string): Promise<PriceResult> {
       const j = await res.json()
       const m = j?.chart?.result?.[0]?.meta
       if (!m) continue
+      if (isStaleQuote(m)) return { price: null, changePct: null }
       const price = m.regularMarketPrice ?? m.previousClose ?? null
       if (price === null) continue
       const prev = m.previousClose ?? m.chartPreviousClose ?? price

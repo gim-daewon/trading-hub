@@ -24,6 +24,17 @@ export interface FlowMetrics {
 const YAHOO_HOSTS = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
+/** 마지막 유효봉이 이보다 오래되면 죽은 티커로 본다 (휴장·데이터 지연은 봐준다) */
+const MAX_STALE_BARS = 3
+
+/**
+ * 일봉을 가져온다. 최근 봉이 비어 있는 티커는 null을 준다.
+ *
+ * null을 그냥 걸러내면 조용히 과거 데이터로 계산이 돌아간다. 실제로 PBS가
+ * 2026-07-17 이후 34거래일 전부 null이었는데, 그 사실이 어디에도 드러나지 않아
+ * 섹터 화면에 "-46.6%"가 정상 값처럼 표시됐다. 수급·볼린저도 같은 문제를 겪는다 —
+ * 3개월 전 데이터로 계산한 %B를 오늘 값으로 쓰면 조용히 틀린다.
+ */
 export async function fetchBars(symbol: string, range = '6mo'): Promise<Bar[] | null> {
   for (const host of YAHOO_HOSTS) {
     try {
@@ -37,9 +48,16 @@ export async function fetchBars(symbol: string, range = '6mo'): Promise<Bar[] | 
       const q = result?.indicators?.quote?.[0]
       if (!result || !q) continue
 
-      const bars: Bar[] = []
       const n = (result.timestamp ?? []).length
-      for (let i = 0; i < n; i++) {
+      // 끝에서부터 유효봉을 찾는다. 너무 오래됐으면 계산하지 않는다
+      let lastValid = -1
+      for (let i = n - 1; i >= 0; i--) {
+        if (q.close?.[i] != null && q.volume?.[i] != null) { lastValid = i; break }
+      }
+      if (lastValid < 0 || n - 1 - lastValid > MAX_STALE_BARS) continue
+
+      const bars: Bar[] = []
+      for (let i = 0; i <= lastValid; i++) {
         if (q.close?.[i] == null || q.volume?.[i] == null) continue
         bars.push({ c: q.close[i], v: q.volume[i] })
       }
