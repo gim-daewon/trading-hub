@@ -9,12 +9,14 @@ export type SectorId =
   | 'industrial' | 'defense' | 'transport' | 'automotive'
   // 소비재
   | 'consumer' | 'leisure' | 'ecommerce' | 'staples' | 'food'
+  // 산업 (우주는 ITA 항공우주·방산과 구성이 거의 겹치지 않아 별도로 둔다)
+  | 'space'
   // 헬스케어
-  | 'health_device' | 'biotech'
+  | 'healthcare' | 'health_device' | 'biotech'
   // 금융
-  | 'banks' | 'fintech' | 'insurance'
+  | 'financial' | 'banks' | 'fintech' | 'insurance'
   // 테크
-  | 'fabless' | 'semiconductor' | 'cloud' | 'software' | 'cybersecurity'
+  | 'tech' | 'fabless' | 'semiconductor' | 'cloud' | 'software' | 'cybersecurity'
   // 커뮤니케이션
   | 'communication' | 'telecom' | 'media'
   // 유틸리티·부동산

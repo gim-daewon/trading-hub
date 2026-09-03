@@ -2,6 +2,56 @@ export type StaticHolding = { symbol: string; name: string; pct: number }
 
 // pct is stored as a decimal (0.231 = 23.1%), matching Yahoo Finance holdingPercent.raw format
 export const STATIC_HOLDINGS: Record<string, StaticHolding[]> = {
+  // ── 광의 섹터 (2026-09-04 Yahoo topHoldings 실측) ────────────────────────
+  XLK: [
+    { symbol: 'NVDA', name: 'NVIDIA',            pct: 0.138 },
+    { symbol: 'AAPL', name: 'Apple',             pct: 0.129 },
+    { symbol: 'MSFT', name: 'Microsoft',         pct: 0.098 },
+    { symbol: 'AVGO', name: 'Broadcom',          pct: 0.052 },
+    { symbol: 'AMD',  name: 'AMD',               pct: 0.042 },
+    { symbol: 'MU',   name: 'Micron',            pct: 0.036 },
+    { symbol: 'CSCO', name: 'Cisco',             pct: 0.032 },
+    { symbol: 'INTC', name: 'Intel',             pct: 0.030 },
+    { symbol: 'AMAT', name: 'Applied Materials', pct: 0.028 },
+    { symbol: 'LRCX', name: 'Lam Research',      pct: 0.025 },
+  ],
+  XLF: [
+    { symbol: 'JPM',   name: 'JPMorgan Chase',    pct: 0.117 },
+    { symbol: 'BRK-B', name: 'Berkshire Hathaway', pct: 0.117 },
+    { symbol: 'V',     name: 'Visa',              pct: 0.076 },
+    { symbol: 'MA',    name: 'Mastercard',        pct: 0.057 },
+    { symbol: 'BAC',   name: 'Bank of America',   pct: 0.050 },
+    { symbol: 'GS',    name: 'Goldman Sachs',     pct: 0.037 },
+    { symbol: 'WFC',   name: 'Wells Fargo',       pct: 0.033 },
+    { symbol: 'MS',    name: 'Morgan Stanley',    pct: 0.031 },
+    { symbol: 'C',     name: 'Citigroup',         pct: 0.028 },
+    { symbol: 'AXP',   name: 'American Express',  pct: 0.022 },
+  ],
+  XLV: [
+    { symbol: 'LLY',  name: 'Eli Lilly',        pct: 0.155 },
+    { symbol: 'JNJ',  name: 'Johnson & Johnson', pct: 0.105 },
+    { symbol: 'ABBV', name: 'AbbVie',           pct: 0.075 },
+    { symbol: 'UNH',  name: 'UnitedHealth',     pct: 0.064 },
+    { symbol: 'MRK',  name: 'Merck',            pct: 0.055 },
+    { symbol: 'TMO',  name: 'Thermo Fisher',    pct: 0.036 },
+    { symbol: 'AMGN', name: 'Amgen',            pct: 0.035 },
+    { symbol: 'ABT',  name: 'Abbott',           pct: 0.031 },
+    { symbol: 'GILD', name: 'Gilead Sciences',  pct: 0.028 },
+    { symbol: 'PFE',  name: 'Pfizer',           pct: 0.024 },
+  ],
+  // 우주 — GRMN·TRMB·SIRI는 위성 의존 사업자다. 순수 발사체 기업만 담은 게 아니라
+  // '우주경제' 정의를 쓴다. 발사체는 ASTS·SPCX·PL·RKLB 쪽이다
+  UFO: [
+    { symbol: 'GRMN', name: 'Garmin',           pct: 0.070 },
+    { symbol: 'TRMB', name: 'Trimble',          pct: 0.063 },
+    { symbol: 'VSAT', name: 'Viasat',           pct: 0.062 },
+    { symbol: 'SIRI', name: 'Sirius XM',        pct: 0.058 },
+    { symbol: 'ECHO', name: 'EchoStar',         pct: 0.042 },
+    { symbol: 'ASTS', name: 'AST SpaceMobile',  pct: 0.040 },
+    { symbol: 'PL',   name: 'Planet Labs',      pct: 0.037 },
+    { symbol: 'GSAT', name: 'Globalstar',       pct: 0.037 },
+    { symbol: 'IRDM', name: 'Iridium',          pct: 0.036 },
+  ],
   // ── 에너지 ─────────────────────────────────────────────────────────────
   XLE: [
     { symbol: 'XOM',  name: 'ExxonMobil',          pct: 0.225 },
@@ -215,17 +265,18 @@ export const STATIC_HOLDINGS: Record<string, StaticHolding[]> = {
   IBIT: [
     { symbol: 'BTC-USD', name: 'Bitcoin', pct: 1.000 },
   ],
-  CLOU: [
-    { symbol: 'WDAY',  name: 'Workday',    pct: 0.072 },
-    { symbol: 'TEAM',  name: 'Atlassian',  pct: 0.068 },
-    { symbol: 'DDOG',  name: 'Datadog',    pct: 0.065 },
-    { symbol: 'SNOW',  name: 'Snowflake',  pct: 0.062 },
-    { symbol: 'NET',   name: 'Cloudflare', pct: 0.058 },
-    { symbol: 'MNDY',  name: 'Monday.com', pct: 0.055 },
-    { symbol: 'CFLT',  name: 'Confluent',  pct: 0.052 },
-    { symbol: 'ZI',    name: 'ZoomInfo',   pct: 0.048 },
-    { symbol: 'NCNO',  name: 'nCino',      pct: 0.045 },
-    { symbol: 'ESTC',  name: 'Elastic',    pct: 0.042 },
+  // CLOU(Global X Cloud Computing)를 뺐다. '네오클라우드'로 부르고 있었지만
+  // 실제 보유는 SNOW·DDOG·NET 같은 SaaS라 WCLD와 거의 같았다.
+  // 실제 네오클라우드(IREN·CIFR·HUT)는 채굴기업의 AI 데이터센터 전환 쪽에 있다.
+  // 해외 상장분(.TO/.NE)은 미국 스크리너와 대조가 안 되므로 뺐다.
+  WGMI: [
+    { symbol: 'CIFR',  name: 'Cipher Mining',    pct: 0.203 },
+    { symbol: 'HUT',   name: 'Hut 8',            pct: 0.124 },
+    { symbol: 'IREN',  name: 'IREN',             pct: 0.100 },
+    { symbol: 'CLSK',  name: 'CleanSpark',       pct: 0.053 },
+    { symbol: 'MARA',  name: 'MARA Holdings',    pct: 0.048 },
+    { symbol: 'RIOT',  name: 'Riot Platforms',   pct: 0.045 },
+    { symbol: 'BTDR',  name: 'Bitdeer',          pct: 0.038 },
   ],
   // ── 금융 ───────────────────────────────────────────────────────────────
   KBE: [
