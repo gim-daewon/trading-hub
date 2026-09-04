@@ -133,6 +133,7 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
       w_close: m.wClose,                // 마지막 '완료된' 주 기준
       w_vwma20: m.wVwma20,
       w_vwma60: m.wVwma60,
+      w_above_run: m.wAboveRun,   // 1 = 지난주에 주봉 VWMA20 탈환
       price: bars[bars.length - 1].c,   // 진입가 — 사후 성과 추적용
       persistence: persistence(m),
     })

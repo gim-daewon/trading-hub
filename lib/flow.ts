@@ -31,6 +31,12 @@ export interface FlowMetrics {
   wVwma20: number | null
   wVwma60: number | null
   /**
+   * 주봉 종가가 주봉 VWMA20 위에 연속으로 머문 '완료된 주' 수.
+   * 1 = 지난주에 막 탈환. 일봉 aboveRun의 주봉판이다.
+   * 이게 없으면 "돌파"와 "이미 한참 위"를 구분할 수 없다.
+   */
+  wAboveRun: number | null
+  /**
    * 오늘까지 연속으로 종가가 VWMA20 위에 있은 일수.
    *   0 = VWMA 아래
    *   1 = 오늘 종가로 상향 돌파 (전일은 아래였다)
@@ -185,8 +191,9 @@ export function computeFlow(bars: Bar[] | DatedBar[]): FlowMetrics {
  */
 export function weeklyVwma(bars: Bar[], dates?: number[]): {
   wClose: number | null; wVwma20: number | null; wVwma60: number | null
+  wAboveRun: number | null
 } {
-  const none = { wClose: null, wVwma20: null, wVwma60: null }
+  const none = { wClose: null, wVwma20: null, wVwma60: null, wAboveRun: null }
   if (!dates || dates.length !== bars.length) return none
 
   const wk: Bar[] = []
@@ -204,10 +211,19 @@ export function weeklyVwma(bars: Bar[], dates?: number[]): {
   // 마지막(진행 중) 주를 버린다
   const done = wk.slice(0, -1)
   if (done.length < 20) return none
+
+  // 주봉 연속 유지 주수. 일봉 aboveRun과 같은 논리다
+  let run = 0
+  for (let i = 19; i < done.length; i++) {
+    const v = vwma(done, 20, i)
+    run = v != null && done[i].c > v ? run + 1 : 0
+  }
+
   return {
     wClose: done[done.length - 1].c,
     wVwma20: vwma(done, 20),
     wVwma60: vwma(done, 60),
+    wAboveRun: run,
   }
 }
 

@@ -29,6 +29,8 @@ export interface ScreenerRow {
   wClose?: number | null
   wVwma20?: number | null
   wVwma60?: number | null
+  /** 주봉 VWMA20 위 연속 주수. 1 = 지난주 탈환 */
+  wAboveRun?: number | null
   price: number | null
 }
 
@@ -345,7 +347,9 @@ function match<T extends ScreenerRow>(r: T, key: BreakoutKey): boolean {
     case 'held':   return aboveRun != null && aboveRun >= 2 && aboveRun <= 5
     // 바닥잡기 — 역배열(60이 20 위)에서 20선을 막 탈환
     case 'revD':   return hasD && d60! > d20! && aboveRun === 1
-    case 'revW':   return hasW && w60! > w20! && wc! > w20!
+    // 주봉도 '막 탈환'이어야 한다. 이 조건이 없으면 몇 달 전에 넘어
+    // 한참 위에 있는 종목까지 전부 걸린다 (실제로 그렇게 떴다)
+    case 'revW':   return hasW && w60! > w20! && r.wAboveRun === 1
     // 강세눌림 — 정배열(20이 60 위)에서 20선 부근까지 조정
     case 'nearD':  return hasD && d20! > d60! && price! >= d20! && (price! - d20!) / d20! <= NEAR_PCT
     case 'nearW':  return hasW && w20! > w60! && wc! >= w20! && (wc! - w20!) / w20! <= NEAR_PCT

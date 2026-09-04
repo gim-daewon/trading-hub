@@ -54,3 +54,9 @@ create index if not exists screener_rows_snapshot_flow_idx
 --  where table_name = 'screener_rows'
 --    and column_name in ('vwma20','vwma60','above_run','w_close','w_vwma20','w_vwma60')
 --  order by column_name;
+
+-- ── 2026-09-05 추가 ────────────────────────────────────────────────────
+-- 주봉 연속 유지 주수. 이게 없으면 "지난주 막 탈환"과 "몇 달 전에 넘어
+-- 한참 위에 있음"을 구분할 수 없다. 실제로 바닥잡기 주봉 탭에
+-- 20주선을 한참 통과한 종목들이 떴다.
+alter table screener_rows add column if not exists w_above_run integer;
