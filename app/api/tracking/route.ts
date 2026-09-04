@@ -16,7 +16,16 @@ import {
 // 구현: 과거 스냅샷의 진입가와 최신 스냅샷의 현재가를 심볼로 조인한다.
 // 별도 갱신 잡이 필요 없다.
 
-export const revalidate = 600
+/**
+ * 라우트를 동적으로 둔다.
+ *
+ * 스냅샷 메타를 캐시하면 새 스캔이 돌아도 앱이 옛 id를 물고 있어
+ * 갱신이 영영 안 온다(실측: 스캔 40분 뒤에도 이전 스냅샷 표시).
+ * 그래서 메타는 no-store로 매번 확인하고,
+ * 무거운 행 조회는 URL에 snapshot_id가 들어가 있어 12시간 캐시해도 안전하다 —
+ * 스냅샷이 바뀌면 URL이 바뀌어 자동으로 새로 받는다.
+ */
+export const dynamic = 'force-dynamic'
 
 // 거래일. 20일은 백테스트 기준이라 필수, 60일은 섹터 검정에서 보유기간별로
 // 결과가 갈려서 추가했다. 60거래일치가 쌓이려면 약 3개월 걸린다.
@@ -56,7 +65,8 @@ async function readRows(url: string, headers: HeadersInit, snapshotId: number): 
     const res = await fetch(
       `${url}/rest/v1/screener_rows?select=*&snapshot_id=eq.${snapshotId}` +
       `&order=id.asc&offset=${from}&limit=${PAGE}`,
-      { headers, next: { revalidate: 600 } }
+      // 특정 스냅샷의 행은 절대 변하지 않는다. 길게 캐시해도 된다
+      { headers, next: { revalidate: 43200 } }
     )
     if (!res.ok) break
     const page = await res.json()

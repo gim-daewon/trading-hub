@@ -16,7 +16,16 @@ import {
 // 스냅샷 읽기는 1~2초라 오래 캐시할 이유가 없다. 12시간으로 잡았더니
 // 스캔이 끝나도 최대 12시간 동안 옛 응답이 나갔다.
 // 라이브 스캔 폴백(7초)은 스냅샷이 없을 때만 도는 예외 경로다.
-export const revalidate = 600  // 10분
+/**
+ * 라우트를 동적으로 둔다.
+ *
+ * 스냅샷 메타를 캐시하면 새 스캔이 돌아도 앱이 옛 id를 물고 있어
+ * 갱신이 영영 안 온다(실측: 스캔 40분 뒤에도 이전 스냅샷 표시).
+ * 그래서 메타는 no-store로 매번 확인하고,
+ * 무거운 행 조회는 URL에 snapshot_id가 들어가 있어 12시간 캐시해도 안전하다 —
+ * 스냅샷이 바뀌면 URL이 바뀌어 자동으로 새로 받는다.
+ */
+export const dynamic = 'force-dynamic'
 
 const NASDAQ_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -107,7 +116,8 @@ async function fromSupabase() {
       const res = await fetch(
         `${url}/rest/v1/screener_rows?select=*&snapshot_id=eq.${snap.id}` +
         `&order=id.asc&offset=${from}&limit=${PAGE}`,
-        { headers, next: { revalidate: 600 } }
+        // 특정 스냅샷의 행은 절대 변하지 않는다. 길게 캐시해도 된다
+        { headers, next: { revalidate: 43200 } }
       )
       if (!res.ok) break
       const page = await res.json()
