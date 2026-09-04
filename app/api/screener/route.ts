@@ -74,9 +74,16 @@ async function fromSupabase() {
 
   try {
     const headers = { apikey: key, Authorization: `Bearer ${key}` }
+    // 스냅샷 메타 조회는 캐시하지 않는다.
+    //
+    // 이걸 캐시하면 새 스캔이 돌아도 앱이 옛 스냅샷 id를 계속 들고 있어
+    // 갱신이 영영 안 온다. 실제로 스캔 후 40분이 지나도 화면이 안 바뀌었다.
+    // 행(rows) 조회는 URL에 snapshot_id가 들어가므로, 스냅샷이 바뀌면
+    // URL이 바뀌어 자동으로 새로 받는다 — 캐시를 그대로 둬도 안전하다.
+    // 비용은 요청당 1행 조회 하나뿐이다.
     const snapRes = await fetch(
       `${url}/rest/v1/screener_snapshots?select=*&order=scanned_at.desc&limit=1`,
-      { headers, next: { revalidate: 600 } }
+      { headers, cache: 'no-store' }
     )
     if (!snapRes.ok) return null
     const [snap] = await snapRes.json()
