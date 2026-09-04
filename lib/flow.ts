@@ -6,6 +6,9 @@
 
 export interface Bar { c: number; v: number }
 
+/** 일봉에 주 구분을 붙인 형태. 주봉 파생에 쓴다 */
+export interface DatedBar extends Bar { t: number }
+
 export interface FlowMetrics {
   /** 순자금 비율 5/20/60일 — 상승일 거래대금 대비 (-100 ~ +100) */
   f5: number | null
@@ -21,6 +24,12 @@ export interface FlowMetrics {
   pctB: number | null
   /** VWMA(20) — 거래량 가중 이동평균. 트레이딩뷰 VWMA 기본설정과 같다 */
   vwma20: number | null
+  /** VWMA(60). vwma20과의 상하 관계가 정배열/역배열을 가른다 */
+  vwma60: number | null
+  /** 주봉 — 마지막 '완료된' 주 기준. 진행 중인 주를 쓰면 룩어헤드가 된다 */
+  wClose: number | null
+  wVwma20: number | null
+  wVwma60: number | null
   /**
    * 오늘까지 연속으로 종가가 VWMA20 위에 있은 일수.
    *   0 = VWMA 아래
@@ -72,7 +81,8 @@ const MAX_STALE_BARS = 3
  * 섹터 화면에 "-46.6%"가 정상 값처럼 표시됐다. 수급·볼린저도 같은 문제를 겪는다 —
  * 3개월 전 데이터로 계산한 %B를 오늘 값으로 쓰면 조용히 틀린다.
  */
-export async function fetchBars(symbol: string, range = '6mo'): Promise<Bar[] | null> {
+/** 날짜까지 필요한 곳(주봉 파생)에서 쓴다. fetchBars는 이걸 감싼다 */
+export async function fetchDatedBars(symbol: string, range = '6mo'): Promise<DatedBar[] | null> {
   for (const host of YAHOO_HOSTS) {
     try {
       const res = await fetch(
@@ -93,15 +103,20 @@ export async function fetchBars(symbol: string, range = '6mo'): Promise<Bar[] | 
       }
       if (lastValid < 0 || n - 1 - lastValid > MAX_STALE_BARS) continue
 
-      const bars: Bar[] = []
+      const ts: number[] = result.timestamp ?? []
+      const bars: DatedBar[] = []
       for (let i = 0; i <= lastValid; i++) {
         if (q.close?.[i] == null || q.volume?.[i] == null) continue
-        bars.push({ c: q.close[i], v: q.volume[i] })
+        bars.push({ t: ts[i], c: q.close[i], v: q.volume[i] })
       }
       if (bars.length > 0) return bars
     } catch { /* 다음 호스트 */ }
   }
   return null
+}
+
+export async function fetchBars(symbol: string, range = '6mo'): Promise<Bar[] | null> {
+  return fetchDatedBars(symbol, range)
 }
 
 /**
@@ -136,7 +151,7 @@ export function pctB(bars: Bar[], n = 20, k = 2): number | null {
   return (bars[bars.length - 1].c - (m - k * sd)) / (2 * k * sd)
 }
 
-export function computeFlow(bars: Bar[]): FlowMetrics {
+export function computeFlow(bars: Bar[] | DatedBar[]): FlowMetrics {
   const dollarVols = bars.map(b => b.c * b.v)
   const recent = dollarVols.slice(-21, -1)
   const avg20 = recent.length ? recent.reduce((a, b) => a + b, 0) / recent.length : null
@@ -154,7 +169,45 @@ export function computeFlow(bars: Bar[]): FlowMetrics {
     avgDollarVol: avg20,
     pctB: pctB(bars),
     vwma20: vwma(bars, 20),
+    vwma60: vwma(bars, 60),
     aboveRun: aboveVwmaRun(bars, 20),
+    // 날짜가 있는 경우에만 주봉을 계산한다 (fetchDatedBars로 받은 경우)
+    ...weeklyVwma(bars, (bars as DatedBar[])[0]?.t != null ? (bars as DatedBar[]).map(b => b.t) : undefined),
+  }
+}
+
+/**
+ * 일봉을 주봉으로 묶어 VWMA를 계산한다.
+ *
+ * 마지막 원소는 '진행 중인 주'라 아직 종가가 확정되지 않았다.
+ * 그걸 쓰면 룩어헤드가 되므로 하나 앞(마지막 완료 주)을 쓴다.
+ * 주봉 VWMA60에는 60주 ≈ 14개월치 일봉이 필요하다 — 스캔 range가 2y인 이유.
+ */
+export function weeklyVwma(bars: Bar[], dates?: number[]): {
+  wClose: number | null; wVwma20: number | null; wVwma60: number | null
+} {
+  const none = { wClose: null, wVwma20: null, wVwma60: null }
+  if (!dates || dates.length !== bars.length) return none
+
+  const wk: Bar[] = []
+  let cur: number | null = null
+  for (let i = 0; i < bars.length; i++) {
+    const d = new Date(dates[i] * 1000)
+    // ISO 주차 — 목요일이 속한 해/주로 묶는다
+    const u = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+    u.setUTCDate(u.getUTCDate() + 4 - (u.getUTCDay() || 7))
+    const key = u.getUTCFullYear() * 100 +
+      Math.ceil(((+u - Date.UTC(u.getUTCFullYear(), 0, 1)) / 86400000 + 1) / 7)
+    if (key !== cur) { wk.push({ c: bars[i].c, v: bars[i].v }); cur = key }
+    else { const l = wk[wk.length - 1]; l.c = bars[i].c; l.v += bars[i].v }
+  }
+  // 마지막(진행 중) 주를 버린다
+  const done = wk.slice(0, -1)
+  if (done.length < 20) return none
+  return {
+    wClose: done[done.length - 1].c,
+    wVwma20: vwma(done, 20),
+    wVwma60: vwma(done, 60),
   }
 }
 

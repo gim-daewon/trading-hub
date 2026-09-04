@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { fetchBars, computeFlow, mapLimit } from '@/lib/flow'
+import { fetchBars, fetchDatedBars, computeFlow, mapLimit } from '@/lib/flow'
 import {
   TIERS, tierOf, TIER_EVIDENCE, CAVEATS, buildCategories,
   buildBreakouts, BREAKOUT_EVIDENCE,
@@ -114,7 +114,8 @@ async function fromSupabase() {
       symbol: string; name: string | null; sector: string | null; market_cap: number | null
       f5: number | null; f20: number | null; f60: number | null
       rvol: number | null; chg20: number | null; pct_b: number | null
-      vwma20: number | null; above_run: number | null
+      vwma20: number | null; vwma60: number | null; above_run: number | null
+      w_close: number | null; w_vwma20: number | null; w_vwma60: number | null
       price: number | null
     }
     const rows: ScreenerRow[] = (raw as DbRow[]).map(r => ({
@@ -127,7 +128,11 @@ async function fromSupabase() {
       rvol: r.rvol, chg20: r.chg20,
       pctB: r.pct_b,
       vwma20: r.vwma20,
+      vwma60: r.vwma60,
       aboveRun: r.above_run,
+      wClose: r.w_close,
+      wVwma20: r.w_vwma20,
+      wVwma60: r.w_vwma60,
       price: r.price,
     }))
 
@@ -189,14 +194,16 @@ export async function GET() {
     // 2순위: 라이브 스캔 (705종목, Vercel 10초 제한)
     const [list, regimeInfo] = await Promise.all([universe(), marketRegime()])
     const rows = await mapLimit(list, 20, async (u): Promise<ScreenerRow | null> => {
-      const bars = await fetchBars(u.symbol)
+      // 주봉 VWMA60에 60주치가 필요하다. 라이브 폴백은 종목 수가 적어 감당된다
+      const bars = await fetchDatedBars(u.symbol, '2y')
       if (!bars || bars.length < 65) return null
       const m = computeFlow(bars)
       if (m.f20 === null) return null
       return {
         ...u, tier: tierOf(u.marketCap),
         f5: m.f5, f20: m.f20, f60: m.f60, rvol: m.rvol, chg20: m.chg20, pctB: m.pctB,
-        vwma20: m.vwma20, aboveRun: m.aboveRun,
+        vwma20: m.vwma20, vwma60: m.vwma60, aboveRun: m.aboveRun,
+        wClose: m.wClose, wVwma20: m.wVwma20, wVwma60: m.wVwma60,
         price: bars[bars.length - 1].c,
       }
     })

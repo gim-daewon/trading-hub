@@ -9,7 +9,7 @@
 // 필요한 환경변수: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 // (service_role은 RLS를 우회한다. 절대 클라이언트에 노출하지 말 것)
 
-import { fetchBars, computeFlow, persistence } from '../lib/flow.ts'
+import { fetchDatedBars, computeFlow, persistence } from '../lib/flow.ts'
 
 // 대시보드는 REST 엔드포인트(.../rest/v1/)만 보여주는 경우가 많다.
 // 어느 쪽을 넣어도 동작하도록 베이스 URL로 정규화한다.
@@ -65,7 +65,9 @@ async function universe() {
 
 async function barsWithRetry(symbol) {
   for (let i = 0; i <= MAX_RETRY; i++) {
-    const b = await fetchBars(symbol)
+    // 2년치를 받는다. 주봉 VWMA60에 60주(약 14개월)치 일봉이 필요하다.
+    // 6개월로는 주봉 지표가 전부 null이 된다.
+    const b = await fetchDatedBars(symbol, '2y')
     if (b && b.length >= 65) return b
     if (i < MAX_RETRY) await sleep(300 * (i + 1))
   }
@@ -126,7 +128,11 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
       rvol: m.rvol, chg20: m.chg20,
       pct_b: m.pctB,
       vwma20: m.vwma20,
+      vwma60: m.vwma60,                 // vwma20과의 상하 관계가 정배열/역배열
       above_run: m.aboveRun,            // 1 = 오늘 종가로 VWMA20 상향 돌파
+      w_close: m.wClose,                // 마지막 '완료된' 주 기준
+      w_vwma20: m.wVwma20,
+      w_vwma60: m.wVwma60,
       price: bars[bars.length - 1].c,   // 진입가 — 사후 성과 추적용
       persistence: persistence(m),
     })

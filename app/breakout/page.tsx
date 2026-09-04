@@ -21,7 +21,9 @@ interface Row {
   symbol: string; name: string; sector: string; marketCap: number
   f5: number | null; f20: number | null; f60: number | null
   rvol: number | null; chg20: number | null; pctB: number | null
-  vwma20?: number | null; aboveRun?: number | null; price: number | null
+  vwma20?: number | null; vwma60?: number | null; aboveRun?: number | null
+  wClose?: number | null; wVwma20?: number | null; wVwma60?: number | null
+  price: number | null
 }
 interface Data {
   regime: Regime
@@ -37,9 +39,11 @@ interface Data {
 
 const sgn = (v: number | null, d = 0) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(d)}`
 
-function StockRow({ r }: { r: Row }) {
-  // 종가가 VWMA보다 얼마나 위인가 — 돌파 강도를 가늠할 수 있다
-  const gap = r.price && r.vwma20 ? ((r.price - r.vwma20) / r.vwma20) * 100 : null
+function StockRow({ r, weekly }: { r: Row; weekly: boolean }) {
+  // 종가가 VWMA20에서 얼마나 떨어져 있나. 주봉 탭이면 주봉 값으로 잰다
+  const px = weekly ? r.wClose : r.price
+  const ma = weekly ? r.wVwma20 : r.vwma20
+  const gap = px && ma ? ((px - ma) / ma) * 100 : null
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: '1fr 58px 54px 54px',
@@ -59,7 +63,7 @@ function StockRow({ r }: { r: Row }) {
       </div>
 
       <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>VWMA 대비</div>
+        <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{weekly ? '주봉' : ''} VWMA 대비</div>
         <div className={`num ${(gap ?? 0) >= 0 ? 'up' : 'down'}`} style={{ fontSize: 12, fontWeight: 700 }}>
           {gap == null ? '—' : `${sgn(gap, 1)}%`}
         </div>
@@ -137,24 +141,25 @@ export default function BreakoutPage() {
         borderLeft: '3px solid var(--warn)',
       }}>
         <b style={{ color: 'var(--warn)' }}>성과 근거가 없는 탐색 도구다.</b>{' '}
-        10년 검증에서 <b>돌파 계열은 전 구간이 기준선 아래</b>였다
-        (기준선 = 전체 종목 균등매수, 양수 {BREAKOUT_EVIDENCE.baselinePos}%):
+        VWMA 계열 8가지를 10년·격자 10개로 검증했는데
+        <b> 전부 기준선 아래</b>였다 (기준선 = 전체 종목 균등매수, 양수 {BREAKOUT_EVIDENCE.baselinePos}%):
         <div className="num" style={{
           margin: '6px 0', padding: '7px 9px', borderRadius: 6,
-          background: 'var(--bg-base)', color: 'var(--text-muted)', fontSize: 10, lineHeight: 1.6,
+          background: 'var(--bg-base)', color: 'var(--text-muted)', fontSize: 10, lineHeight: 1.7,
         }}>
-          {BREAKOUT_EVIDENCE.buckets.map(b => `${b.label} ${b.pos}%`).join(' · ')}
+          {BREAKOUTS.map(b => `${b.label} ${b.pos}%`).join(' · ')}
         </div>
-        유지일수를 늘려도 좋아지지 않는다(단조성 없음). 오히려 눌림목처럼
-        <b> 아직 밴드 하단에 있을 때</b> 사는 쪽이 나았다.
+        약세 종목 바닥잡기(52%)와 강세 종목 눌림(49~50%)이 모두 기준선에 못 미치고,
+        유지일수를 늘려도 좋아지지 않는다(단조성 없음).
         <br />
         <span style={{ color: 'var(--text-muted)' }}>
           그래서 이 목록은 <b>차트를 직접 볼 후보를 좁히는 용도</b>로만 쓴다.
+          매수 근거로 쓰지 말 것.
         </span>
       </div>
 
-      {/* 탭 */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+      {/* 탭 8개라 가로 스크롤 칩으로 둔다. flex:1로 나누면 글자가 다 뭉개진다 */}
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 8, paddingBottom: 2 }}>
         {BREAKOUTS.map(b => {
           const n = data?.breakouts
             ? TIERS.reduce((a, t) => a + (data.breakouts![t.id]?.[b.key]?.length ?? 0), 0)
@@ -162,11 +167,11 @@ export default function BreakoutPage() {
           const active = tab === b.key
           return (
             <button key={b.key} onClick={() => setTab(b.key)} style={{
-              flex: 1, minHeight: 40, borderRadius: 10, cursor: 'pointer',
+              flexShrink: 0, minHeight: 40, padding: '0 12px', borderRadius: 10, cursor: 'pointer',
               border: `1px solid ${active ? 'var(--info)' : 'var(--border)'}`,
               background: active ? 'rgba(59,130,246,0.15)' : 'var(--bg-card)',
               color: active ? 'var(--text-primary)' : 'var(--text-muted)',
-              fontSize: 12, fontWeight: active ? 700 : 400,
+              fontSize: 12, fontWeight: active ? 700 : 400, whiteSpace: 'nowrap',
             }}>
               {b.label}{n > 0 && <span className="num" style={{ marginLeft: 5, opacity: 0.75 }}>{n}</span>}
             </button>
@@ -178,9 +183,17 @@ export default function BreakoutPage() {
         조건: {BREAKOUTS.find(b => b.key === tab)?.rule} · 수급 높은 순
       </p>
       <p style={{ margin: '0 0 8px', fontSize: 10, color: 'var(--text-muted)' }}>
+        {/* 탭마다 실측치를 붙여둔다. 한 번 읽고 잊는 것보다 매번 보이는 게 낫다 */}
+        <span className="num" style={{ color: 'var(--warn)' }}>
+          이 조건 실측 양수 {BREAKOUTS.find(b => b.key === tab)?.pos}%
+          {' '}(기준선 {BREAKOUT_EVIDENCE.baselinePos}%)
+        </span>
+        {' · '}
         {tab === 'today'
-          ? '이 목록은 매일 통째로 바뀐다 — 오늘 돌파한 종목은 이미 VWMA 위라 내일 다시 돌파할 수 없다 (실측 전날 겹침 0%).'
-          : '돌파 후 아직 위에 머무는 종목이라 며칠간 겹친다.'}
+          ? '매일 통째로 바뀐다 — 오늘 돌파한 종목은 이미 VWMA 위라 내일 다시 돌파할 수 없다 (실측 전날 겹침 0%)'
+          : tab.endsWith('W')
+            ? '주봉 기준이라 한 주 동안 목록이 거의 그대로다'
+            : '조건이 유지되는 동안 며칠간 겹친다'}
       </p>
 
       <MetricGuide show={['flow', 'pctB']} />
@@ -223,7 +236,7 @@ export default function BreakoutPage() {
               <span className="num" style={{ fontSize: 12, color: 'var(--text-muted)' }}>{rows.length}종목</span>
             </div>
             <div className="card" style={{ overflow: 'hidden' }}>
-              {rows.map(r => <StockRow key={r.symbol} r={r} />)}
+              {rows.map(r => <StockRow key={r.symbol} r={r} weekly={tab.endsWith('W')} />)}
             </div>
           </section>
         )

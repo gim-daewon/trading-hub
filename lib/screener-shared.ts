@@ -21,8 +21,14 @@ export interface ScreenerRow {
   pctB: number | null
   /** VWMA(20) 값 */
   vwma20?: number | null
+  /** VWMA(60). vwma20과의 상하 관계가 정배열/역배열을 가른다 */
+  vwma60?: number | null
   /** VWMA20 위 연속 일수. 1 = 오늘 종가로 상향 돌파 */
   aboveRun?: number | null
+  /** 주봉 — 마지막 완료 주 기준 */
+  wClose?: number | null
+  wVwma20?: number | null
+  wVwma60?: number | null
   price: number | null
 }
 
@@ -293,7 +299,7 @@ export const STOPPING_RULE = {
  * 100여 개로 좁혀주는 탐색 도구로는 쓸 수 있다. 성과를 주장하지 않는다.
  */
 export const BREAKOUT_EVIDENCE = {
-  baselinePos: 55,
+  baselinePos: 57,
   buckets: [
     { label: '돌파 당일',   pos: 51, med: 0.04 },
     { label: '2~3일 유지',  pos: 53, med: 0.15 },
@@ -304,25 +310,63 @@ export const BREAKOUT_EVIDENCE = {
   ],
 } as const
 
-export type BreakoutKey = 'today' | 'held'
+export type BreakoutKey =
+  | 'today' | 'held'          // 단순 돌파 / 유지
+  | 'revD'  | 'revW'          // 바닥잡기 (역배열에서 20선 탈환) 일봉/주봉
+  | 'nearD' | 'nearW'         // 강세눌림 접근 (정배열, 20선 0~3% 위)
+  | 'touchD' | 'touchW'       // 강세눌림 터치 (정배열, 20선 하향 이탈)
 
-export const BREAKOUTS: { key: BreakoutKey; label: string; rule: string }[] = [
-  { key: 'today', label: '오늘 돌파', rule: '종가가 VWMA20을 상향 돌파 (전일은 아래)' },
-  { key: 'held',  label: '2~5일 유지', rule: '돌파 후 2~5일째 VWMA20 위 유지' },
+/**
+ * 신호 목록. pos는 10년·격자 10개 실측 양수비율이고 기준선은 57%다.
+ * 전부 기준선 아래라 화면에 그대로 노출한다.
+ */
+export const BREAKOUTS: { key: BreakoutKey; label: string; rule: string; pos: number | null }[] = [
+  { key: 'today',  label: '오늘 돌파',     rule: '종가가 VWMA20 상향 돌파 (전일은 아래)', pos: 51 },
+  { key: 'held',   label: '2~5일 유지',    rule: '돌파 후 2~5일째 VWMA20 위 유지', pos: 53 },
+  { key: 'revD',   label: '바닥잡기 일봉',  rule: 'VWMA60 > VWMA20(역배열)에서 종가가 VWMA20 탈환', pos: 52 },
+  { key: 'revW',   label: '바닥잡기 주봉',  rule: '주봉 VWMA60 > VWMA20에서 주봉 종가가 VWMA20 위', pos: 50 },
+  { key: 'nearD',  label: '강세눌림 접근 일봉', rule: 'VWMA20 > VWMA60(정배열) + 종가가 VWMA20의 0~3% 위', pos: 50 },
+  { key: 'nearW',  label: '강세눌림 접근 주봉', rule: '주봉 정배열 + 주봉 종가가 VWMA20의 0~3% 위', pos: 48 },
+  { key: 'touchD', label: '강세눌림 터치 일봉', rule: 'VWMA20 > VWMA60(정배열) + 종가가 VWMA20의 0~3% 아래', pos: 49 },
+  { key: 'touchW', label: '강세눌림 터치 주봉', rule: '주봉 정배열 + 주봉 종가가 VWMA20의 0~3% 아래', pos: 50 },
 ]
 
-/** 수급이 실린 돌파를 위로 올린다. 성과 근거는 아니고 읽는 순서일 뿐이다 */
+/** 근접 허용폭 — 3%. 사용자가 지정한 값이고 별도 검증은 하지 않았다 */
+const NEAR_PCT = 0.03
+
+function match<T extends ScreenerRow>(r: T, key: BreakoutKey): boolean {
+  const { vwma20: d20, vwma60: d60, price, aboveRun } = r
+  const { wClose: wc, wVwma20: w20, wVwma60: w60 } = r
+  const hasD = d20 != null && d60 != null && price != null
+  const hasW = wc != null && w20 != null && w60 != null
+
+  switch (key) {
+    case 'today':  return aboveRun === 1
+    case 'held':   return aboveRun != null && aboveRun >= 2 && aboveRun <= 5
+    // 바닥잡기 — 역배열(60이 20 위)에서 20선을 막 탈환
+    case 'revD':   return hasD && d60! > d20! && aboveRun === 1
+    case 'revW':   return hasW && w60! > w20! && wc! > w20!
+    // 강세눌림 — 정배열(20이 60 위)에서 20선 부근까지 조정
+    case 'nearD':  return hasD && d20! > d60! && price! >= d20! && (price! - d20!) / d20! <= NEAR_PCT
+    case 'nearW':  return hasW && w20! > w60! && wc! >= w20! && (wc! - w20!) / w20! <= NEAR_PCT
+    // 터치에도 하한을 둔다. 없으면 '닿은 것'과 '무너진 것'이 섞인다 —
+    // 실제로 INTC 주봉이 VWMA20보다 15% 아래인데 터치로 잡혔다
+    case 'touchD': return hasD && d20! > d60! && price! < d20! && (d20! - price!) / d20! <= NEAR_PCT
+    case 'touchW': return hasW && w20! > w60! && wc! < w20! && (w20! - wc!) / w20! <= NEAR_PCT
+  }
+}
+
+/** 수급이 실린 것을 위로 올린다. 성과 근거가 아니라 읽는 순서일 뿐이다 */
 export function buildBreakouts<T extends ScreenerRow>(
   rows: T[], limit = 50,
 ): Record<TierId, Record<BreakoutKey, T[]>> {
   const out = {} as Record<TierId, Record<BreakoutKey, T[]>>
   for (const tier of TIERS) {
-    const inTier = rows.filter(r => r.tier === tier.id && r.aboveRun != null)
+    const inTier = rows.filter(r => r.tier === tier.id)
     const byFlow = (a: T[]) => [...a].sort((x, y) => (y.f20 ?? -999) - (x.f20 ?? -999)).slice(0, limit)
-    out[tier.id] = {
-      today: byFlow(inTier.filter(r => r.aboveRun === 1)),
-      held:  byFlow(inTier.filter(r => (r.aboveRun ?? 0) >= 2 && (r.aboveRun ?? 0) <= 5)),
-    }
+    const m = {} as Record<BreakoutKey, T[]>
+    for (const b of BREAKOUTS) m[b.key] = byFlow(inTier.filter(r => match(r, b.key)))
+    out[tier.id] = m
   }
   return out
 }
