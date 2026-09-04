@@ -37,11 +37,13 @@ export interface FlowMetrics {
    */
   wAboveRun: number | null
   /**
-   * 오늘까지 연속으로 종가가 VWMA20 위에 있은 일수.
-   *   0 = VWMA 아래
-   *   1 = 오늘 종가로 상향 돌파 (전일은 아래였다)
-   *   N = N일째 위 유지
-   * 돌파와 유지를 이 한 값으로 다 표현할 수 있어 컬럼을 하나만 늘린다.
+   * VWMA20 대비 연속 일수. 부호로 위/아래를 구분한다.
+   *   +1 = 오늘 상향 돌파 (전일은 아래)   +N = N일째 위 유지
+   *   -1 = 오늘 하향 이탈 (전일은 위)     -N = N일째 아래
+   *
+   * 부호가 필요한 이유: "위에 있던 주가가 선에 닿았다"를 판정하려면
+   * '지금 아래'만으로는 부족하고 '직전까지 위였나'를 알아야 한다.
+   * 0으로 뭉뚱그리면 아래에서 올라와 닿은 종목과 구분이 안 된다.
    */
   aboveRun: number | null
 }
@@ -68,7 +70,9 @@ export function aboveVwmaRun(bars: Bar[], days: number, maxLookback = 260): numb
   for (let i = start; i < bars.length; i++) {
     const v = vwma(bars, days, i)
     if (v == null) { run = 0; continue }
-    run = bars[i].c > v ? run + 1 : 0
+    const above = bars[i].c > v
+    // 방향이 바뀌면 1(또는 -1)부터 다시 센다
+    run = above ? (run > 0 ? run + 1 : 1) : (run < 0 ? run - 1 : -1)
   }
   return run
 }
@@ -212,11 +216,13 @@ export function weeklyVwma(bars: Bar[], dates?: number[]): {
   const done = wk.slice(0, -1)
   if (done.length < 20) return none
 
-  // 주봉 연속 유지 주수. 일봉 aboveRun과 같은 논리다
+  // 주봉 연속 주수. 일봉 aboveRun과 같은 논리(부호로 위/아래 구분)
   let run = 0
   for (let i = 19; i < done.length; i++) {
     const v = vwma(done, 20, i)
-    run = v != null && done[i].c > v ? run + 1 : 0
+    if (v == null) { run = 0; continue }
+    const above = done[i].c > v
+    run = above ? (run > 0 ? run + 1 : 1) : (run < 0 ? run - 1 : -1)
   }
 
   return {

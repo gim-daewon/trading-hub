@@ -60,3 +60,10 @@ create index if not exists screener_rows_snapshot_flow_idx
 -- 한참 위에 있음"을 구분할 수 없다. 실제로 바닥잡기 주봉 탭에
 -- 20주선을 한참 통과한 종목들이 떴다.
 alter table screener_rows add column if not exists w_above_run integer;
+
+-- above_run / w_above_run 의미가 바뀌었다 (2026-09-05).
+-- 이전: 0 = 아래 · N = N일째 위
+-- 이후: +N = N일째 위 · -N = N일째 아래 (부호로 구분)
+-- "위에 있던 주가가 선에 닿았다"를 판정하려면 '직전까지 위였나'가 필요한데
+-- 0으로 뭉뚱그리면 아래에서 올라와 닿은 종목과 구분이 안 된다.
+-- 컬럼 타입은 그대로라 SQL 변경은 없다. 스캔을 다시 돌리면 값이 갱신된다.

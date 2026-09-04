@@ -333,30 +333,48 @@ export const BREAKOUTS: { key: BreakoutKey; label: string; rule: string; pos: nu
   { key: 'touchW', label: '강세눌림 터치 주봉', rule: '주봉 정배열 + 주봉 종가가 VWMA20의 0~3% 아래', pos: 50 },
 ]
 
-/** 근접 허용폭 — 3%. 사용자가 지정한 값이고 별도 검증은 하지 않았다 */
+/** 근접 허용폭 — 3%. 사용자가 지정한 값이고 별도로 최적화하지 않았다 */
 const NEAR_PCT = 0.03
 
+/**
+ * "위에 있던" 상태를 요구하는 최소 기간.
+ *
+ * 없으면 아래에서 올라와 선에 닿은 종목까지 눌림으로 잡힌다 — 방향이 정반대다.
+ * 값은 성능 최적화가 아니라 "막 돌파한 것과 구분한다"는 의미로 정했다.
+ */
+const MIN_ABOVE_D = 3   // 일봉: 3일 이상 위에 있었다
+const MIN_ABOVE_W = 2   // 주봉: 2주 이상 (주봉은 한 봉이 5거래일이라 짧게 잡는다)
+/** 이탈 후 이 기간 안이어야 '닿았다'로 본다. 오래 아래면 그냥 무너진 것이다 */
+const MAX_BELOW_D = 3
+const MAX_BELOW_W = 2
+
 function match<T extends ScreenerRow>(r: T, key: BreakoutKey): boolean {
-  const { vwma20: d20, vwma60: d60, price, aboveRun } = r
-  const { wClose: wc, wVwma20: w20, wVwma60: w60 } = r
-  const hasD = d20 != null && d60 != null && price != null
-  const hasW = wc != null && w20 != null && w60 != null
+  const { vwma20: d20, vwma60: d60, price, aboveRun: dRun } = r
+  const { wClose: wc, wVwma20: w20, wVwma60: w60, wAboveRun: wRun } = r
+  const hasD = d20 != null && d60 != null && price != null && dRun != null
+  const hasW = wc != null && w20 != null && w60 != null && wRun != null
 
   switch (key) {
-    case 'today':  return aboveRun === 1
-    case 'held':   return aboveRun != null && aboveRun >= 2 && aboveRun <= 5
+    case 'today':  return dRun === 1
+    case 'held':   return dRun != null && dRun >= 2 && dRun <= 5
+
     // 바닥잡기 — 역배열(60이 20 위)에서 20선을 막 탈환
-    case 'revD':   return hasD && d60! > d20! && aboveRun === 1
-    // 주봉도 '막 탈환'이어야 한다. 이 조건이 없으면 몇 달 전에 넘어
-    // 한참 위에 있는 종목까지 전부 걸린다 (실제로 그렇게 떴다)
-    case 'revW':   return hasW && w60! > w20! && r.wAboveRun === 1
-    // 강세눌림 — 정배열(20이 60 위)에서 20선 부근까지 조정
-    case 'nearD':  return hasD && d20! > d60! && price! >= d20! && (price! - d20!) / d20! <= NEAR_PCT
-    case 'nearW':  return hasW && w20! > w60! && wc! >= w20! && (wc! - w20!) / w20! <= NEAR_PCT
-    // 터치에도 하한을 둔다. 없으면 '닿은 것'과 '무너진 것'이 섞인다 —
-    // 실제로 INTC 주봉이 VWMA20보다 15% 아래인데 터치로 잡혔다
-    case 'touchD': return hasD && d20! > d60! && price! < d20! && (d20! - price!) / d20! <= NEAR_PCT
-    case 'touchW': return hasW && w20! > w60! && wc! < w20! && (w20! - wc!) / w20! <= NEAR_PCT
+    case 'revD':   return hasD && d60! > d20! && dRun === 1
+    case 'revW':   return hasW && w60! > w20! && wRun === 1
+
+    // 강세눌림 접근 — 정배열 + 한동안 위에 있었고 + 지금 선의 0~3% 위
+    // dRun >= MIN_ABOVE 가 "위에 있던"을 보장한다
+    case 'nearD':  return hasD && d20! > d60! && dRun! >= MIN_ABOVE_D
+                     && price! >= d20! && (price! - d20!) / d20! <= NEAR_PCT
+    case 'nearW':  return hasW && w20! > w60! && wRun! >= MIN_ABOVE_W
+                     && wc! >= w20! && (wc! - w20!) / w20! <= NEAR_PCT
+
+    // 강세눌림 터치 — 정배열 + 최근에 위에 있다가 막 내려옴 + 0~3% 아래
+    // dRun 이 -1~-3 이면 "며칠 전까지 위였다"가 보장된다
+    case 'touchD': return hasD && d20! > d60! && dRun! <= -1 && dRun! >= -MAX_BELOW_D
+                     && (d20! - price!) / d20! <= NEAR_PCT
+    case 'touchW': return hasW && w20! > w60! && wRun! <= -1 && wRun! >= -MAX_BELOW_W
+                     && (w20! - wc!) / w20! <= NEAR_PCT
   }
 }
 
