@@ -301,7 +301,7 @@ export const STOPPING_RULE = {
  * 100여 개로 좁혀주는 탐색 도구로는 쓸 수 있다. 성과를 주장하지 않는다.
  */
 export const BREAKOUT_EVIDENCE = {
-  baselinePos: 57,
+  baselinePos: 56,
   buckets: [
     { label: '돌파 당일',   pos: 51, med: 0.04 },
     { label: '2~3일 유지',  pos: 53, med: 0.15 },
@@ -323,14 +323,14 @@ export type BreakoutKey =
  * 전부 기준선 아래라 화면에 그대로 노출한다.
  */
 export const BREAKOUTS: { key: BreakoutKey; label: string; rule: string; pos: number | null }[] = [
-  { key: 'today',  label: '오늘 돌파',     rule: '종가가 VWMA20 상향 돌파 (전일은 아래)', pos: 51 },
+  { key: 'today',  label: '오늘 돌파',     rule: '종가가 VWMA20 상향 돌파 (전일은 아래) + 3% 이내', pos: 53 },
   { key: 'held',   label: '2~5일 유지',    rule: '돌파 후 2~5일째 VWMA20 위 유지', pos: 53 },
-  { key: 'revD',   label: '바닥잡기 일봉',  rule: 'VWMA60 > VWMA20(역배열)에서 종가가 VWMA20 탈환', pos: 52 },
-  { key: 'revW',   label: '바닥잡기 주봉',  rule: '주봉 VWMA60 > VWMA20에서 주봉 종가가 VWMA20 위', pos: 50 },
-  { key: 'nearD',  label: '강세눌림 접근 일봉', rule: 'VWMA20 > VWMA60(정배열) + 종가가 VWMA20의 0~3% 위', pos: 50 },
-  { key: 'nearW',  label: '강세눌림 접근 주봉', rule: '주봉 정배열 + 주봉 종가가 VWMA20의 0~3% 위', pos: 48 },
-  { key: 'touchD', label: '강세눌림 터치 일봉', rule: 'VWMA20 > VWMA60(정배열) + 종가가 VWMA20의 0~3% 아래', pos: 49 },
-  { key: 'touchW', label: '강세눌림 터치 주봉', rule: '주봉 정배열 + 주봉 종가가 VWMA20의 0~3% 아래', pos: 50 },
+  { key: 'revD',   label: '바닥잡기 일봉',  rule: '역배열(VWMA60>20)에서 오늘 VWMA20 탈환 + 3% 이내', pos: 52 },
+  { key: 'revW',   label: '바닥잡기 주봉',  rule: '주봉 역배열에서 지난주 VWMA20 탈환 + 3% 이내', pos: 50 },
+  { key: 'nearD',  label: '강세눌림 접근 일봉', rule: '정배열(VWMA20>60) + 3일 이상 위였고 지금 0~3% 위', pos: 48 },
+  { key: 'nearW',  label: '강세눌림 접근 주봉', rule: '주봉 정배열 + 2주 이상 위였고 지금 0~3% 위', pos: 48 },
+  { key: 'touchD', label: '강세눌림 터치 일봉', rule: '정배열 + 최근 3일 안에 위였고 지금 0~3% 아래', pos: 48 },
+  { key: 'touchW', label: '강세눌림 터치 주봉', rule: '주봉 정배열 + 최근 2주 안에 위였고 지금 0~3% 아래', pos: 53 },
 ]
 
 /** 근접 허용폭 — 3%. 사용자가 지정한 값이고 별도로 최적화하지 않았다 */
@@ -358,9 +358,14 @@ function match<T extends ScreenerRow>(r: T, key: BreakoutKey): boolean {
     case 'today':  return dRun === 1
     case 'held':   return dRun != null && dRun >= 2 && dRun <= 5
 
-    // 바닥잡기 — 역배열(60이 20 위)에서 20선을 막 탈환
+    // 바닥잡기 — 역배열(60이 20 위)에서 20선을 막 탈환.
+    // 괴리도 3%로 묶는다. 봉 하나가 크게 뛰면 "막 돌파"인데도 선에서
+    // 한참 떨어진 채 잡힌다 (실제로 주봉에서 GAP +8.5%, KT +4.1%가 걸렸다).
+    // 다른 신호는 전부 3%로 묶여 있는데 여기만 빠져 있었다.
     case 'revD':   return hasD && d60! > d20! && dRun === 1
+                     && (price! - d20!) / d20! <= NEAR_PCT
     case 'revW':   return hasW && w60! > w20! && wRun === 1
+                     && (wc! - w20!) / w20! <= NEAR_PCT
 
     // 강세눌림 접근 — 정배열 + 한동안 위에 있었고 + 지금 선의 0~3% 위
     // dRun >= MIN_ABOVE 가 "위에 있던"을 보장한다
