@@ -19,6 +19,10 @@ export interface ScreenerRow {
   rvol: number | null
   chg20: number | null
   pctB: number | null
+  /** VWMA(20) 값 */
+  vwma20?: number | null
+  /** VWMA20 위 연속 일수. 1 = 오늘 종가로 상향 돌파 */
+  aboveRun?: number | null
   price: number | null
 }
 
@@ -271,3 +275,54 @@ export const STOPPING_RULE = {
     '중간 결과로 기준을 바꾸지 않는다. 바꾸려면 왜 바꾸는지를 먼저 적는다.',
   ],
 } as const
+
+
+/**
+ * VWMA20 돌파 목록.
+ *
+ * ── 성과 근거가 없다 ────────────────────────────────────────────────────
+ * 10년 · 격자 시작점 10개로 검증한 결과 (기준선 = 전체 종목 균등, 양수 55%):
+ *   돌파 당일      51% (45~53)   중앙값 +0.04%p
+ *   재돌파(2차)    49% (43~53)   중앙값 -0.05%p
+ *   2~3일 유지     53% (47~61)   중앙값 +0.15%p
+ *   4~5일 유지     50%           6~10일 50%   11~20일 49%   21일+ 51%
+ * 전 구간이 기준선 아래고 유지일수에 단조성도 없다.
+ * 즉 "VWMA20 위에 있다"는 것 자체가 약한 마이너스 신호다.
+ *
+ * 그래도 화면에 두는 이유: 차트를 직접 보고 판단할 때 2,000종목을
+ * 100여 개로 좁혀주는 탐색 도구로는 쓸 수 있다. 성과를 주장하지 않는다.
+ */
+export const BREAKOUT_EVIDENCE = {
+  baselinePos: 55,
+  buckets: [
+    { label: '돌파 당일',   pos: 51, med: 0.04 },
+    { label: '2~3일 유지',  pos: 53, med: 0.15 },
+    { label: '4~5일 유지',  pos: 50, med: 0.11 },
+    { label: '6~10일 유지', pos: 50, med: -0.03 },
+    { label: '11~20일 유지', pos: 49, med: -0.08 },
+    { label: '21일+ 유지',  pos: 51, med: 0.09 },
+  ],
+} as const
+
+export type BreakoutKey = 'today' | 'held'
+
+export const BREAKOUTS: { key: BreakoutKey; label: string; rule: string }[] = [
+  { key: 'today', label: '오늘 돌파', rule: '종가가 VWMA20을 상향 돌파 (전일은 아래)' },
+  { key: 'held',  label: '2~5일 유지', rule: '돌파 후 2~5일째 VWMA20 위 유지' },
+]
+
+/** 수급이 실린 돌파를 위로 올린다. 성과 근거는 아니고 읽는 순서일 뿐이다 */
+export function buildBreakouts<T extends ScreenerRow>(
+  rows: T[], limit = 50,
+): Record<TierId, Record<BreakoutKey, T[]>> {
+  const out = {} as Record<TierId, Record<BreakoutKey, T[]>>
+  for (const tier of TIERS) {
+    const inTier = rows.filter(r => r.tier === tier.id && r.aboveRun != null)
+    const byFlow = (a: T[]) => [...a].sort((x, y) => (y.f20 ?? -999) - (x.f20 ?? -999)).slice(0, limit)
+    out[tier.id] = {
+      today: byFlow(inTier.filter(r => r.aboveRun === 1)),
+      held:  byFlow(inTier.filter(r => (r.aboveRun ?? 0) >= 2 && (r.aboveRun ?? 0) <= 5)),
+    }
+  }
+  return out
+}

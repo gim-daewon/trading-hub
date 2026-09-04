@@ -125,6 +125,8 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
       f5: m.f5, f20: m.f20, f60: m.f60,
       rvol: m.rvol, chg20: m.chg20,
       pct_b: m.pctB,
+      vwma20: m.vwma20,
+      above_run: m.aboveRun,            // 1 = 오늘 종가로 VWMA20 상향 돌파
       price: bars[bars.length - 1].c,   // 진입가 — 사후 성과 추적용
       persistence: persistence(m),
     })

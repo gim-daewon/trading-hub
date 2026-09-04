@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { fetchBars, computeFlow, mapLimit } from '@/lib/flow'
 import {
   TIERS, tierOf, TIER_EVIDENCE, CAVEATS, buildCategories,
+  buildBreakouts, BREAKOUT_EVIDENCE,
   type Regime, type TierId, type CatKey, type ScreenerRow,
 } from '@/lib/screener-shared'
 
@@ -113,6 +114,7 @@ async function fromSupabase() {
       symbol: string; name: string | null; sector: string | null; market_cap: number | null
       f5: number | null; f20: number | null; f60: number | null
       rvol: number | null; chg20: number | null; pct_b: number | null
+      vwma20: number | null; above_run: number | null
       price: number | null
     }
     const rows: ScreenerRow[] = (raw as DbRow[]).map(r => ({
@@ -124,6 +126,8 @@ async function fromSupabase() {
       f5: r.f5, f20: r.f20, f60: r.f60,
       rvol: r.rvol, chg20: r.chg20,
       pctB: r.pct_b,
+      vwma20: r.vwma20,
+      aboveRun: r.above_run,
       price: r.price,
     }))
 
@@ -160,6 +164,11 @@ function payload(rows: ScreenerRow[], regime: Regime, spyChg20: number | null,
     source,
     tierCounts,
     categories: buildCategories(rows),
+    breakouts: buildBreakouts(rows),
+    breakoutEvidence: BREAKOUT_EVIDENCE,
+    // "조건에 맞는 종목이 없다"와 "아직 지표가 안 채워졌다"를 구분한다.
+    // 둘 다 목록이 비어 보이지만 사용자가 할 일이 완전히 다르다.
+    hasVwma: rows.some(r => r.aboveRun != null),
     evidence: TIER_EVIDENCE,
     caveats: CAVEATS,
     scannedAt,
@@ -187,6 +196,7 @@ export async function GET() {
       return {
         ...u, tier: tierOf(u.marketCap),
         f5: m.f5, f20: m.f20, f60: m.f60, rvol: m.rvol, chg20: m.chg20, pctB: m.pctB,
+        vwma20: m.vwma20, aboveRun: m.aboveRun,
         price: bars[bars.length - 1].c,
       }
     })

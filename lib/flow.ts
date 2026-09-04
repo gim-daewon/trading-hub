@@ -19,6 +19,43 @@ export interface FlowMetrics {
   avgDollarVol: number | null
   /** 볼린저 %B (20,2) — 0=하단밴드, 0.5=중심선, 1=상단밴드 */
   pctB: number | null
+  /** VWMA(20) — 거래량 가중 이동평균. 트레이딩뷰 VWMA 기본설정과 같다 */
+  vwma20: number | null
+  /**
+   * 오늘까지 연속으로 종가가 VWMA20 위에 있은 일수.
+   *   0 = VWMA 아래
+   *   1 = 오늘 종가로 상향 돌파 (전일은 아래였다)
+   *   N = N일째 위 유지
+   * 돌파와 유지를 이 한 값으로 다 표현할 수 있어 컬럼을 하나만 늘린다.
+   */
+  aboveRun: number | null
+}
+
+/** VWMA(N) = sum(종가 x 거래량) / sum(거래량) */
+export function vwma(bars: Bar[], days: number, endIdx = bars.length - 1): number | null {
+  if (endIdx < days - 1) return null
+  let pv = 0, vv = 0
+  for (let i = endIdx - days + 1; i <= endIdx; i++) { pv += bars[i].c * bars[i].v; vv += bars[i].v }
+  return vv > 0 ? pv / vv : null
+}
+
+/**
+ * 종가가 VWMA(days) 위에 연속으로 머문 일수.
+ *
+ * 주의: 이 지표는 성과 근거가 없다. 10년 격자 10개로 검증한 결과
+ * 돌파 당일 51% · 재돌파 49% · 2~3일 유지 53%로 전부 기준선(55%) 아래였고
+ * 유지일수에 단조성도 없었다. 화면에는 관찰용으로만 쓴다.
+ */
+export function aboveVwmaRun(bars: Bar[], days: number, maxLookback = 260): number | null {
+  if (bars.length < days) return null
+  let run = 0
+  const start = Math.max(days - 1, bars.length - maxLookback)
+  for (let i = start; i < bars.length; i++) {
+    const v = vwma(bars, days, i)
+    if (v == null) { run = 0; continue }
+    run = bars[i].c > v ? run + 1 : 0
+  }
+  return run
 }
 
 const YAHOO_HOSTS = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']
@@ -116,6 +153,8 @@ export function computeFlow(bars: Bar[]): FlowMetrics {
     chg20: c0 && cN ? ((cN - c0) / c0) * 100 : null,
     avgDollarVol: avg20,
     pctB: pctB(bars),
+    vwma20: vwma(bars, 20),
+    aboveRun: aboveVwmaRun(bars, 20),
   }
 }
 
