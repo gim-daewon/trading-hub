@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import {
-  TIERS, CATS, tierOf, buildCategories, TIER_EVIDENCE, STOPPING_RULE,
+  TIERS, CATS, BREAKOUTS, tierOf, buildCategories, buildBreakouts,
+  TIER_EVIDENCE, STOPPING_RULE,
   type TierId, type CatKey, type Regime, type ScreenerRow,
 } from '@/lib/screener-shared'
 
@@ -29,7 +30,11 @@ export const dynamic = 'force-dynamic'
 
 // 거래일. 20일은 백테스트 기준이라 필수, 60일은 섹터 검정에서 보유기간별로
 // 결과가 갈려서 추가했다. 60거래일치가 쌓이려면 약 3개월 걸린다.
-const HORIZONS = [5, 10, 20, 60]
+// 1일을 넣는다. 스냅샷이 매일 쌓이므로 다음 거래일이면 바로 결과가 나온다 —
+// 5일을 기다릴 이유가 없다. 다만 1일 손익비는 '규칙 손익비'가 아니다.
+// 손절 -3%/익절 +9% 규칙의 손익비(2.5~2.9)는 규칙이 만드는 값이고,
+// 여기 1일 손익비는 하루 등락의 비대칭(상방이 하방보다 큰가)을 잰다. 다른 지표다.
+const HORIZONS = [1, 5, 10, 20, 60]
 
 // 화면에 뜬 개수(25)와, 표본을 늘린 확장 집합(50)을 따로 잰다.
 // 확장 표본은 통계적 힘을 위한 참고치일 뿐 "내가 본 것의 성적"이 아니다.
@@ -97,8 +102,12 @@ interface Result {
   exMed: number
   /** SPY를 이긴 비율 */
   hit: number
-  /** 절대 기준 상승 비율 */
+  /** 절대 기준 상승 비율 = 승률 */
   up: number
+  /** 손익비 — 오른 종목 평균 / |내린 종목 평균| */
+  rr: number
+  /** 거래당 기댓값 = 전체 평균 수익률. 판정은 이걸로 한다 */
+  exp: number
 }
 
 function summarize(pairs: { ret: number; ex: number }[]): Result | null {
@@ -109,12 +118,15 @@ function summarize(pairs: { ret: number; ex: number }[]): Result | null {
     const s = [...a].sort((x, y) => x - y), h = s.length >> 1
     return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2
   }
+  const wins = rets.filter(v => v > 0), losses = rets.filter(v => v <= 0)
   return {
     n: pairs.length,
     avg: mean(rets), med: med(rets),
     exAvg: mean(exs), exMed: med(exs),
     hit: (exs.filter(v => v > 0).length / exs.length) * 100,
-    up: (rets.filter(v => v > 0).length / rets.length) * 100,
+    up: (wins.length / rets.length) * 100,
+    rr: losses.length ? mean(wins) / Math.abs(mean(losses)) : 0,
+    exp: mean(rets),
   }
 }
 
@@ -216,6 +228,13 @@ export async function GET() {
         byCatExt[c.key] = summarize(toPairs(TIERS.flatMap(t => catsExt[t.id][c.key])))
       }
 
+      // VWMA 신호도 같이 추적한다. 화면에 띄우면서 성적을 안 재고 있었다
+      const bo = buildBreakouts(rows, SHOWN_LIMIT)
+      const byBreakout: Record<string, Result | null> = {}
+      for (const b of BREAKOUTS) {
+        byBreakout[b.key] = summarize(toPairs(TIERS.flatMap(t => bo[t.id][b.key])))
+      }
+
       out.push({
         days: h,
         from: past.scanned_at,
@@ -224,6 +243,7 @@ export async function GET() {
         spyRet,
         byCat,
         byCatExt,
+        byBreakout,
       })
     }
 
