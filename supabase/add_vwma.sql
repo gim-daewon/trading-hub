@@ -67,3 +67,11 @@ alter table screener_rows add column if not exists w_above_run integer;
 -- "위에 있던 주가가 선에 닿았다"를 판정하려면 '직전까지 위였나'가 필요한데
 -- 0으로 뭉뚱그리면 아래에서 올라와 닿은 종목과 구분이 안 된다.
 -- 컬럼 타입은 그대로라 SQL 변경은 없다. 스캔을 다시 돌리면 값이 갱신된다.
+
+-- ── 2026-09-05 추가 2 ──────────────────────────────────────────────────
+-- 직전 반대 구간의 길이. 돌파 전에 며칠(몇 주) 아래에 있었나.
+-- "밑에 '있다가' 돌파"의 지속성을 판정한다.
+-- 없으면 1~2주만 눌렸다 올라온 종목이 바닥으로 잡힌다
+-- (실측: JEF 1주 아래인데 20주 등락 +16.0%, SNAP 1주에 +12.7%).
+alter table screener_rows add column if not exists prev_run   integer;
+alter table screener_rows add column if not exists w_prev_run integer;

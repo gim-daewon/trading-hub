@@ -31,6 +31,9 @@ export interface ScreenerRow {
   wVwma60?: number | null
   /** 주봉 VWMA20 위 연속 주수. 1 = 지난주 탈환 */
   wAboveRun?: number | null
+  /** 직전 반대 구간 길이. 돌파 전 며칠(몇 주) 아래에 있었나 */
+  prevRun?: number | null
+  wPrevRun?: number | null
   price: number | null
 }
 
@@ -325,8 +328,8 @@ export type BreakoutKey =
 export const BREAKOUTS: { key: BreakoutKey; label: string; rule: string; pos: number | null }[] = [
   { key: 'today',  label: '오늘 돌파',     rule: '종가가 VWMA20 상향 돌파 (전일은 아래) + 3% 이내', pos: 53 },
   { key: 'held',   label: '2~5일 유지',    rule: '돌파 후 2~5일째 VWMA20 위 유지', pos: 53 },
-  { key: 'revD',   label: '바닥잡기 일봉',  rule: '역배열(VWMA60>20)에서 오늘 VWMA20 탈환 + 3% 이내', pos: 52 },
-  { key: 'revW',   label: '바닥잡기 주봉',  rule: '주봉 역배열에서 지난주 VWMA20 탈환 + 3% 이내', pos: 50 },
+  { key: 'revD',   label: '바닥잡기 일봉',  rule: '역배열 + 5일 이상 아래 있다가 오늘 VWMA20 탈환 + 3% 이내', pos: 52 },
+  { key: 'revW',   label: '바닥잡기 주봉',  rule: '주봉 역배열 + 4주 이상 아래 있다가 지난주 탈환 + 3% 이내', pos: 50 },
   { key: 'nearD',  label: '강세눌림 접근 일봉', rule: '정배열(VWMA20>60) + 3일 이상 위였고 지금 0~3% 위', pos: 48 },
   { key: 'nearW',  label: '강세눌림 접근 주봉', rule: '주봉 정배열 + 2주 이상 위였고 지금 0~3% 위', pos: 48 },
   { key: 'touchD', label: '강세눌림 터치 일봉', rule: '정배열 + 최근 3일 안에 위였고 지금 0~3% 아래', pos: 48 },
@@ -348,9 +351,20 @@ const MIN_ABOVE_W = 2   // 주봉: 2주 이상 (주봉은 한 봉이 5거래일�
 const MAX_BELOW_D = 3
 const MAX_BELOW_W = 2
 
+/**
+ * 바닥잡기에서 "밑에 '있다가'"를 만족하는 최소 기간.
+ *
+ * 없으면 1~2주만 눌렸다 올라온 종목이 바닥으로 잡힌다.
+ * 실측: JEF는 1주 아래였는데 20주 등락이 +16.0%, SNAP은 1주에 +12.7%였다.
+ * 오르는 중에 잠깐 이탈했다 복귀한 것이지 바닥이 아니다.
+ * 반면 FUBO 41주 · STN 28주 · CRK 21주는 진짜 눌린 종목이다.
+ */
+const MIN_BELOW_D = 5   // 일봉 5일 이상 아래에 있었다
+const MIN_BELOW_W = 4   // 주봉 4주 이상
+
 function match<T extends ScreenerRow>(r: T, key: BreakoutKey): boolean {
-  const { vwma20: d20, vwma60: d60, price, aboveRun: dRun } = r
-  const { wClose: wc, wVwma20: w20, wVwma60: w60, wAboveRun: wRun } = r
+  const { vwma20: d20, vwma60: d60, price, aboveRun: dRun, prevRun: dPrev } = r
+  const { wClose: wc, wVwma20: w20, wVwma60: w60, wAboveRun: wRun, wPrevRun: wPrev } = r
   const hasD = d20 != null && d60 != null && price != null && dRun != null
   const hasW = wc != null && w20 != null && w60 != null && wRun != null
 
@@ -363,8 +377,10 @@ function match<T extends ScreenerRow>(r: T, key: BreakoutKey): boolean {
     // 한참 떨어진 채 잡힌다 (실제로 주봉에서 GAP +8.5%, KT +4.1%가 걸렸다).
     // 다른 신호는 전부 3%로 묶여 있는데 여기만 빠져 있었다.
     case 'revD':   return hasD && d60! > d20! && dRun === 1
+                     && (dPrev ?? 0) >= MIN_BELOW_D
                      && (price! - d20!) / d20! <= NEAR_PCT
     case 'revW':   return hasW && w60! > w20! && wRun === 1
+                     && (wPrev ?? 0) >= MIN_BELOW_W
                      && (wc! - w20!) / w20! <= NEAR_PCT
 
     // 강세눌림 접근 — 정배열 + 한동안 위에 있었고 + 지금 선의 0~3% 위

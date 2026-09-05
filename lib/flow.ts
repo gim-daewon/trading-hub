@@ -37,6 +37,14 @@ export interface FlowMetrics {
    */
   wAboveRun: number | null
   /**
+   * 직전(반대 방향) 구간의 길이.
+   * aboveRun이 +1일 때 prevRun = 돌파 전에 며칠(몇 주) 아래에 있었나.
+   * "밑에 '있다가' 돌파"의 지속성을 이걸로 판정한다 —
+   * 1주만 아래 있다 올라온 건 바닥이 아니라 흔들림이다.
+   */
+  prevRun: number | null
+  wPrevRun: number | null
+  /**
    * VWMA20 대비 연속 일수. 부호로 위/아래를 구분한다.
    *   +1 = 오늘 상향 돌파 (전일은 아래)   +N = N일째 위 유지
    *   -1 = 오늘 하향 이탈 (전일은 위)     -N = N일째 아래
@@ -63,18 +71,24 @@ export function vwma(bars: Bar[], days: number, endIdx = bars.length - 1): numbe
  * 돌파 당일 51% · 재돌파 49% · 2~3일 유지 53%로 전부 기준선(55%) 아래였고
  * 유지일수에 단조성도 없었다. 화면에는 관찰용으로만 쓴다.
  */
-export function aboveVwmaRun(bars: Bar[], days: number, maxLookback = 260): number | null {
-  if (bars.length < days) return null
-  let run = 0
+/** 현재 연속 구간과 직전 반대 구간의 길이를 함께 돌려준다 */
+export function vwmaRuns(bars: Bar[], days: number, maxLookback = 400): { run: number; prev: number } {
+  let run = 0, prev = 0
   const start = Math.max(days - 1, bars.length - maxLookback)
   for (let i = start; i < bars.length; i++) {
     const v = vwma(bars, days, i)
     if (v == null) { run = 0; continue }
     const above = bars[i].c > v
-    // 방향이 바뀌면 1(또는 -1)부터 다시 센다
-    run = above ? (run > 0 ? run + 1 : 1) : (run < 0 ? run - 1 : -1)
+    const same = above ? run > 0 : run < 0
+    if (same) run = above ? run + 1 : run - 1
+    else { prev = Math.abs(run); run = above ? 1 : -1 }   // 방향 전환 — 직전 길이를 기억
   }
-  return run
+  return { run, prev }
+}
+
+export function aboveVwmaRun(bars: Bar[], days: number, maxLookback = 400): number | null {
+  if (bars.length < days) return null
+  return vwmaRuns(bars, days, maxLookback).run
 }
 
 const YAHOO_HOSTS = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']
@@ -181,6 +195,7 @@ export function computeFlow(bars: Bar[] | DatedBar[]): FlowMetrics {
     vwma20: vwma(bars, 20),
     vwma60: vwma(bars, 60),
     aboveRun: aboveVwmaRun(bars, 20),
+    prevRun: bars.length >= 20 ? vwmaRuns(bars, 20).prev : null,
     // 날짜가 있는 경우에만 주봉을 계산한다 (fetchDatedBars로 받은 경우)
     ...weeklyVwma(bars, (bars as DatedBar[])[0]?.t != null ? (bars as DatedBar[]).map(b => b.t) : undefined),
   }
@@ -195,9 +210,9 @@ export function computeFlow(bars: Bar[] | DatedBar[]): FlowMetrics {
  */
 export function weeklyVwma(bars: Bar[], dates?: number[]): {
   wClose: number | null; wVwma20: number | null; wVwma60: number | null
-  wAboveRun: number | null
+  wAboveRun: number | null; wPrevRun: number | null
 } {
-  const none = { wClose: null, wVwma20: null, wVwma60: null, wAboveRun: null }
+  const none = { wClose: null, wVwma20: null, wVwma60: null, wAboveRun: null, wPrevRun: null }
   if (!dates || dates.length !== bars.length) return none
 
   const wk: Bar[] = []
@@ -216,20 +231,14 @@ export function weeklyVwma(bars: Bar[], dates?: number[]): {
   const done = wk.slice(0, -1)
   if (done.length < 20) return none
 
-  // 주봉 연속 주수. 일봉 aboveRun과 같은 논리(부호로 위/아래 구분)
-  let run = 0
-  for (let i = 19; i < done.length; i++) {
-    const v = vwma(done, 20, i)
-    if (v == null) { run = 0; continue }
-    const above = done[i].c > v
-    run = above ? (run > 0 ? run + 1 : 1) : (run < 0 ? run - 1 : -1)
-  }
+  const { run, prev } = vwmaRuns(done, 20)
 
   return {
     wClose: done[done.length - 1].c,
     wVwma20: vwma(done, 20),
     wVwma60: vwma(done, 60),
     wAboveRun: run,
+    wPrevRun: prev,
   }
 }
 

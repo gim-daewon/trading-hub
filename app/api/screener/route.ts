@@ -133,7 +133,7 @@ async function fromSupabase() {
       rvol: number | null; chg20: number | null; pct_b: number | null
       vwma20: number | null; vwma60: number | null; above_run: number | null
       w_close: number | null; w_vwma20: number | null; w_vwma60: number | null
-      w_above_run: number | null
+      w_above_run: number | null; prev_run: number | null; w_prev_run: number | null
       price: number | null
     }
     const rows: ScreenerRow[] = (raw as DbRow[]).map(r => ({
@@ -152,6 +152,8 @@ async function fromSupabase() {
       wVwma20: r.w_vwma20,
       wVwma60: r.w_vwma60,
       wAboveRun: r.w_above_run,
+      prevRun: r.prev_run,
+      wPrevRun: r.w_prev_run,
       price: r.price,
     }))
 
@@ -223,6 +225,7 @@ export async function GET() {
         f5: m.f5, f20: m.f20, f60: m.f60, rvol: m.rvol, chg20: m.chg20, pctB: m.pctB,
         vwma20: m.vwma20, vwma60: m.vwma60, aboveRun: m.aboveRun,
         wClose: m.wClose, wVwma20: m.wVwma20, wVwma60: m.wVwma60, wAboveRun: m.wAboveRun,
+        prevRun: m.prevRun, wPrevRun: m.wPrevRun,
         price: bars[bars.length - 1].c,
       }
     })
