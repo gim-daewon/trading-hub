@@ -43,3 +43,5 @@ next-env.d.ts
 # 백테스트 작업 파일
 bt-out.txt
 bt-err.txt
+rr*.txt
+bt-rr.mjs
