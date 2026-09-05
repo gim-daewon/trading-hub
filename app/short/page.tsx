@@ -52,9 +52,11 @@ export default function ShortPage() {
   const rows = data?.breakouts
     ? TIERS.flatMap(t => data.breakouts![t.id]?.brokeD ?? [])
         .filter(r => r.symbol in INVERSE_ETF)
+        // 최근에 깨진 것부터. 같은 날이면 깊게 빠진 것부터
         .sort((a, b) => {
-          const g = (r: Row) => r.price && r.vwma20 ? (r.vwma20 - r.price) / r.vwma20 : -999
-          return g(b) - g(a)
+          const days = (r: Row) => Math.abs(r.aboveRun ?? 999)
+          const depth = (r: Row) => r.price && r.vwma20 ? (r.vwma20 - r.price) / r.vwma20 : -999
+          return days(a) - days(b) || depth(b) - depth(a)
         })
     : []
 
@@ -85,8 +87,8 @@ export default function ShortPage() {
       }}>
         <b>강세 구조가 깨진 종목</b> 중 <b>인버스 ETF가 있는 것</b>만 추렸다.
         <br />
-        조건: 정배열(VWMA20 &gt; VWMA60)이었는데 <b>종가(몸통)가 VWMA20 아래</b>로 내려갔다.
-        밑꼬리만 뚫린 건 매수 후보(강세눌림 밑꼬리)로 따로 뒀다.
+        조건: <b>종가가 VWMA20 아래</b>. 얼마나 최근에 깨졌는지(이탈 일수)와
+        얼마나 깊은지(20선 대비)를 같이 보여준다 — 판단은 직접 하는 것이다.
         <br />
         <span style={{ color: 'var(--warn)' }}>
           <b>성과 근거가 없다.</b> 지금까지 검증은 전부 매수 기준이었고

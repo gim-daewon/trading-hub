@@ -427,7 +427,7 @@ export const BREAKOUTS: { key: BreakoutKey; label: string; rule: string; pos: nu
   { key: 'today',  label: '오늘 돌파',     rule: '종가가 VWMA20 상향 돌파 (전일은 아래) + 3% 이내', pos: 53 },
   { key: 'held',   label: '2~5일 유지',    rule: '돌파 후 2~5일째 VWMA20 위 유지', pos: 53 },
   // 숏 전용. /breakout 탭에는 노출하지 않고 /short에서만 쓴다
-  { key: 'brokeD', label: '강세 이탈(숏)', rule: '정배열이었는데 종가가 VWMA20 아래 3% 이내', pos: 0 },
+  { key: 'brokeD', label: '강세 이탈(숏)', rule: '종가가 VWMA20 아래 (20선 이탈)', pos: 0 },
   { key: 'nearD',  label: '강세눌림 접근 일봉', rule: '정배열(VWMA20>60) + 3일 이상 위였고 지금 0~1% 위', pos: 48 },
 ]
 
@@ -501,10 +501,13 @@ function match<T extends ScreenerRow>(r: T, key: BreakoutKey): boolean {
     case 'touchW': return hasW && w20! > w60! && wRun! >= MIN_ABOVE_W
                      && r.wLow != null && r.wLow <= w20! && wc! >= w20!
 
-    // 이탈 — 정배열이었는데 몸통이 VWMA20 아래로 내려갔다.
-    // 강세 구조가 깨지는 지점이라 숏 후보로 뺀다.
-    case 'brokeD': return hasD && d20! > d60! && dRun! <= -1 && dRun! >= -MAX_BELOW_D
-                     && (d20! - price!) / d20! <= NEAR_PCT
+    // 이탈 — 종가가 VWMA20 아래. 숏 후보 목록의 원천이다.
+    //
+    // 처음엔 "정배열 + 3일 이내 + 3% 이내"로 좁혔는데 후보가 0개가 나왔다.
+    // 인버스 ETF가 있는 14종목 중 4개가 20선 아래였지만 전부 11~15일 전에
+    // 이탈해 조건 밖이었다. 사용자 의도는 "20선이 깨진 상태" 그 자체다.
+    // 얼마나 최근인지·얼마나 깊은지는 화면에서 보여주고 판단은 사용자가 한다.
+    case 'brokeD': return hasD && price! < d20!
   }
 }
 

@@ -49,3 +49,7 @@ bt-rr9.mjs
 rr9*.txt
 bt-all.mjs
 all-*.txt
+bt-short.mjs
+short-*.txt
+bt-mtf.mjs
+mtf-*.txt
