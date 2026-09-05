@@ -328,8 +328,8 @@ export type BreakoutKey =
 export const BREAKOUTS: { key: BreakoutKey; label: string; rule: string; pos: number | null }[] = [
   { key: 'today',  label: '오늘 돌파',     rule: '종가가 VWMA20 상향 돌파 (전일은 아래) + 3% 이내', pos: 53 },
   { key: 'held',   label: '2~5일 유지',    rule: '돌파 후 2~5일째 VWMA20 위 유지', pos: 53 },
-  { key: 'revD',   label: '바닥잡기 일봉',  rule: '역배열 + 5일 이상 아래 있다가 오늘 VWMA20 탈환 + 3% 이내', pos: 52 },
-  { key: 'revW',   label: '바닥잡기 주봉',  rule: '주봉 역배열 + 4주 이상 아래 있다가 지난주 탈환 + 3% 이내', pos: 50 },
+  { key: 'revD',   label: '바닥잡기 일봉',  rule: '역배열 + 5일 이상 아래 있다가 오늘 VWMA20 탈환 + 3% 이내', pos: 50 },
+  { key: 'revW',   label: '바닥잡기 주봉',  rule: '주봉 역배열 + 4주 이상 아래 있다가 지난주 탈환 + 3% 이내', pos: 46 },
   { key: 'nearD',  label: '강세눌림 접근 일봉', rule: '정배열(VWMA20>60) + 3일 이상 위였고 지금 0~3% 위', pos: 48 },
   { key: 'nearW',  label: '강세눌림 접근 주봉', rule: '주봉 정배열 + 2주 이상 위였고 지금 0~3% 위', pos: 48 },
   { key: 'touchD', label: '강세눌림 터치 일봉', rule: '정배열 + 최근 3일 안에 위였고 지금 0~3% 아래', pos: 48 },
