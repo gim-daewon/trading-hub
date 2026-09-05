@@ -75,3 +75,10 @@ alter table screener_rows add column if not exists w_above_run integer;
 -- (실측: JEF 1주 아래인데 20주 등락 +16.0%, SNAP 1주에 +12.7%).
 alter table screener_rows add column if not exists prev_run   integer;
 alter table screener_rows add column if not exists w_prev_run integer;
+
+-- ── 2026-09-05 추가 3 ──────────────────────────────────────────────────
+-- 데이터 기준일. 스캔 시각과 다를 수 있다.
+-- 야후가 당일 일봉을 늦게 내놓는 날이 있다 — 2026-09-04는 마감 4시간 뒤에도
+-- 전 종목 일봉이 null이라 스캔이 09-03 종가로 돌았다.
+-- 그 상태로 "9/4 종가 기준"이라고 띄우면 표시가 거짓말을 한다.
+alter table screener_snapshots add column if not exists bar_date date;

@@ -33,6 +33,8 @@ interface Data {
   /** false면 스냅샷에 VWMA 지표가 아직 없다 (컬럼 추가 + 스캔 필요) */
   hasVwma?: boolean
   scannedAt?: number
+  /** 데이터 마지막 봉 날짜 (YYYY-MM-DD). 스캔 시각과 다를 수 있다 */
+  barDate?: string | null
   fetchedAt: number
   error?: string
 }
@@ -123,11 +125,11 @@ export default function BreakoutPage() {
             <span className={`pill ${data.source === 'snapshot' ? 'pill-up' : 'pill-stale'}`}>
               {data.source === 'snapshot' ? `스냅샷 ${data.scanned.toLocaleString()}` : `라이브 ${data.scanned}`}
             </span>
-            {data.scannedAt && (
-              <span className="num">
-                {new Date(data.scannedAt).toLocaleString('ko-KR', {
-                  timeZone: 'America/New_York', month: 'numeric', day: 'numeric',
-                })} 종가 기준
+            {/* 스캔 시각이 아니라 '데이터 기준일'을 보여준다.
+                야후가 당일 일봉을 늦게 주면 둘이 하루씩 어긋난다 */}
+            {data.barDate && (
+              <span className="num" title="이 목록을 계산한 마지막 거래일. 스캔 시각과 다를 수 있다">
+                {data.barDate.slice(5).replace('-', '/')} 종가 기준
               </span>
             )}
           </span>

@@ -163,6 +163,7 @@ async function fromSupabase() {
       spyChg20: snap.spy_chg20,
       universeSize: snap.universe_size,
       scannedAt: new Date(snap.scanned_at).getTime(),
+      barDate: snap.bar_date ?? null,
     }
   } catch (e) {
     // 조용히 삼키면 원인을 못 찾는다. 실제로 이것 때문에
@@ -179,7 +180,8 @@ async function fromSupabase() {
  * 화면에는 scannedAt을 보여줘야 한다. "언제 기준 목록인가"가 사용자에게 필요한 정보다.
  */
 function payload(rows: ScreenerRow[], regime: Regime, spyChg20: number | null,
-                 universeSize: number, source: 'snapshot' | 'live', scannedAt: number) {
+                 universeSize: number, source: 'snapshot' | 'live', scannedAt: number,
+                 barDate: string | null = null) {
   const tierCounts = {} as Record<TierId, number>
   for (const t of TIERS) tierCounts[t.id] = rows.filter(r => r.tier === t.id).length
 
@@ -198,6 +200,8 @@ function payload(rows: ScreenerRow[], regime: Regime, spyChg20: number | null,
     evidence: TIER_EVIDENCE,
     caveats: CAVEATS,
     scannedAt,
+    // 실제 데이터의 마지막 봉 날짜. 스캔 시각과 다를 수 있다
+    barDate,
     fetchedAt: Date.now(),
   }
 }
@@ -208,7 +212,7 @@ export async function GET() {
     const snap = await fromSupabase()
     if (snap) {
       return NextResponse.json(
-        payload(snap.rows, snap.regime, snap.spyChg20, snap.universeSize, 'snapshot', snap.scannedAt)
+        payload(snap.rows, snap.regime, snap.spyChg20, snap.universeSize, 'snapshot', snap.scannedAt, snap.barDate)
       )
     }
 

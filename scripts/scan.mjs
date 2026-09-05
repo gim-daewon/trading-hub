@@ -150,8 +150,18 @@ if (out.length < list.length * 0.5) {
   process.exit(1)
 }
 
+// 스캔 시각과 데이터 기준일은 다르다.
+// 야후가 당일 일봉을 늦게 내놓는 날이 있다 — 실제로 2026-09-04 마감 4시간 뒤에도
+// 전 종목 일봉이 null이라 스캔이 09-03 종가로 돌았다.
+// 그 상태로 화면에 "9/4 종가 기준"이라고 띄우면 표시가 거짓말을 한다.
+const lastBarDate = spyBars && spyBars.length
+  ? new Date(spyBars[spyBars.length - 1].t * 1000).toISOString().slice(0, 10)
+  : null
+console.log(`데이터 기준일 ${lastBarDate ?? '?'}`)
+
 const [snap] = await sb('screener_snapshots', 'POST', {
   regime,
+  bar_date: lastBarDate,
   spy_chg20: spyChg20,
   spy_price: spyPrice,
   universe_size: list.length,
