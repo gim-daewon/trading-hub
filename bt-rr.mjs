@@ -58,6 +58,7 @@ const med=a=>{const s=[...a].sort((x,y)=>x-y),h=s.length>>1;return s.length?(s.l
 // 벌어진 폭(spread)별로 나눈다
 const B=[['0~3%',0,3],['3~6%',3,6],['6~10%',6,10],['10~15%',10,15],['15%+',15,999]]
 const R={}; for(const [n] of B) R[n]=[]
+R['기준선(전체)']=[]   // 비교 대상 — 아무 종목이나 샀을 때의 손익비
 
 for(let start=200;start<210;start++){
  for(let i=start;i+FWD<spy.t.length;i+=STEP){
@@ -75,36 +76,49 @@ for(let start=200;start<210;start++){
       price:b.c[j]})
     meta.set(sym,{b,j})}
   if(rows.length<200)continue
+  // 기준선: 같은 시점 전체 종목의 MFE/MAE (200종목만 표본추출해 비용 억제)
+  for(let q=0;q<rows.length;q+=Math.max(1,Math.floor(rows.length/200))){
+    const r=rows[q]; const m=meta.get(r.symbol); if(!m)continue
+    const {b,j}=m; const entry=r.price
+    let mfe=0,mae=0
+    for(let k=1;k<=FWD;k++){const px=b.c[j+k]; if(px==null)break
+      const ret=((px-entry)/entry)*100; if(ret>mfe)mfe=ret; if(ret<mae)mae=ret}
+    const fwd=((b.c[j+FWD]-entry)/entry)*100
+    R['기준선(전체)'].push({spread:0,mfe,mae,hit:false,fwd,ex:fwd-spyRet})}
   const hits=buildBreakouts(rows,99999).large.revD
   for(const r of hits){
     const {b,j}=meta.get(r.symbol)
     const entry=r.price, tgt=r.vwma60
-    const spread=((tgt-entry)/entry)*100          // 상방 여력
-    let mfe=0,mae=0,hit=false,hitDay=null
+    const spread=((tgt-entry)/entry)*100
+    // 손절 -3% · 익절 = 진입 시점 VWMA60. 먼저 닿는 쪽으로 청산, 아니면 20일 만기
+    let exit=null, days=FWD, kind='만기'
     for(let k=1;k<=FWD;k++){
       const px=b.c[j+k]; if(px==null)break
       const ret=((px-entry)/entry)*100
-      if(ret>mfe)mfe=ret
-      if(ret<mae)mae=ret
-      if(!hit&&px>=tgt){hit=true;hitDay=k}}
-    const fwd=((b.c[j+FWD]-entry)/entry)*100
+      if(ret<=-3){exit=-3;days=k;kind='손절';break}
+      if(px>=tgt){exit=spread;days=k;kind='익절';break}}
+    if(exit===null) exit=((b.c[j+FWD]-entry)/entry)*100
     for(const [n,lo,hi] of B) if(spread>=lo&&spread<hi){
-      R[n].push({spread,mfe,mae,hit,hitDay,fwd,ex:fwd-spyRet});break}}}}
+      R[n].push({spread,exit,days,kind});break}}}}
 
-const sg=v=>(v>=0?'+':'')+v.toFixed(2),pad=(s,n)=>String(s).padEnd(n)
-console.log('바닥잡기 일봉 — 60일선까지의 여력(spread)별 손익비')
-console.log(pad('여력',9),pad('표본',7),pad('평균여력',9),pad('도달률',8),pad('평균MFE',9),pad('평균MAE',9),pad('손익비',7),pad('20일수익',9),'SPY대비')
-console.log('-'.repeat(92))
+const sg=v=>(v>=0?'+':'')+v.toFixed(2),pad=(x,n)=>String(x).padEnd(n)
+const mean2=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0
+console.log('바닥잡기 일봉 — 손절 -3% · 익절 VWMA60 규칙 적용')
+console.log(pad('여력',9),pad('표본',7),pad('익절%',7),pad('손절%',7),pad('만기%',7),pad('평균익절',9),pad('손익비',7),pad('기댓값',9),'평균보유')
+console.log('-'.repeat(88))
 for(const [n] of B){
-  const a=R[n]; if(a.length<30){console.log(pad(n,9),`표본 ${a.length} (부족)`);continue}
-  const mfe=mean(a.map(x=>x.mfe)),mae=mean(a.map(x=>x.mae))
+  const a=R[n]; if(a.length<30){console.log(pad(n,9),'표본 부족');continue}
+  const w=a.filter(x=>x.kind==='익절'), l=a.filter(x=>x.kind==='손절'), e=a.filter(x=>x.kind==='만기')
+  const wins=a.filter(x=>x.exit>0), loss=a.filter(x=>x.exit<=0)
+  const aw=mean2(wins.map(x=>x.exit)), al=mean2(loss.map(x=>x.exit))
   console.log(pad(n,9),pad(a.length,7),
-    pad(sg(mean(a.map(x=>x.spread)))+'%',9),
-    pad((a.filter(x=>x.hit).length/a.length*100).toFixed(0)+'%',8),
-    pad(sg(mfe)+'%',9),pad(sg(mae)+'%',9),
-    pad((mfe/Math.abs(mae)).toFixed(2),7),
-    pad(sg(med(a.map(x=>x.fwd)))+'%',9),
-    sg(med(a.map(x=>x.ex)))+'%p')}
-console.log('\n※ MFE=진입 후 최대상승 · MAE=최대하락 (종가 기준, 20일 내)')
-console.log('※ 손익비 = 평균MFE / |평균MAE|. 1보다 크면 상방이 하방보다 크다')
-console.log('※ 20일수익·SPY대비는 중앙값')
+    pad((w.length/a.length*100).toFixed(0)+'%',7),
+    pad((l.length/a.length*100).toFixed(0)+'%',7),
+    pad((e.length/a.length*100).toFixed(0)+'%',7),
+    pad(sg(aw)+'%',9),
+    pad((aw/Math.abs(al||1)).toFixed(2),7),
+    pad(sg(mean2(a.map(x=>x.exit)))+'%',9),
+    mean2(a.map(x=>x.days)).toFixed(1)+'일')}
+console.log('')
+console.log('※ 손익비 = 이익 거래 평균 / |손실 거래 평균|')
+console.log('※ 기댓값 = 전체 거래 평균 수익. 이게 양수여야 실제로 돈이 된다')
