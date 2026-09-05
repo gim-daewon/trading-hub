@@ -1,3 +1,4 @@
+import { hasInverse } from './inverse-etf'
 // 스크리너 공용 정의 — API·스캔 스크립트·UI가 같은 기준을 쓴다.
 
 export type Regime = 'up' | 'down'
@@ -541,7 +542,11 @@ export function buildBreakouts<T extends ScreenerRow>(
     const inTier = rows.filter(r => r.tier === tier.id)
     const m = {} as Record<BreakoutKey, T[]>
     for (const b of BREAKOUTS) {
-      const hit = inTier.filter(r => match(r, b.key))
+      // brokeD는 숏 전용이라 인버스 ETF가 있는 종목만 남긴다.
+      // 안 그러면 20선 아래 대형주 수백 개에 밀려 상위 50 컷에서 잘린다 —
+      // 실제로 그래서 숏 후보가 0개로 나왔다.
+      let hit = inTier.filter(r => match(r, b.key))
+      if (b.key === 'brokeD') hit = hit.filter(r => hasInverse(r.symbol))
       const wk = isWeeklyKey(b.key)
       const byFlow = [...hit].sort((x, y) => (y.f20 ?? -999) - (x.f20 ?? -999)).slice(0, limit)
       const byRoom = [...hit].sort((x, y) =>
