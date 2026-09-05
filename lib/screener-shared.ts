@@ -373,6 +373,33 @@ export const CAVEATS = [
  * 판정 대상은 SPY 상회율(hit)이다. 절대 상승률은 시장이 오르면 같이 오르므로
  * 지표의 값어치를 재지 못한다. 백테스트도 전부 SPY 대비였다.
  */
+/**
+ * 신호 정의를 바꾼 날의 기록.
+ *
+ * /api/tracking은 저장된 스냅샷에 **지금의** 정의를 다시 적용해 성적을 낸다.
+ * 그래서 정의를 바꾸면 과거 기록까지 소급해서 바뀐다 — 어제 화면에 떴던
+ * 종목과 오늘 추적이 보고하는 종목이 달라진다.
+ *
+ * 그 사실을 숨기면 12월 판정 때 "이 성적이 실제로 화면에 떴던 것인가"를
+ * 알 수 없게 된다. 바꾼 날과 내용을 남겨 화면에서 표시한다.
+ *
+ * 스냅샷 자체(종목·가격·지표)는 그대로다. 바뀌는 건 그 종목들을
+ * 어느 카테고리로 묶느냐뿐이다.
+ */
+export interface DefChange { date: string; keys: string[]; what: string }
+
+export const DEFINITION_CHANGES: DefChange[] = [
+  { date: '2026-09-06', keys: ['pullback', 'quiet'], what: '수급 상위 필터 제거 — 앞뒤 절반에서 부호가 뒤집혔다' },
+  { date: '2026-09-06', keys: ['nearD', 'touchD'], what: '주봉 정배열 전제조건 추가 — nearD 기댓값 +0.07%p' },
+  { date: '2026-09-06', keys: ['touchW'], what: '화면에서 제거 — 격자 20개 전부 마이너스' },
+]
+
+/** 이 날짜 이후에 있었던 정의 변경 (기록 구간이 변경일을 걸치면 소급 적용됐다는 뜻) */
+export function changesSince(from: string): DefChange[] {
+  const d = from.slice(0, 10)
+  return DEFINITION_CHANGES.filter(c => c.date > d)
+}
+
 export const STOPPING_RULE = {
   decideAfter: '2026-12-08',
   /**

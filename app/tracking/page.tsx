@@ -20,6 +20,7 @@ interface Result {
 }
 interface Horizon {
   days: number; from: string; to: string; regime: Regime; spyRet: number
+  defChanges?: { date: string; keys: string[]; what: string }[]
   byCat: Record<CatKey, Record<string, Result | null>>
   /** 상위 50개까지 넓힌 표본. 화면에 안 뜬 종목이 섞이므로 따로 본다 */
   byCatExt: Record<CatKey, Result | null>
@@ -152,6 +153,24 @@ export default function TrackingPage() {
               SPY {sgn(h.spyRet)}%
             </span>
           </div>
+
+          {/* 이 구간이 정의 변경일을 걸치면 아래 성적은 소급 재계산된 것이다.
+              그때 화면에 실제로 떴던 종목과 다르다 — 숨기면 12월 판정 때
+              "이게 실제로 떴던 것인가"를 확인할 수 없다 */}
+          {!!h.defChanges?.length && (
+            <div className="card" style={{
+              padding: '8px 10px', marginBottom: 8, fontSize: 10, lineHeight: 1.6,
+              borderLeft: '3px solid var(--warn)', color: 'var(--text-muted)',
+            }}>
+              <b style={{ color: 'var(--warn)' }}>이 구간은 정의가 바뀐 날을 지난다.</b>
+              {' '}아래 성적은 <b>지금 정의로 다시 묶은 것</b>이라, 그때 화면에 떴던 종목과 다르다.
+              {h.defChanges.map(c => (
+                <div key={c.date + c.keys.join()} className="num" style={{ marginTop: 3 }}>
+                  {c.date} · {c.keys.join(', ')} — <span style={{ fontFamily: 'inherit' }}>{c.what}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="card" style={{ overflow: 'hidden' }}>
             <div className="overflow-x-table">

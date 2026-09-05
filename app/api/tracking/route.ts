@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import {
   TIERS, CATS, BREAKOUTS, tierOf, buildCategories, buildBreakouts,
-  TIER_EVIDENCE, STOPPING_RULE,
+  TIER_EVIDENCE, STOPPING_RULE, changesSince,
   type TierId, type CatKey, type Regime, type ScreenerRow,
 } from '@/lib/screener-shared'
 
@@ -252,6 +252,9 @@ export async function GET() {
         // 둘이 하루씩 어긋나 "언제부터 언제까지"가 틀리게 표시된다
         from: past.bar_date ?? past.scanned_at,
         to: latest.bar_date ?? latest.scanned_at,
+        // 이 구간이 정의 변경일을 걸치면, 아래 성적은 **그때 화면에 떴던
+        // 종목이 아니라** 지금 정의로 다시 묶은 종목의 성적이다
+        defChanges: changesSince(past.bar_date ?? past.scanned_at),
         regime: past.regime,
         spyRet,
         byCat,
