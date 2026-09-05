@@ -1,8 +1,0 @@
-(node:22656) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///F:/MY_THINK-TANK/trading-hub/lib/screener-shared.ts is not specified and it doesn't parse as CommonJS.
-Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
-To eliminate this warning, add "type": "module" to F:\MY_THINK-TANK\trading-hub\package.json.
-(Use `node --trace-warnings ...` to show where the warning was created)
-유니버스 2714 수집...
-수집 2521 · 사전계산...
-완료
-
