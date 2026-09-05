@@ -161,29 +161,30 @@ export async function GET() {
     if (!snapRes.ok) throw new Error(`snapshots ${snapRes.status}`)
     const allSnaps: Snap[] = await snapRes.json()
 
-    // "스냅샷 1개 = 1거래일"이 성립해야 snaps[5]를 '5거래일 전'으로 쓸 수 있다.
-    // 세 가지를 걸러야 그 가정이 유지된다:
+    // "스냅샷 1개 = 1거래일"이 성립해야 snaps[1]을 '1거래일 전'으로 쓸 수 있다.
     //
-    //  1) 같은 날 여러 번 스캔 (스키마 변경 후 수동 실행 등)
-    //  2) 주말 수동 실행 — 실제로 있었다(2026-08-29 토, 08-30 일).
-    //     그대로 두면 '5거래일 전'이 실제로는 3거래일 전이 된다
-    //  3) spy_price가 없는 초기 스냅샷 (컬럼 추가 전)
+    // 판정은 반드시 bar_date(데이터 기준일)로 한다. scanned_at(스캔 시각)이 아니다.
+    // 실제로 토요일 ET에 수동 실행한 스캔이 '주말'로 걸러졌는데,
+    // 그 데이터의 기준일은 금요일로 멀쩡한 거래일이었다.
+    // 스캔을 언제 돌렸는지는 아무 상관이 없다 — 어느 날 데이터인지가 전부다.
     //
-    // 휴장일은 요일로 못 거른다. 대신 직전 스냅샷과 spy_price가 같으면
-    // 그 사이에 거래가 없었다는 뜻이므로 같이 제외한다.
+    // bar_date가 없는 옛 스냅샷은 scanned_at의 ET 날짜로 대체한다.
+    const etDate = (s: Snap) =>
+      s.bar_date ?? new Date(s.scanned_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+
     const seen = new Set<string>()
     const deduped = allSnaps.filter(s => {
       if (s.spy_price == null) return false
-      const et = new Date(s.scanned_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-      if (seen.has(et)) return false
+      const d = etDate(s)
+      if (seen.has(d)) return false
       // en-CA는 YYYY-MM-DD를 준다. UTC 정오로 파싱해 시간대 밀림을 막는다
-      const dow = new Date(`${et}T12:00:00Z`).getUTCDay()
-      if (dow === 0 || dow === 6) return false
-      seen.add(et)
+      const dow = new Date(`${d}T12:00:00Z`).getUTCDay()
+      if (dow === 0 || dow === 6) return false     // 거래일 데이터가 아니다
+      seen.add(d)
       return true
     })
 
-    // 최신순 정렬이므로 뒤쪽이 과거다. 값이 같으면 휴장으로 보고 과거 쪽을 버린다
+    // 최신순이므로 뒤쪽이 과거다. spy_price가 같으면 휴장으로 보고 과거 쪽을 버린다
     const snaps = deduped.filter((s, i) => i === 0 || s.spy_price !== deduped[i - 1].spy_price)
 
     if (snaps.length < 2) {
@@ -264,7 +265,7 @@ export async function GET() {
       snapshotCount: snaps.length,
       rawCount: allSnaps.length,
       // 어느 horizon이 언제부터 보이는지 화면에서 알 수 있게 한다
-      tradingDays: snaps.map(x => new Date(x.scanned_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })),
+      tradingDays: snaps.map(etDate),
       latestAt: latest.scanned_at,
       evidence: TIER_EVIDENCE,
       // 중단 기준을 응답에 실어 화면에서 "언제 무엇을 근거로 접는지" 보이게 한다
