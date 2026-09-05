@@ -4,7 +4,7 @@ import PageHeader from '../components/PageHeader'
 import MetricGuide from '../components/MetricGuide'
 import { TvLink } from '../components/TvLink'
 import {
-  TIERS, BREAKOUTS, RR_EVIDENCE, RR_BASELINE, rrVerdict,
+  TIERS, BREAKOUTS, RR_EVIDENCE, RR_BASELINE, rrVerdict, roomToVwma60, isWeeklyKey,
   type TierId, type BreakoutKey, type Regime,
 } from '@/lib/screener-shared'
 
@@ -118,6 +118,8 @@ export default function BreakoutPage() {
   const [err, setErr] = useState('')
   // 기본 탭은 기댓값 1위(강세눌림 터치 일봉)
   const [tab, setTab] = useState<BreakoutKey>('touchD')
+  // 기본 정렬을 여력순으로. 손절 -3% 기준이면 여력이 곧 손익비다
+  const [sort, setSort] = useState<'room' | 'flow'>('room')
 
   const load = useCallback(() => {
     setLoading(true); setErr('')
@@ -218,7 +220,7 @@ export default function BreakoutPage() {
       </div>
 
       <p style={{ margin: '0 0 4px', fontSize: 11, color: 'var(--text-muted)' }}>
-        조건: {BREAKOUTS.find(b => b.key === tab)?.rule} · 수급 높은 순
+        조건: {BREAKOUTS.find(b => b.key === tab)?.rule}
       </p>
       <p style={{ margin: '0 0 8px', fontSize: 10, color: 'var(--text-muted)' }}>
         {/* 탭마다 실측치를 붙여둔다. 한 번 읽고 잊는 것보다 매번 보이는 게 낫다 */}
@@ -233,6 +235,26 @@ export default function BreakoutPage() {
             ? '주봉 기준이라 한 주 동안 목록이 거의 그대로다'
             : '조건이 유지되는 동안 며칠간 겹친다'}
       </p>
+
+      {/* 정렬 토글. 여력순이 기본이다 —
+          손절 -3% 고정이면 여력이 그대로 손익비가 된다 (여력 9% = 3:1) */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        {([['room', '여력순'], ['flow', '수급순']] as const).map(([k, label]) => {
+          const active = sort === k
+          return (
+            <button key={k} onClick={() => setSort(k)} style={{
+              minHeight: 34, padding: '0 12px', borderRadius: 8, cursor: 'pointer',
+              border: `1px solid ${active ? 'var(--info)' : 'var(--border)'}`,
+              background: active ? 'rgba(59,130,246,0.15)' : 'var(--bg-card)',
+              color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+              fontSize: 11, fontWeight: active ? 700 : 400,
+            }}>{label}</button>
+          )
+        })}
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center' }}>
+          {sort === 'room' ? '60선까지 여력이 큰 순 (손익비 큰 순)' : '20일 순자금이 큰 순'}
+        </span>
+      </div>
 
       <MetricGuide show={['flow', 'pctB']} />
 
@@ -265,7 +287,11 @@ export default function BreakoutPage() {
       )}
 
       {!awaitingScan && data?.hasVwma && TIERS.map(t => {
-        const rows = data.breakouts![t.id]?.[tab] ?? []
+        const raw = data.breakouts![t.id]?.[tab] ?? []
+        const wk = isWeeklyKey(tab)
+        const rows = [...raw].sort((a, b) => sort === 'room'
+          ? (roomToVwma60(b, wk) ?? -999) - (roomToVwma60(a, wk) ?? -999)
+          : (b.f20 ?? -999) - (a.f20 ?? -999))
         if (!rows.length) return null
         return (
           <section key={t.id} style={{ marginBottom: 16 }}>

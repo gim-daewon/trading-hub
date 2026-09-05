@@ -488,16 +488,44 @@ function match<T extends ScreenerRow>(r: T, key: BreakoutKey): boolean {
   }
 }
 
-/** 수급이 실린 것을 위로 올린다. 성과 근거가 아니라 읽는 순서일 뿐이다 */
+/** VWMA60까지 남은 거리(%). 역배열이면 양수(위로 여력), 정배열이면 음수 */
+export function roomToVwma60(
+  r: Pick<ScreenerRow, 'price' | 'vwma60' | 'wClose' | 'wVwma60'>,
+  weekly = false,
+): number | null {
+  const px = weekly ? r.wClose : r.price
+  const ma = weekly ? r.wVwma60 : r.vwma60
+  return px && ma ? ((ma - px) / px) * 100 : null
+}
+
+/** 주봉 신호인지 — 여력을 주봉 값으로 재야 한다 */
+export const isWeeklyKey = (k: BreakoutKey) => k.endsWith('W')
+
+/**
+ * 두 정렬 기준의 상위를 합집합으로 담는다.
+ *
+ * 수급순으로 자른 뒤 화면에서 여력순으로 재정렬하면 "수급 상위 50개 중
+ * 여력이 큰 것"이지 "여력 상위 50개"가 아니다. 두 기준 모두의 상위를
+ * 담아야 화면에서 어느 쪽으로 정렬해도 진짜 상위가 나온다.
+ *
+ * 손절 -3%가 고정이면 여력이 곧 손익비다 — 여력 9%가 3:1이다.
+ */
 export function buildBreakouts<T extends ScreenerRow>(
   rows: T[], limit = 50,
 ): Record<TierId, Record<BreakoutKey, T[]>> {
   const out = {} as Record<TierId, Record<BreakoutKey, T[]>>
   for (const tier of TIERS) {
     const inTier = rows.filter(r => r.tier === tier.id)
-    const byFlow = (a: T[]) => [...a].sort((x, y) => (y.f20 ?? -999) - (x.f20 ?? -999)).slice(0, limit)
     const m = {} as Record<BreakoutKey, T[]>
-    for (const b of BREAKOUTS) m[b.key] = byFlow(inTier.filter(r => match(r, b.key)))
+    for (const b of BREAKOUTS) {
+      const hit = inTier.filter(r => match(r, b.key))
+      const wk = isWeeklyKey(b.key)
+      const byFlow = [...hit].sort((x, y) => (y.f20 ?? -999) - (x.f20 ?? -999)).slice(0, limit)
+      const byRoom = [...hit].sort((x, y) =>
+        (roomToVwma60(y, wk) ?? -999) - (roomToVwma60(x, wk) ?? -999)).slice(0, limit)
+      const seen = new Set<string>()
+      m[b.key] = [...byRoom, ...byFlow].filter(r => !seen.has(r.symbol) && seen.add(r.symbol))
+    }
     out[tier.id] = m
   }
   return out
