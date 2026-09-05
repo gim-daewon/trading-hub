@@ -47,3 +47,5 @@ rr*.txt
 bt-rr.mjs
 bt-rr9.mjs
 rr9*.txt
+bt-all.mjs
+all-*.txt

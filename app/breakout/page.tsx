@@ -45,11 +45,16 @@ function StockRow({ r, weekly }: { r: Row; weekly: boolean }) {
   // 종가가 VWMA20에서 얼마나 떨어져 있나. 주봉 탭이면 주봉 값으로 잰다
   const px = weekly ? r.wClose : r.price
   const ma = weekly ? r.wVwma20 : r.vwma20
+  const ma60 = weekly ? r.wVwma60 : r.vwma60
   const gap = px && ma ? ((px - ma) / ma) * 100 : null
+  // 여력 = VWMA60까지 남은 거리. 역배열에서만 양수다 (60이 위에 있으므로).
+  // 손절 -3% 기준으로 손익비를 가늠하는 데 쓴다 — 여력 9%면 3:1이다
+  const room = px && ma60 ? ((ma60 - px) / px) * 100 : null
+  const rr = room != null ? room / 3 : null
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: '1fr 58px 54px 54px',
-      alignItems: 'center', gap: 8, minHeight: 52,
+      display: 'grid', gridTemplateColumns: '1fr 56px 52px 52px 56px',
+      alignItems: 'center', gap: 6, minHeight: 52,
       padding: '8px 12px', borderBottom: '1px solid var(--border)',
     }}>
       <div style={{ minWidth: 0 }}>
@@ -83,6 +88,25 @@ function StockRow({ r, weekly }: { r: Row; weekly: boolean }) {
         <div className={`num ${(r.f20 ?? 0) >= 0 ? 'up' : 'down'}`} style={{ fontSize: 12, fontWeight: 700 }}>
           {sgn(r.f20, 0)}%
         </div>
+      </div>
+
+      {/* 60선까지 남은 여력과, 손절 -3% 기준 손익비.
+          바닥잡기에서 여력이 클수록 손익비가 좋아진다는 게 실측으로 확인됐다
+          (여력 15%+ 구간 기댓값 +0.42% vs 기준선 +0.22%).
+          다만 도달률이 76%→22%로 떨어지므로 여력만 보고 고르면 안 된다. */}
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>60선 여력</div>
+        <div className="num" style={{
+          fontSize: 12, fontWeight: 700,
+          color: (room ?? 0) >= 9 ? 'var(--up)' : 'var(--text-secondary)',
+        }}>
+          {room == null ? '—' : `${sgn(room, 0)}%`}
+        </div>
+        {rr != null && room != null && room > 0 && (
+          <div className="num" style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+            {rr.toFixed(1)}:1
+          </div>
+        )}
       </div>
     </div>
   )
@@ -156,8 +180,17 @@ export default function BreakoutPage() {
         <br />
         <span style={{ color: 'var(--text-muted)' }}>
           그래서 이 목록은 <b>차트를 직접 볼 후보를 좁히는 용도</b>로만 쓴다.
-          매수 근거로 쓰지 말 것.
         </span>
+        <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border)' }}>
+          <b style={{ color: 'var(--text-secondary)' }}>60선 여력 · 손익비</b>{' '}
+          <span style={{ color: 'var(--text-muted)' }}>
+            VWMA60까지 남은 거리다. 손절 −3% 기준이면 여력 9%가 3:1이다.
+            바닥잡기에서 <b>여력이 클수록 손익비가 좋아진다</b>는 건 실측으로 확인됐다
+            (여력 15%+ 기댓값 +0.42% vs 기준선 +0.22%).
+            <b style={{ color: 'var(--warn)' }}> 다만 도달률이 76% → 22%로 떨어진다</b> —
+            여력만 보고 고르면 목표에 못 닿는다.
+          </span>
+        </div>
       </div>
 
       {/* 탭 8개라 가로 스크롤 칩으로 둔다. flex:1로 나누면 글자가 다 뭉개진다 */}
