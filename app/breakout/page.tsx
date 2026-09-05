@@ -5,6 +5,7 @@ import MetricGuide from '../components/MetricGuide'
 import { TvLink } from '../components/TvLink'
 import {
   TIERS, BREAKOUTS, RR_EVIDENCE, RR_BASELINE, rrVerdict, roomToVwma60, isWeeklyKey,
+  alignStrength,
   type TierId, type BreakoutKey, type Regime,
 } from '@/lib/screener-shared'
 
@@ -51,9 +52,11 @@ function StockRow({ r, weekly }: { r: Row; weekly: boolean }) {
   // 손절 -3% 기준으로 손익비를 가늠하는 데 쓴다 — 여력 9%면 3:1이다
   const room = px && ma60 ? ((ma60 - px) / px) * 100 : null
   const rr = room != null ? room / 3 : null
+  // 정배열 강도 — 20선과 60선이 벌어진 폭(%). 조건이 아니라 참고용이다
+  const align = alignStrength(r, weekly)
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: '1fr 56px 52px 52px 56px',
+      display: 'grid', gridTemplateColumns: '1fr 62px 46px 46px 56px',
       alignItems: 'center', gap: 6, minHeight: 52,
       padding: '8px 12px', borderBottom: '1px solid var(--border)',
     }}>
@@ -74,6 +77,15 @@ function StockRow({ r, weekly }: { r: Row; weekly: boolean }) {
         <div className={`num ${(gap ?? 0) >= 0 ? 'up' : 'down'}`} style={{ fontSize: 12, fontWeight: 700 }}>
           {gap == null ? '—' : `${sgn(gap, 1)}%`}
         </div>
+        {/* 정배열 강도 = (VWMA20 - VWMA60) / VWMA60. 부호는 방향, 크기는 벌어진 폭.
+            "정배열이냐"만 보면 간신히 붙은 것과 크게 벌어진 것이 같아진다.
+            특징 분석에서 클수록 기댓값이 높았지만 살아남은 특징 수가 우연 수준이라
+            **거르는 조건으로는 쓰지 않고** 판단 재료로만 보여준다. */}
+        {align != null && (
+          <div className="num" style={{ fontSize: 8, color: 'var(--text-muted)' }}>
+            정배열 {sgn(align, 0)}%
+          </div>
+        )}
       </div>
 
       <div style={{ textAlign: 'right' }}>

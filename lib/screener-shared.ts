@@ -420,7 +420,7 @@ export type BreakoutKey =
  */
 export const BREAKOUTS: { key: BreakoutKey; label: string; rule: string; pos: number }[] = [
   // 기댓값(RR_EVIDENCE) 순으로 둔다. pos는 참고용 승률이다.
-  { key: 'touchD', label: '강세눌림 밑꼬리 일봉', rule: '정배열 + 3일 이상 위였고 저가는 VWMA20을 뚫었으나 종가는 위 (밑꼬리)', pos: 48 },
+  { key: 'touchD', label: '강세눌림 밑꼬리 일봉', rule: '일봉·주봉 모두 정배열 + 3일 이상 위였고 저가는 VWMA20을 뚫었으나 종가는 위 (밑꼬리)', pos: 48 },
   { key: 'revW',   label: '바닥잡기 주봉',  rule: '주봉 역배열 + 4주 이상 아래 있다가 지난주 탈환 + 3% 이내', pos: 46 },
   { key: 'revD',   label: '바닥잡기 일봉',  rule: '역배열 + 5일 이상 아래 있다가 오늘 VWMA20 탈환 + 3% 이내', pos: 50 },
   { key: 'nearW',  label: '강세눌림 접근 주봉', rule: '주봉 정배열 + 2주 이상 위였고 지금 0~1% 위', pos: 48 },
@@ -429,7 +429,7 @@ export const BREAKOUTS: { key: BreakoutKey; label: string; rule: string; pos: nu
   { key: 'held',   label: '2~5일 유지',    rule: '돌파 후 2~5일째 VWMA20 위 유지', pos: 53 },
   // 숏 전용. /breakout 탭에는 노출하지 않고 /short에서만 쓴다
   { key: 'brokeD', label: '강세 이탈(숏)', rule: '종가가 VWMA20 아래 (20선 이탈)', pos: 0 },
-  { key: 'nearD',  label: '강세눌림 접근 일봉', rule: '정배열(VWMA20>60) + 3일 이상 위였고 지금 0~1% 위', pos: 48 },
+  { key: 'nearD',  label: '강세눌림 접근 일봉', rule: '일봉·주봉 모두 정배열 + 3일 이상 위였고 지금 0~1% 위', pos: 48 },
 ]
 
 /** 돌파 신호의 근접 허용폭 — 3% */
@@ -466,6 +466,43 @@ const MAX_BELOW_W = 2
 const MIN_BELOW_D = 5   // 일봉 5일 이상 아래에 있었다
 const MIN_BELOW_W = 4   // 주봉 4주 이상
 
+/**
+ * 주봉 정배열 여부 — 강세눌림 **일봉**의 전제조건이다.
+ *
+ * 사용자 질문: "강세눌림 일봉의 전제조건은 주봉 월봉 모두 정배열일 때 아닌가?"
+ * 측정 결과 주봉은 도움이 됐고(+0.10~0.15%p) 월봉은 아니었다.
+ * 보유가 9~11일인데 월봉 60선은 5년 추세라 이 시간축과 맞지 않는다.
+ *
+ * 이후 특징 분석에서 "주봉 정배열 강도"가 앞/뒤 절반 모두에서 살아남아
+ * 다른 설계로 한 번 더 확인됐다. 두 번 독립 확인된 유일한 특징이다.
+ *
+ * 주봉 값이 없으면 통과시킨다 — 스캔 초기 데이터에서 일봉 신호까지
+ * 통째로 사라지는 것보다 낫다.
+ */
+function weeklyAligned(r: ScreenerRow): boolean {
+  const { wVwma20: w20, wVwma60: w60 } = r
+  return w20 == null || w60 == null || w20 > w60
+}
+
+/**
+ * 정배열 강도 — (VWMA20 - VWMA60) / VWMA60 × 100.
+ *
+ * 부호는 배열 방향(양수면 정배열), 크기는 두 선이 벌어진 폭이다.
+ * "정배열이냐"만 보면 간신히 붙은 것과 크게 벌어진 것이 같아진다.
+ *
+ * 특징 분석에서 클수록 기댓값이 높았다(일봉 앞 +0.74 / 뒤 +0.19,
+ * 주봉 앞 +0.65 / 뒤 +0.16). 다만 살아남은 특징 수 자체가 우연 수준이라
+ * **조건으로 쓰지 않고 화면에 보여주기만 한다.**
+ */
+export function alignStrength(
+  r: Pick<ScreenerRow, 'vwma20' | 'vwma60' | 'wVwma20' | 'wVwma60'>,
+  weekly = false,
+): number | null {
+  const a = weekly ? r.wVwma20 : r.vwma20
+  const b = weekly ? r.wVwma60 : r.vwma60
+  return a != null && b != null && b !== 0 ? ((a - b) / b) * 100 : null
+}
+
 function match<T extends ScreenerRow>(r: T, key: BreakoutKey): boolean {
   const { vwma20: d20, vwma60: d60, price, aboveRun: dRun, prevRun: dPrev } = r
   const { wClose: wc, wVwma20: w20, wVwma60: w60, wAboveRun: wRun, wPrevRun: wPrev } = r
@@ -490,6 +527,7 @@ function match<T extends ScreenerRow>(r: T, key: BreakoutKey): boolean {
     // 강세눌림 접근 — 정배열 + 한동안 위에 있었고 + 지금 선의 0~1% 위.
     // 폭을 3%에서 1%로 좁혔다. 선에 실제로 붙은 것만 본다.
     case 'nearD':  return hasD && d20! > d60! && dRun! >= MIN_ABOVE_D
+                     && weeklyAligned(r)
                      && price! >= d20! && (price! - d20!) / d20! <= PULLBACK_PCT
     case 'nearW':  return hasW && w20! > w60! && wRun! >= MIN_ABOVE_W
                      && wc! >= w20! && (wc! - w20!) / w20! <= PULLBACK_PCT
@@ -498,6 +536,7 @@ function match<T extends ScreenerRow>(r: T, key: BreakoutKey): boolean {
     // 지지선을 시험하고 되받아친 모양이다.
     // 종가가 아래로 뚫린 건 여기 안 넣는다 — 그건 계속 떨어지는 쪽이라 숏 후보(brokeD)다.
     case 'touchD': return hasD && d20! > d60! && dRun! >= MIN_ABOVE_D
+                     && weeklyAligned(r)
                      && r.low != null && r.low <= d20! && price! >= d20!
     case 'touchW': return hasW && w20! > w60! && wRun! >= MIN_ABOVE_W
                      && r.wLow != null && r.wLow <= w20! && wc! >= w20!
