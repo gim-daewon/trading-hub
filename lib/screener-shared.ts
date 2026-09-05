@@ -34,6 +34,9 @@ export interface ScreenerRow {
   /** 직전 반대 구간 길이. 돌파 전 며칠(몇 주) 아래에 있었나 */
   prevRun?: number | null
   wPrevRun?: number | null
+  /** 저가 — 밑꼬리가 VWMA20을 뚫었는지 판정 */
+  low?: number | null
+  wLow?: number | null
   price: number | null
 }
 
@@ -407,7 +410,8 @@ export type BreakoutKey =
   | 'today' | 'held'          // 단순 돌파 / 유지
   | 'revD'  | 'revW'          // 바닥잡기 (역배열에서 20선 탈환) 일봉/주봉
   | 'nearD' | 'nearW'         // 강세눌림 접근 (정배열, 20선 0~3% 위)
-  | 'touchD' | 'touchW'       // 강세눌림 터치 (정배열, 20선 하향 이탈)
+  | 'touchD' | 'touchW'       // 강세눌림 밑꼬리 터치 (꼬리는 뚫려도 몸통은 지킴)
+  | 'brokeD'                  // 강세눌림 이탈 — 몸통이 20선 아래. 숏 후보
 
 /**
  * 신호 목록. pos는 10년·격자 10개 실측 양수비율이고 기준선은 57%다.
@@ -415,18 +419,28 @@ export type BreakoutKey =
  */
 export const BREAKOUTS: { key: BreakoutKey; label: string; rule: string; pos: number }[] = [
   // 기댓값(RR_EVIDENCE) 순으로 둔다. pos는 참고용 승률이다.
-  { key: 'touchD', label: '강세눌림 터치 일봉', rule: '정배열 + 최근 3일 안에 위였고 지금 0~3% 아래', pos: 48 },
+  { key: 'touchD', label: '강세눌림 밑꼬리 일봉', rule: '정배열 + 3일 이상 위였고 저가는 VWMA20을 뚫었으나 종가는 위 (밑꼬리)', pos: 48 },
   { key: 'revW',   label: '바닥잡기 주봉',  rule: '주봉 역배열 + 4주 이상 아래 있다가 지난주 탈환 + 3% 이내', pos: 46 },
   { key: 'revD',   label: '바닥잡기 일봉',  rule: '역배열 + 5일 이상 아래 있다가 오늘 VWMA20 탈환 + 3% 이내', pos: 50 },
-  { key: 'nearW',  label: '강세눌림 접근 주봉', rule: '주봉 정배열 + 2주 이상 위였고 지금 0~3% 위', pos: 48 },
-  { key: 'touchW', label: '강세눌림 터치 주봉', rule: '주봉 정배열 + 최근 2주 안에 위였고 지금 0~3% 아래', pos: 53 },
+  { key: 'nearW',  label: '강세눌림 접근 주봉', rule: '주봉 정배열 + 2주 이상 위였고 지금 0~1% 위', pos: 48 },
+  { key: 'touchW', label: '강세눌림 밑꼬리 주봉', rule: '주봉 정배열 + 2주 이상 위였고 주봉 저가는 뚫었으나 종가는 위', pos: 53 },
   { key: 'today',  label: '오늘 돌파',     rule: '종가가 VWMA20 상향 돌파 (전일은 아래) + 3% 이내', pos: 53 },
   { key: 'held',   label: '2~5일 유지',    rule: '돌파 후 2~5일째 VWMA20 위 유지', pos: 53 },
-  { key: 'nearD',  label: '강세눌림 접근 일봉', rule: '정배열(VWMA20>60) + 3일 이상 위였고 지금 0~3% 위', pos: 48 },
+  // 숏 전용. /breakout 탭에는 노출하지 않고 /short에서만 쓴다
+  { key: 'brokeD', label: '강세 이탈(숏)', rule: '정배열이었는데 종가가 VWMA20 아래 3% 이내', pos: 0 },
+  { key: 'nearD',  label: '강세눌림 접근 일봉', rule: '정배열(VWMA20>60) + 3일 이상 위였고 지금 0~1% 위', pos: 48 },
 ]
 
-/** 근접 허용폭 — 3%. 사용자가 지정한 값이고 별도로 최적화하지 않았다 */
+/** 돌파 신호의 근접 허용폭 — 3% */
 const NEAR_PCT = 0.03
+
+/**
+ * 강세눌림의 근접 허용폭 — 1%.
+ *
+ * 사용자 관찰: "몸통이 20선을 뚫리면 주가도 계속 떨어진다."
+ * 3%는 너무 넓어 이미 무너진 것까지 잡혔다. 선에 실제로 붙은 것만 남긴다.
+ */
+const PULLBACK_PCT = 0.01
 
 /**
  * "위에 있던" 상태를 요구하는 최소 기간.
@@ -472,19 +486,25 @@ function match<T extends ScreenerRow>(r: T, key: BreakoutKey): boolean {
                      && (wPrev ?? 0) >= MIN_BELOW_W
                      && (wc! - w20!) / w20! <= NEAR_PCT
 
-    // 강세눌림 접근 — 정배열 + 한동안 위에 있었고 + 지금 선의 0~3% 위
-    // dRun >= MIN_ABOVE 가 "위에 있던"을 보장한다
+    // 강세눌림 접근 — 정배열 + 한동안 위에 있었고 + 지금 선의 0~1% 위.
+    // 폭을 3%에서 1%로 좁혔다. 선에 실제로 붙은 것만 본다.
     case 'nearD':  return hasD && d20! > d60! && dRun! >= MIN_ABOVE_D
-                     && price! >= d20! && (price! - d20!) / d20! <= NEAR_PCT
+                     && price! >= d20! && (price! - d20!) / d20! <= PULLBACK_PCT
     case 'nearW':  return hasW && w20! > w60! && wRun! >= MIN_ABOVE_W
-                     && wc! >= w20! && (wc! - w20!) / w20! <= NEAR_PCT
+                     && wc! >= w20! && (wc! - w20!) / w20! <= PULLBACK_PCT
 
-    // 강세눌림 터치 — 정배열 + 최근에 위에 있다가 막 내려옴 + 0~3% 아래
-    // dRun 이 -1~-3 이면 "며칠 전까지 위였다"가 보장된다
-    case 'touchD': return hasD && d20! > d60! && dRun! <= -1 && dRun! >= -MAX_BELOW_D
+    // 강세눌림 밑꼬리 터치 — 저가는 VWMA20을 뚫었지만 종가(몸통)는 위에서 마감.
+    // 지지선을 시험하고 되받아친 모양이다.
+    // 종가가 아래로 뚫린 건 여기 안 넣는다 — 그건 계속 떨어지는 쪽이라 숏 후보(brokeD)다.
+    case 'touchD': return hasD && d20! > d60! && dRun! >= MIN_ABOVE_D
+                     && r.low != null && r.low <= d20! && price! >= d20!
+    case 'touchW': return hasW && w20! > w60! && wRun! >= MIN_ABOVE_W
+                     && r.wLow != null && r.wLow <= w20! && wc! >= w20!
+
+    // 이탈 — 정배열이었는데 몸통이 VWMA20 아래로 내려갔다.
+    // 강세 구조가 깨지는 지점이라 숏 후보로 뺀다.
+    case 'brokeD': return hasD && d20! > d60! && dRun! <= -1 && dRun! >= -MAX_BELOW_D
                      && (d20! - price!) / d20! <= NEAR_PCT
-    case 'touchW': return hasW && w20! > w60! && wRun! <= -1 && wRun! >= -MAX_BELOW_W
-                     && (w20! - wc!) / w20! <= NEAR_PCT
   }
 }
 

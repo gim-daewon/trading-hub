@@ -136,6 +136,8 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
       w_above_run: m.wAboveRun,   // 1 = 지난주에 주봉 VWMA20 탈환
       prev_run: m.prevRun,        // 돌파 전 며칠 아래에 있었나
       w_prev_run: m.wPrevRun,
+      low: m.low,           // 밑꼬리 판정용
+      w_low: m.wLow,
       price: bars[bars.length - 1].c,   // 진입가 — 사후 성과 추적용
       persistence: persistence(m),
     })

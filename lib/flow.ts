@@ -4,7 +4,7 @@
 // 실제 순매수가 아니다. 미국은 기관·외국인 순매수를 실시간 공개하지 않는다(13F 분기 지연).
 // 그래서 "상승일 거래대금 vs 하락일 거래대금"이 무료로 얻을 수 있는 최선이다.
 
-export interface Bar { c: number; v: number }
+export interface Bar { c: number; v: number; l?: number }
 
 /** 일봉에 주 구분을 붙인 형태. 주봉 파생에 쓴다 */
 export interface DatedBar extends Bar { t: number }
@@ -36,6 +36,10 @@ export interface FlowMetrics {
    * 이게 없으면 "돌파"와 "이미 한참 위"를 구분할 수 없다.
    */
   wAboveRun: number | null
+  /** 당일 저가. 밑꼬리가 VWMA20을 뚫었는지 판정한다 */
+  low: number | null
+  /** 마지막 완료 주의 저가 */
+  wLow: number | null
   /**
    * 직전(반대 방향) 구간의 길이.
    * aboveRun이 +1일 때 prevRun = 돌파 전에 며칠(몇 주) 아래에 있었나.
@@ -131,7 +135,7 @@ export async function fetchDatedBars(symbol: string, range = '6mo'): Promise<Dat
       const bars: DatedBar[] = []
       for (let i = 0; i <= lastValid; i++) {
         if (q.close?.[i] == null || q.volume?.[i] == null) continue
-        bars.push({ t: ts[i], c: q.close[i], v: q.volume[i] })
+        bars.push({ t: ts[i], c: q.close[i], v: q.volume[i], l: q.low?.[i] ?? undefined })
       }
       if (bars.length > 0) return bars
     } catch { /* 다음 호스트 */ }
@@ -196,6 +200,7 @@ export function computeFlow(bars: Bar[] | DatedBar[]): FlowMetrics {
     vwma60: vwma(bars, 60),
     aboveRun: aboveVwmaRun(bars, 20),
     prevRun: bars.length >= 20 ? vwmaRuns(bars, 20).prev : null,
+    low: bars[bars.length - 1]?.l ?? null,
     // 날짜가 있는 경우에만 주봉을 계산한다 (fetchDatedBars로 받은 경우)
     ...weeklyVwma(bars, (bars as DatedBar[])[0]?.t != null ? (bars as DatedBar[]).map(b => b.t) : undefined),
   }
@@ -210,9 +215,9 @@ export function computeFlow(bars: Bar[] | DatedBar[]): FlowMetrics {
  */
 export function weeklyVwma(bars: Bar[], dates?: number[]): {
   wClose: number | null; wVwma20: number | null; wVwma60: number | null
-  wAboveRun: number | null; wPrevRun: number | null
+  wAboveRun: number | null; wPrevRun: number | null; wLow: number | null
 } {
-  const none = { wClose: null, wVwma20: null, wVwma60: null, wAboveRun: null, wPrevRun: null }
+  const none = { wClose: null, wVwma20: null, wVwma60: null, wAboveRun: null, wPrevRun: null, wLow: null }
   if (!dates || dates.length !== bars.length) return none
 
   const wk: Bar[] = []
@@ -224,8 +229,13 @@ export function weeklyVwma(bars: Bar[], dates?: number[]): {
     u.setUTCDate(u.getUTCDate() + 4 - (u.getUTCDay() || 7))
     const key = u.getUTCFullYear() * 100 +
       Math.ceil(((+u - Date.UTC(u.getUTCFullYear(), 0, 1)) / 86400000 + 1) / 7)
-    if (key !== cur) { wk.push({ c: bars[i].c, v: bars[i].v }); cur = key }
-    else { const l = wk[wk.length - 1]; l.c = bars[i].c; l.v += bars[i].v }
+    if (key !== cur) { wk.push({ c: bars[i].c, v: bars[i].v, l: bars[i].l }); cur = key }
+    else {
+      const w = wk[wk.length - 1]
+      w.c = bars[i].c; w.v += bars[i].v
+      // 주봉 저가 = 그 주 일봉 저가들의 최소
+      if (bars[i].l != null) w.l = w.l == null ? bars[i].l : Math.min(w.l, bars[i].l!)
+    }
   }
   // 마지막(진행 중) 주를 버린다
   const done = wk.slice(0, -1)
@@ -239,6 +249,7 @@ export function weeklyVwma(bars: Bar[], dates?: number[]): {
     wVwma60: vwma(done, 60),
     wAboveRun: run,
     wPrevRun: prev,
+    wLow: done[done.length - 1].l ?? null,
   }
 }
 

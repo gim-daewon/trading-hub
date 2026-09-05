@@ -82,3 +82,11 @@ alter table screener_rows add column if not exists w_prev_run integer;
 -- 전 종목 일봉이 null이라 스캔이 09-03 종가로 돌았다.
 -- 그 상태로 "9/4 종가 기준"이라고 띄우면 표시가 거짓말을 한다.
 alter table screener_snapshots add column if not exists bar_date date;
+
+-- ── 2026-09-05 추가 4 ──────────────────────────────────────────────────
+-- 저가. 밑꼬리가 VWMA20을 뚫었는지 판정한다.
+-- 사용자 관찰: "강세눌림에서 몸통이 20선을 뚫리면 주가도 계속 떨어진다.
+-- 밑꼬리는 뚫려도 몸통은 20선 위에 있는 것으로 해달라."
+-- 종가만으로는 '꼬리만 닿음'과 '몸통이 무너짐'을 구분할 수 없다.
+alter table screener_rows add column if not exists low   double precision;
+alter table screener_rows add column if not exists w_low double precision;

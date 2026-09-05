@@ -179,7 +179,7 @@ export default function BreakoutPage() {
         }}>
           기준선 {RR_BASELINE.exp}%/거래 · 연환산 {RR_BASELINE.ann}%
           <br />
-          {BREAKOUTS.map(b => {
+          {BREAKOUTS.filter(b => b.key !== 'brokeD').map(b => {
             const q = RR_EVIDENCE[b.key]
             return q ? `${b.label} ${q.exp >= 0 ? '+' : ''}${q.exp}%` : ''
           }).filter(Boolean).join(' · ')}
@@ -200,7 +200,8 @@ export default function BreakoutPage() {
 
       {/* 탭 8개라 가로 스크롤 칩으로 둔다. flex:1로 나누면 글자가 다 뭉개진다 */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 8, paddingBottom: 2 }}>
-        {BREAKOUTS.map(b => {
+        {/* 숏 전용(brokeD)은 여기 안 띄운다. /short 메뉴에서 쓴다 */}
+        {BREAKOUTS.filter(b => b.key !== 'brokeD').map(b => {
           const n = data?.breakouts
             ? TIERS.reduce((a, t) => a + (data.breakouts![t.id]?.[b.key]?.length ?? 0), 0)
             : 0
