@@ -4,7 +4,7 @@ import PageHeader from '../components/PageHeader'
 import MetricGuide from '../components/MetricGuide'
 import { TvLink } from '../components/TvLink'
 import {
-  TIERS, TIER_EVIDENCE, PERIOD_EVIDENCE, periodVerdict,
+  TIERS, TIER_EVIDENCE, RR_EVIDENCE, RR_BASELINE, rrVerdict,
   type TierId, type CatKey, type Regime, type Perf,
 } from '@/lib/screener-shared'
 
@@ -141,15 +141,17 @@ export default function PicksPage() {
         <p style={{ margin: 0, color: 'var(--text-muted)' }}>
           조건: <b>볼린저 %B ≤ 0.2</b>(20일선 아래로 밀린 상태) + <b>20일 순자금 상위 30%</b>
           <br />
-          10년 실측: 겹치지 않는 20거래일 {PERIOD_EVIDENCE.pullback.periods}구간 중
-          양수 <b>{PERIOD_EVIDENCE.pullback.pos.toFixed(0)}%</b> ·
-          중앙값 <b>{sgn(PERIOD_EVIDENCE.pullback.med, 2)}%p</b>
+          10년 실측 (손절 −3% / 익절 +9% 규칙, 격자 10개):
+          거래당 기댓값 <b>{RR_EVIDENCE.pullback.exp >= 0 ? '+' : ''}{RR_EVIDENCE.pullback.exp}%</b>
+          {' '}· 연환산 <b>{RR_EVIDENCE.pullback.ann >= 0 ? '+' : ''}{RR_EVIDENCE.pullback.ann}%</b>
+          {' '}(기준선 +{RR_BASELINE.exp}% · +{RR_BASELINE.ann}%)
           <br />
           <span style={{ color: 'var(--warn)' }}>
-            <b>{periodVerdict('pullback').text}.</b> 최고 구간 하나가
-            +{PERIOD_EVIDENCE.pullback.max.toFixed(0)}%p이고, 그걸 빼면 우위가
-            {' '}{sgn(PERIOD_EVIDENCE.pullback.trimmed, 2)}%p로 줄어든다.
-            평소엔 거의 차이가 없다는 뜻이다. <b>오를 종목 목록이 아니라 살펴볼 후보 목록</b>으로 쓸 것.
+            <b>{rrVerdict('pullback').text}.</b> 격자 범위가
+            {' '}{RR_EVIDENCE.pullback.lo}~{RR_EVIDENCE.pullback.hi}%로 넓어
+            구간에 따라 기준선에 지기도 한다. 세 카테고리 중
+            <b> 조용한 매집(+{RR_EVIDENCE.quiet.exp}%)이 더 낫다.</b>
+            {' '}<b>오를 종목 목록이 아니라 살펴볼 후보 목록</b>으로 쓸 것.
           </span>
         </p>
       </div>

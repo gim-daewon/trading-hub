@@ -4,7 +4,7 @@ import PageHeader from '../components/PageHeader'
 import MetricGuide from '../components/MetricGuide'
 import { TvLink } from '../components/TvLink'
 import {
-  TIERS, BREAKOUTS, BREAKOUT_EVIDENCE,
+  TIERS, BREAKOUTS, RR_EVIDENCE, RR_BASELINE, rrVerdict,
   type TierId, type BreakoutKey, type Regime,
 } from '@/lib/screener-shared'
 
@@ -116,7 +116,8 @@ export default function BreakoutPage() {
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
-  const [tab, setTab] = useState<BreakoutKey>('today')
+  // 기본 탭은 기댓값 1위(강세눌림 터치 일봉)
+  const [tab, setTab] = useState<BreakoutKey>('touchD')
 
   const load = useCallback(() => {
     setLoading(true); setErr('')
@@ -166,28 +167,30 @@ export default function BreakoutPage() {
         padding: '11px 13px', marginBottom: 12, fontSize: 11, lineHeight: 1.6,
         borderLeft: '3px solid var(--warn)',
       }}>
-        <b style={{ color: 'var(--warn)' }}>성과 근거가 없는 탐색 도구다.</b>{' '}
-        VWMA 계열 8가지를 10년·격자 10개로 검증했는데
-        <b> 전부 기준선 아래</b>였다 (기준선 = 전체 종목 균등매수, 양수 {BREAKOUT_EVIDENCE.baselinePos}%):
+        <b style={{ color: 'var(--warn)' }}>기준선을 확실히 넘는 조건은 없다.</b>{' '}
+        손절 −3% / 익절 +9% 규칙으로 10년·격자 10개를 재측정했다.
+        <b> 손익비는 전부 2.5~2.9로 신호와 무관하다</b> — 규칙이 만드는 값이다.
+        승률도 26~32%로 거의 같다. <b>차이는 오직 거래당 기댓값에서 난다.</b>
         <div className="num" style={{
           margin: '6px 0', padding: '7px 9px', borderRadius: 6,
           background: 'var(--bg-base)', color: 'var(--text-muted)', fontSize: 10, lineHeight: 1.7,
         }}>
-          {BREAKOUTS.map(b => `${b.label} ${b.pos}%`).join(' · ')}
+          기준선 {RR_BASELINE.exp}%/거래 · 연환산 {RR_BASELINE.ann}%
+          <br />
+          {BREAKOUTS.map(b => {
+            const q = RR_EVIDENCE[b.key]
+            return q ? `${b.label} ${q.exp >= 0 ? '+' : ''}${q.exp}%` : ''
+          }).filter(Boolean).join(' · ')}
         </div>
-        약세 종목 바닥잡기(52%)와 강세 종목 눌림(49~50%)이 모두 기준선에 못 미치고,
-        유지일수를 늘려도 좋아지지 않는다(단조성 없음).
-        <br />
         <span style={{ color: 'var(--text-muted)' }}>
-          그래서 이 목록은 <b>차트를 직접 볼 후보를 좁히는 용도</b>로만 쓴다.
+          10개 격자 전부에서 기준선을 넘은 조건은 하나도 없다.
+          <b> 차트를 직접 볼 후보를 좁히는 용도</b>로 쓴다.
         </span>
         <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border)' }}>
           <b style={{ color: 'var(--text-secondary)' }}>60선 여력 · 손익비</b>{' '}
           <span style={{ color: 'var(--text-muted)' }}>
             VWMA60까지 남은 거리다. 손절 −3% 기준이면 여력 9%가 3:1이다.
-            바닥잡기에서 <b>여력이 클수록 손익비가 좋아진다</b>는 건 실측으로 확인됐다
-            (여력 15%+ 기댓값 +0.42% vs 기준선 +0.22%).
-            <b style={{ color: 'var(--warn)' }}> 다만 도달률이 76% → 22%로 떨어진다</b> —
+            <b style={{ color: 'var(--warn)' }}> 다만 여력이 클수록 도달률이 76% → 22%로 떨어진다</b> —
             여력만 보고 고르면 목표에 못 닿는다.
           </span>
         </div>
@@ -220,8 +223,8 @@ export default function BreakoutPage() {
       <p style={{ margin: '0 0 8px', fontSize: 10, color: 'var(--text-muted)' }}>
         {/* 탭마다 실측치를 붙여둔다. 한 번 읽고 잊는 것보다 매번 보이는 게 낫다 */}
         <span className="num" style={{ color: 'var(--warn)' }}>
-          이 조건 실측 양수 {BREAKOUTS.find(b => b.key === tab)?.pos}%
-          {' '}(기준선 {BREAKOUT_EVIDENCE.baselinePos}%)
+          기댓값 {(() => { const q = RR_EVIDENCE[tab]; return q ? `${q.exp >= 0 ? '+' : ''}${q.exp}%/거래 · 연환산 ${q.ann >= 0 ? '+' : ''}${q.ann}%` : '미측정' })()}
+          {' '}(기준선 +{RR_BASELINE.exp}% · +{RR_BASELINE.ann}%)
         </span>
         {' · '}
         {tab === 'today'

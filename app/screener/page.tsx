@@ -4,7 +4,7 @@ import PageHeader from '../components/PageHeader'
 import MetricGuide from '../components/MetricGuide'
 import { TvLink, TvLayoutSetting } from '../components/TvLink'
 import {
-  TIERS, CATS, TIER_EVIDENCE, PERIOD_EVIDENCE, periodVerdict,
+  TIERS, CATS, TIER_EVIDENCE, RR_EVIDENCE, RR_BASELINE, rrVerdict,
   type TierId, type CatKey, type Regime, type Perf,
 } from '@/lib/screener-shared'
 
@@ -62,11 +62,18 @@ const TONE = {
  * 구간 단위로 재보니 유의한 조건이 하나도 없었다. 초록 배지는 없앴다.
  * 시총·국면별 값은 참고로 아래에 접어둔다.
  */
+/**
+ * 손익비 기준 근거 박스.
+ *
+ * 전에는 "20일 보유 후 양수 구간 비율"(승률)로 판정했다. 그런데 사용자 매매는
+ * 손절 -3%가 있는 규칙 매매이고, 그 기준으로 재보니 순위가 정반대였다 —
+ * 모멘텀은 승률 1위인데 기댓값은 유일한 마이너스였다.
+ * 그래서 판정을 거래당 기댓값으로 바꿨다. 승률·손익비는 참고로만 둔다.
+ */
 function EvidenceBox({ tier, cat, regime }: { tier: TierId; cat: CatKey; regime: Regime }) {
-  const q = PERIOD_EVIDENCE[cat]
-  const v = periodVerdict(cat)
+  const q = RR_EVIDENCE[cat]
+  const v = rrVerdict(cat)
   const tone = TONE[v.tone]
-
   const p: Perf = TIER_EVIDENCE[tier][cat][regime]
   const b: Perf = TIER_EVIDENCE[tier].base[regime]
 
@@ -80,36 +87,43 @@ function EvidenceBox({ tier, cat, regime }: { tier: TierId; cat: CatKey; regime:
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
         <span style={{ fontSize: 13, fontWeight: 800, color: tone.color }}>{v.text}</span>
         <span style={{ color: 'var(--text-muted)' }}>
-          10년 · 겹치지 않는 20거래일 {q.periods}구간
+          10년 · 손절 −3% / 익절 +9% 규칙 · 격자 10개
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(76px, 1fr))', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(84px, 1fr))', gap: 8 }}>
         {[
-          { k: '양수 구간',  v: `${q.pos.toFixed(0)}%`,        hl: q.pos > 50 },
-          { k: '중앙값',     v: `${sgn(q.med, 2)}%p`,          hl: q.med > 0 },
-          { k: '상위2 제외', v: `${sgn(q.trimmed, 2)}%p`,      hl: q.trimmed > 0 },
-          { k: '최고 구간',  v: `${sgn(q.max, 1)}%p`,          hl: false },
+          { k: '거래당 기댓값', v: `${sgn(q.exp, 2)}%`, sub: `기준선 ${sgn(RR_BASELINE.exp, 2)}`, hl: q.exp > RR_BASELINE.exp },
+          { k: '연환산',       v: `${sgn(q.ann, 1)}%`, sub: `기준선 ${sgn(RR_BASELINE.ann, 1)}`, hl: q.ann > RR_BASELINE.ann },
+          { k: '평균 보유',    v: `${q.days.toFixed(1)}일`, sub: `기준선 ${RR_BASELINE.days}`, hl: false },
+          { k: '격자 범위',    v: `${sgn(q.lo, 2)}~${sgn(q.hi, 2)}`, sub: '10개 최소~최대', hl: q.lo > RR_BASELINE.exp },
         ].map(x => (
           <div key={x.k}>
             <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>{x.k}</div>
-            <div className="num" style={{ fontSize: 13, fontWeight: 700, color: x.hl ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+            <div className="num" style={{ fontSize: 13, fontWeight: 700, color: x.hl ? 'var(--up)' : 'var(--text-secondary)' }}>
               {x.v}
             </div>
+            <div className="num" style={{ fontSize: 9, color: 'var(--text-muted)' }}>{x.sub}</div>
           </div>
         ))}
       </div>
 
       {v.note && (
-        <p style={{ margin: '8px 0 0', color: 'var(--warn)', lineHeight: 1.5 }}>
-          {v.note}. 그 구간을 빼면 우위가 {sgn(q.trimmed, 2)}%p로 줄어든다 —
-          평소에는 거의 차이가 없고 어쩌다 한 번 크게 벌었다는 뜻이다.
-        </p>
+        <p style={{ margin: '8px 0 0', color: 'var(--warn)', lineHeight: 1.5 }}>{v.note}</p>
       )}
+
+      <div className="num" style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)' }}>
+        참고 · 승률 {q.win}% · 손익비 {q.rr.toFixed(2)}
+        <span style={{ opacity: 0.75 }}> (기준선 {RR_BASELINE.win}% · {RR_BASELINE.rr.toFixed(2)})</span>
+        <br />
+        <span style={{ opacity: 0.75 }}>
+          승률·손익비는 신호와 거의 무관하다 — 규칙(−3%/+9%)이 만드는 값이다.
+        </span>
+      </div>
 
       <details style={{ marginTop: 8 }}>
         <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 10 }}>
-          시총·국면별 참고값 (개별 거래 뭉침 — 표본이 겹쳐 과대평가된다)
+          시총·국면별 참고값 (20일 보유 기준 · 표본이 겹쳐 과대평가된다)
         </summary>
         <div className="num" style={{ marginTop: 6, color: 'var(--text-muted)', lineHeight: 1.6 }}>
           {TIERS.find(t => t.id === tier)?.label} · {regime === 'up' ? 'SPY 상승' : 'SPY 하락'} 구간 ·
@@ -129,7 +143,8 @@ export default function ScreenerPage() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [tier, setTier] = useState<TierId>('large')
-  const [tab, setTab] = useState<CatKey>('momentum')
+  // 기본 탭은 기댓값 1위(조용한 매집). 모멘텀은 기댓값이 마이너스라 뒤로 뺐다
+  const [tab, setTab] = useState<CatKey>('quiet')
 
   const load = useCallback(() => {
     setLoading(true); setErr('')
@@ -149,10 +164,9 @@ export default function ScreenerPage() {
   //
   // 정렬 기준을 시총·국면별 값에서 10년 구간 단위 양수비율로 바꿨다.
   // 구간 단위로 재보니 순서가 뒤집혔다 — 모멘텀 57% > 눌림목 52% > 조용한매집 47%.
-  const orderedCats = useMemo(
-    () => [...CATS].sort((a, b) => PERIOD_EVIDENCE[b.key].pos - PERIOD_EVIDENCE[a.key].pos),
-    []
-  )
+  // CATS가 이미 기댓값 순으로 정의돼 있다. 여기서 다시 정렬하지 않는다 —
+  // 정렬 기준이 두 곳에 있으면 갈라진다
+  const orderedCats = CATS
 
   return (
     <div style={{ padding: 16, maxWidth: 900, margin: '0 auto' }}>
@@ -180,8 +194,10 @@ export default function ScreenerPage() {
 
       <div className="card" style={{ padding: '10px 12px', marginBottom: 14, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
         <b style={{ color: 'var(--warn)' }}>이건 예측이 아니라 탐색 도구다.</b> 2,700종목을 수십 개로 좁혀줄 뿐,
-        오를 종목을 고르지 않는다. 10년 120구간으로 재보니 <b>통계적으로 유의한 조건이 하나도 없었다</b>
-        (가장 나은 모멘텀도 양수 57%, z=1.64로 기준 1.96 미달).
+        오를 종목을 고르지 않는다. 판정 기준을 <b>승률에서 거래당 기댓값</b>으로 바꿨다
+        (손절 −3% / 익절 +9%). 그러자 순위가 뒤집혔다 —
+        <b>모멘텀은 승률 1위인데 기댓값은 유일한 마이너스</b>, 조용한매집은 승률 꼴찌인데 기댓값 2위였다.
+        <br /><b>10개 격자 전부에서 기준선을 넘은 조건은 하나도 없다.</b>
         <br />순자금은 실제 순매수가 아니라 상승일·하락일 거래대금 비교로 만든 <b>대리지표</b>다
         (미국은 기관 순매수를 실시간 공개하지 않는다).
         <div style={{ marginTop: 8 }}><TvLayoutSetting /></div>
@@ -210,7 +226,7 @@ export default function ScreenerPage() {
         {orderedCats.map(c => {
           const n = data?.categories?.[tier]?.[c.key]?.length ?? 0
           const active = tab === c.key
-          const strong = periodVerdict(c.key).tone === 'ok'
+          const strong = rrVerdict(c.key).tone === 'ok'
           return (
             <button key={c.key} onClick={() => setTab(c.key)} style={{
               flexShrink: 0, minHeight: 38, padding: '0 14px', borderRadius: 19,

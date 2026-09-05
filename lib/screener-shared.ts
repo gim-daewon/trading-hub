@@ -179,10 +179,83 @@ export function verdictOf(p: Perf, base: Perf): { text: string; strong: boolean 
   return { text: '기준선과 유사', strong: false }
 }
 
+
+export interface RrPerf {
+  /** 승률 — 규칙 매매에선 지표가 아니다. 참고로만 둔다 */
+  win: number
+  /** 손익비. 규칙(-3%/+9%)이 만드는 값이라 신호별 차이가 거의 없다 */
+  rr: number
+  /** 거래당 기댓값(%). 이게 유일하게 신호를 가른다 */
+  exp: number
+  /** 격자 시작점 10개의 최소~최대 */
+  lo: number
+  hi: number
+  /** 평균 보유일 */
+  days: number
+  /** 연환산 = 기댓값 / 보유일 x 252. 자본 회전을 반영한 상한치 */
+  ann: number
+}
+
+/**
+ * 손절 -3% · 익절 +9% 규칙 기준 실측 (10년, 격자 시작점 10개, 갭 반영).
+ *
+ * 사용자 지침으로 기준을 바꿨다 — "승률뿐만 아니라 손익비도 중요시해라".
+ * 그러자 순위가 뒤집혔다:
+ *   모멘텀은 승률 57%로 1위였는데 기댓값 -0.03%로 유일한 마이너스
+ *   조용한매집은 승률 47%로 꼴찌였는데 기댓값 +0.46%로 2위
+ *
+ * 세 가지가 드러났다:
+ *  1) 손익비는 전부 2.52~2.89 — 규칙이 만드는 값이지 신호가 만드는 게 아니다
+ *  2) 승률도 26~32%로 거의 무차별
+ *  3) 차이는 오직 기댓값에서 난다
+ *
+ * 주의: 10개 격자 전부에서 기준선을 넘은 신호는 하나도 없다.
+ * 중앙값이 높아도 일부 구간에서는 기준선에 진다.
+ */
+export const RR_BASELINE: RrPerf =
+  { win: 28, rr: 2.73, exp: 0.18, lo: -0.09, hi: 0.63, days: 8.2, ann: 5.66 }
+
+export const RR_EVIDENCE: Record<string, RrPerf> = {
+  // 수급 스크리너
+  quiet:    { win: 32, rr: 2.54, exp:  0.46, lo: -0.10, hi: 0.98, days: 10.2, ann: 11.31 },
+  pullback: { win: 29, rr: 2.74, exp:  0.09, lo: -1.15, hi: 1.21, days:  6.5, ann:  3.47 },
+  momentum: { win: 26, rr: 2.79, exp: -0.03, lo: -0.19, hi: 0.25, days:  6.2, ann: -1.14 },
+  // VWMA 돌파
+  touchD:   { win: 31, rr: 2.74, exp:  0.50, lo: -0.01, hi: 0.71, days:  9.2, ann: 13.60 },
+  revW:     { win: 28, rr: 2.78, exp:  0.27, lo: -0.08, hi: 0.81, days:  8.7, ann:  7.78 },
+  revD:     { win: 29, rr: 2.72, exp:  0.25, lo: -0.22, hi: 1.19, days:  8.3, ann:  7.61 },
+  nearW:    { win: 31, rr: 2.52, exp:  0.25, lo:  0.12, hi: 0.71, days: 11.8, ann:  5.42 },
+  touchW:   { win: 29, rr: 2.64, exp:  0.23, lo: -0.26, hi: 0.67, days: 10.1, ann:  5.62 },
+  today:    { win: 28, rr: 2.74, exp:  0.18, lo:  0.05, hi: 0.98, days:  8.2, ann:  5.42 },
+  held:     { win: 28, rr: 2.73, exp:  0.18, lo: -0.16, hi: 0.50, days:  8.4, ann:  5.29 },
+  nearD:    { win: 29, rr: 2.55, exp:  0.14, lo: -0.09, hi: 0.34, days: 11.7, ann:  3.04 },
+}
+
+/**
+ * 기댓값 기준 판정. 승률이 아니라 이걸로 판단한다.
+ *
+ * "우위 확인"은 10개 격자 전부에서 기준선을 넘었을 때만 쓴다.
+ * 현재 그 조건을 만족하는 신호는 없다.
+ */
+export function rrVerdict(key: string): { text: string; tone: 'ok' | 'weak' | 'none'; note: string } {
+  const p = RR_EVIDENCE[key]
+  if (!p) return { text: '미측정', tone: 'weak', note: '' }
+  const b = RR_BASELINE.exp
+  if (p.exp <= 0) return { text: '기댓값 마이너스', tone: 'none', note: '규칙대로 매매하면 잃는다' }
+  if (p.lo > b) return { text: '우위 확인', tone: 'ok', note: '전 격자에서 기준선 상회' }
+  if (p.exp > b) return {
+    text: '기준선 상회 (불확실)', tone: 'ok',
+    note: `중앙값은 기준선의 ${(p.exp / b).toFixed(1)}배지만 일부 구간에선 기준선에 진다`,
+  }
+  return { text: '기준선 이하', tone: 'weak', note: '' }
+}
+
 export const CATS: { key: CatKey; label: string; rule: string }[] = [
+  // 기댓값 순으로 둔다. 승률 순이 아니다 —
+  // 모멘텀은 승률 57%로 1위였지만 기댓값은 -0.03%로 유일한 마이너스다.
+  { key: 'quiet',     label: '조용한 매집', rule: '20일 순자금 상위 + 20일 등락 −5~+2%' },
   { key: 'pullback',  label: '눌림목 매집', rule: '볼린저 %B ≤ 0.2 (하단권) + 20일 순자금 상위 30%' },
   { key: 'momentum',  label: '모멘텀 매집', rule: '20일 순자금 상위 + 20일 상승 10% 이상' },
-  { key: 'quiet',     label: '조용한 매집', rule: '20일 순자금 상위 + 20일 등락 −5~+2%' },
 ]
 
 /**
@@ -273,16 +346,31 @@ export const CAVEATS = [
  */
 export const STOPPING_RULE = {
   decideAfter: '2026-12-08',
+  /**
+   * 판정 대상을 승률에서 거래당 기댓값으로 바꿨다 (2026-09-05).
+   *
+   * 이유: 손절 -3% 규칙으로 재보니 승률과 기댓값의 순위가 정반대였다.
+   *   모멘텀   승률 57%(1위) → 기댓값 -0.03%(꼴찌)
+   *   조용한매집 승률 47%(꼴찌) → 기댓값 +0.46%(2위)
+   * 손익비는 규칙이 만드는 값이라 신호별 차이가 없다(전부 2.5~2.9).
+   * 남는 판별력은 기댓값뿐이다.
+   *
+   * 기준을 결과 보기 전에 바꾼다. 데이터를 본 뒤 바꾸면 자기합리화가 된다.
+   */
+  metric: '거래당 기댓값 (손절 -3% / 익절 +9%)',
+  /** 백테스트 기준선. 아무 종목이나 같은 규칙으로 사면 이만큼 나온다 */
+  baselineExp: 0.18,
   /** 이 아래면 해당 카테고리를 화면에서 내린다 */
-  dropBelowHitPct: 45,
-  /** 세 카테고리 모두 이 아래면 스크리너를 '필터 전용'으로 격하한다 */
-  demoteAllBelowHitPct: 50,
-  /** 판단에 필요한 최소 표본 (카테고리별 누적 종목-관측 수) */
-  minSamples: 300,
+  dropBelowExp: 0,
+  /** 세 카테고리 모두 기준선 아래면 스크리너를 '필터 전용'으로 격하한다 */
+  demoteAllBelowExp: 0.18,
+  /** 판단에 필요한 최소 거래 수 (카테고리별 누적) */
+  minTrades: 200,
   notes: [
-    '상회율 45% 미만 = 동전 던지기보다 나쁘다. 그 카테고리는 내린다.',
-    '세 카테고리 모두 50% 미만 = 지표군 자체에 우위가 없다. 화면은 남기되 "종목을 좁혀주는 필터"로만 쓰고 카테고리 구분과 순서를 없앤다.',
-    '한 카테고리라도 55% 이상이면서 표본 300 이상이면 유지한다.',
+    '기댓값이 0 이하 = 규칙대로 매매하면 잃는다. 그 카테고리는 내린다.',
+    '세 카테고리 모두 기준선(+0.18%) 미만 = 신호에 값어치가 없다. 화면은 남기되 종목을 좁히는 필터로만 쓰고 카테고리 구분과 순서를 없앤다.',
+    '승률과 손익비는 참고로만 본다. 규칙 매매에서 승률 26~32%, 손익비 2.5~2.9는 신호와 무관하게 나오는 값이다.',
+    '자본 회전도 같이 본다. 기댓값이 같아도 보유 3일과 12일은 연환산이 4배 다르다.',
     '중간 결과로 기준을 바꾸지 않는다. 바꾸려면 왜 바꾸는지를 먼저 적는다.',
   ],
 } as const
@@ -325,15 +413,16 @@ export type BreakoutKey =
  * 신호 목록. pos는 10년·격자 10개 실측 양수비율이고 기준선은 57%다.
  * 전부 기준선 아래라 화면에 그대로 노출한다.
  */
-export const BREAKOUTS: { key: BreakoutKey; label: string; rule: string; pos: number | null }[] = [
+export const BREAKOUTS: { key: BreakoutKey; label: string; rule: string; pos: number }[] = [
+  // 기댓값(RR_EVIDENCE) 순으로 둔다. pos는 참고용 승률이다.
+  { key: 'touchD', label: '강세눌림 터치 일봉', rule: '정배열 + 최근 3일 안에 위였고 지금 0~3% 아래', pos: 48 },
+  { key: 'revW',   label: '바닥잡기 주봉',  rule: '주봉 역배열 + 4주 이상 아래 있다가 지난주 탈환 + 3% 이내', pos: 46 },
+  { key: 'revD',   label: '바닥잡기 일봉',  rule: '역배열 + 5일 이상 아래 있다가 오늘 VWMA20 탈환 + 3% 이내', pos: 50 },
+  { key: 'nearW',  label: '강세눌림 접근 주봉', rule: '주봉 정배열 + 2주 이상 위였고 지금 0~3% 위', pos: 48 },
+  { key: 'touchW', label: '강세눌림 터치 주봉', rule: '주봉 정배열 + 최근 2주 안에 위였고 지금 0~3% 아래', pos: 53 },
   { key: 'today',  label: '오늘 돌파',     rule: '종가가 VWMA20 상향 돌파 (전일은 아래) + 3% 이내', pos: 53 },
   { key: 'held',   label: '2~5일 유지',    rule: '돌파 후 2~5일째 VWMA20 위 유지', pos: 53 },
-  { key: 'revD',   label: '바닥잡기 일봉',  rule: '역배열 + 5일 이상 아래 있다가 오늘 VWMA20 탈환 + 3% 이내', pos: 50 },
-  { key: 'revW',   label: '바닥잡기 주봉',  rule: '주봉 역배열 + 4주 이상 아래 있다가 지난주 탈환 + 3% 이내', pos: 46 },
   { key: 'nearD',  label: '강세눌림 접근 일봉', rule: '정배열(VWMA20>60) + 3일 이상 위였고 지금 0~3% 위', pos: 48 },
-  { key: 'nearW',  label: '강세눌림 접근 주봉', rule: '주봉 정배열 + 2주 이상 위였고 지금 0~3% 위', pos: 48 },
-  { key: 'touchD', label: '강세눌림 터치 일봉', rule: '정배열 + 최근 3일 안에 위였고 지금 0~3% 아래', pos: 48 },
-  { key: 'touchW', label: '강세눌림 터치 주봉', rule: '주봉 정배열 + 최근 2주 안에 위였고 지금 0~3% 아래', pos: 53 },
 ]
 
 /** 근접 허용폭 — 3%. 사용자가 지정한 값이고 별도로 최적화하지 않았다 */

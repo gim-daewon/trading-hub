@@ -95,17 +95,22 @@ export default function TrackingPage() {
           중단 기준 — {STOPPING_RULE.decideAfter} 이후 판단
         </summary>
         <div style={{ marginTop: 8, color: 'var(--text-muted)', lineHeight: 1.7 }}>
-          <b style={{ color: 'var(--text-secondary)' }}>결과를 보기 전(2026-09-04)에 미리 정한 규칙이다.</b>
+          <b style={{ color: 'var(--text-secondary)' }}>결과를 보기 전에 미리 정한 규칙이다.</b>
           <br />
-          판정 대상은 <b>SPY 상회율</b>이다. 절대 상승률은 시장이 오르면 같이 오르므로
-          지표의 값어치를 재지 못한다.
+          판정 대상을 <b>승률에서 거래당 기댓값</b>으로 바꿨다 (2026-09-05).
+          손절 −3% 규칙으로 재보니 승률과 기댓값의 순위가 정반대였다 —
+          모멘텀은 승률 1위인데 기댓값은 유일한 마이너스였고,
+          조용한매집은 승률 꼴찌인데 기댓값 2위였다.
+          손익비는 규칙이 만드는 값이라 신호별 차이가 없다(전부 2.5~2.9).
           <div className="num" style={{
             margin: '6px 0', padding: '8px 10px', borderRadius: 8,
             background: 'var(--bg-base)', color: 'var(--text-secondary)', fontSize: 11,
           }}>
-            카테고리 상회율 &lt; {STOPPING_RULE.dropBelowHitPct}% → 그 카테고리 화면에서 내림<br />
-            세 카테고리 모두 &lt; {STOPPING_RULE.demoteAllBelowHitPct}% → 스크리너를 필터 전용으로 격하<br />
-            최소 표본 {STOPPING_RULE.minSamples}건 이상일 때만 판단
+            판정 지표: {STOPPING_RULE.metric}<br />
+            백테스트 기준선 {STOPPING_RULE.baselineExp}%/거래<br />
+            카테고리 기댓값 &lt;= {STOPPING_RULE.dropBelowExp}% → 화면에서 내림<br />
+            세 카테고리 모두 &lt; {STOPPING_RULE.demoteAllBelowExp}% → 필터 전용으로 격하<br />
+            최소 거래 {STOPPING_RULE.minTrades}건 이상일 때만 판단
           </div>
           {STOPPING_RULE.notes.map((n, i) => <div key={i}>· {n}</div>)}
         </div>
