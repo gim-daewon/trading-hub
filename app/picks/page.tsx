@@ -136,12 +136,19 @@ export default function PicksPage() {
 
       <div className="card" style={{ padding: '12px 14px', marginBottom: 14, fontSize: 11, lineHeight: 1.6 }}>
         <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-          눌림목 — 볼린저 하단권 + 수급 상위
+          눌림목 — 볼린저 하단권
         </p>
         <p style={{ margin: 0, color: 'var(--text-muted)' }}>
-          조건: <b>볼린저 %B ≤ 0.2</b>(20일선 아래로 밀린 상태) + <b>20일 순자금 상위 30%</b>
+          조건: <b>볼린저 %B ≤ 0.2</b>(20일선 아래로 밀린 상태)
           <br />
-          10년 실측 (손절 −3% / 익절 +9% 규칙, 격자 10개):
+          <span style={{ color: 'var(--info)' }}>
+            2026-09-06에 <b>수급 상위 30% 조건을 뺐다.</b> %B ≤ 0.2는 “최근 떨어졌다”,
+            순자금 상위는 “최근 올랐다”는 뜻이라 두 조건이 서로 싸운다. 실측으로
+            눌림목 종목 중 수급 상위는 9%뿐이었고(1,491 / 16,144) 그 소수 표본에서
+            기댓값 부호가 뒤집혔다(앞절반 −0.417% → 뒤절반 +0.454%).
+          </span>
+          <br />
+          10년 실측 (손절 −3% / 익절 +9% 규칙, 격자 20개):
           거래당 기댓값 <b>{RR_EVIDENCE.pullback.exp >= 0 ? '+' : ''}{RR_EVIDENCE.pullback.exp}%</b>
           {' '}· 연환산 <b>{RR_EVIDENCE.pullback.ann >= 0 ? '+' : ''}{RR_EVIDENCE.pullback.ann}%</b>
           {' '}(기준선 +{RR_BASELINE.exp}% · +{RR_BASELINE.ann}%)
@@ -149,8 +156,9 @@ export default function PicksPage() {
           <span style={{ color: 'var(--warn)' }}>
             <b>{rrVerdict('pullback').text}.</b> 격자 범위가
             {' '}{RR_EVIDENCE.pullback.lo}~{RR_EVIDENCE.pullback.hi}%로 넓어
-            구간에 따라 기준선에 지기도 한다. 세 카테고리 중
-            <b> 조용한 매집(+{RR_EVIDENCE.quiet.exp}%)이 더 낫다.</b>
+            구간에 따라 기준선에 지기도 한다. 기댓값은 정체 구간
+            (+{RR_EVIDENCE.quiet.exp}%)과 사실상 같은데,
+            <b> 정체 구간은 격자 20개 전부에서 플러스였고 눌림목은 아니다.</b>
             {' '}<b>오를 종목 목록이 아니라 살펴볼 후보 목록</b>으로 쓸 것.
           </span>
         </p>
@@ -174,8 +182,7 @@ export default function PicksPage() {
           <br />
           GitHub → Actions → <b>Screener Scan</b> → Run workflow (약 1분)
           <br /><br />
-          조건을 만족하는 종목이 실제로 없을 수도 있다. 볼린저 하단권까지 밀리면서
-          동시에 수급 상위 30%에 드는 건 흔한 조합이 아니다.
+          조건을 만족하는 종목이 실제로 없을 수도 있다.
           <br /><br />
           스캔 직후라면 최대 10분간 이전 결과가 보일 수 있다. 새로고침을 눌러보라.
         </div>

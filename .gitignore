@@ -58,3 +58,9 @@ feat-*.txt
 bt-flow.mjs
 flow-*.txt
 flow2-*.txt
+bt-cats.mjs
+cats-*.txt
+bt-vwma.mjs
+vwma-*.txt
+ts-hooks.mjs
+ts-resolve.mjs

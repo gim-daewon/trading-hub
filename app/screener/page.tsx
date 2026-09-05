@@ -143,8 +143,10 @@ export default function ScreenerPage() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [tier, setTier] = useState<TierId>('large')
-  // 기본 탭은 기댓값 1위(조용한 매집). 모멘텀은 기댓값이 마이너스라 뒤로 뺐다
+  // 기본 탭은 정체 구간. 기댓값은 눌림목과 사실상 같지만(+0.28 vs +0.30)
+  // 격자 20개 전부에서 플러스인 건 이쪽뿐이다. 모멘텀은 기댓값이 마이너스다
   const [tab, setTab] = useState<CatKey>('quiet')
+  const [sort, setSort] = useState<'default' | 'flowHigh' | 'flowLow'>('default')
 
   const load = useCallback(() => {
     setLoading(true); setErr('')
@@ -157,13 +159,23 @@ export default function ScreenerPage() {
 
   useEffect(() => { load() }, [load])
 
-  const rows = data?.categories?.[tier]?.[tab] ?? []
+  // 수급은 이제 **거르지 않고 정렬만 한다.**
+  //
+  // 눌림목·정체 구간에서 수급 상위 필터가 앞뒤 절반 검증을 통과하지 못했다.
+  // 그렇다고 화면에서 지우면 판단 재료가 사라지므로, 선정은 카테고리 고유
+  // 변수(%B, 등락)로 하고 수급은 여기서 껐다 켜는 정렬 기준으로 남긴다.
+  //
+  // 서버가 이미 25개로 자른 뒤라 이 정렬은 **보이는 것의 순서만** 바꾼다.
+  // 종목 선정에는 관여하지 않는다 — 그게 필터와 다른 점이다.
+  const picked = data?.categories?.[tier]?.[tab] ?? []
+  const rows = useMemo(() => sort === 'default' ? picked
+    : [...picked].sort((a, b) => sort === 'flowHigh'
+      ? (b.f20 ?? -999) - (a.f20 ?? -999)
+      : (a.f20 ?? 999) - (b.f20 ?? 999)), [picked, sort])
 
   // 근거가 약한 카테고리를 뒤로 민다 — 지우지는 않는다.
   // 지우면 "왜 없지?" 하고 나중에 또 만들게 되지만, 근거와 함께 남으면 그게 기록이 된다.
   //
-  // 정렬 기준을 시총·국면별 값에서 10년 구간 단위 양수비율로 바꿨다.
-  // 구간 단위로 재보니 순서가 뒤집혔다 — 모멘텀 57% > 눌림목 52% > 조용한매집 47%.
   // CATS가 이미 기댓값 순으로 정의돼 있다. 여기서 다시 정렬하지 않는다 —
   // 정렬 기준이 두 곳에 있으면 갈라진다
   const orderedCats = CATS
@@ -196,8 +208,12 @@ export default function ScreenerPage() {
         <b style={{ color: 'var(--warn)' }}>이건 예측이 아니라 탐색 도구다.</b> 2,700종목을 수십 개로 좁혀줄 뿐,
         오를 종목을 고르지 않는다. 판정 기준을 <b>승률에서 거래당 기댓값</b>으로 바꿨다
         (손절 −3% / 익절 +9%). 그러자 순위가 뒤집혔다 —
-        <b>모멘텀은 승률 1위인데 기댓값은 유일한 마이너스</b>, 조용한매집은 승률 꼴찌인데 기댓값 2위였다.
-        <br /><b>10개 격자 전부에서 기준선을 넘은 조건은 하나도 없다.</b>
+        <b>모멘텀은 승률 1위인데 기댓값은 유일한 마이너스</b>, 정체 구간은 승률 꼴찌인데 기댓값 2위였다.
+        <br /><b style={{ color: 'var(--info)' }}>2026-09-06: 눌림목·정체 구간에서 수급 상위 필터를 뺐다.</b>
+        {' '}앞뒤 절반으로 나눠 재보니 수급 상위는 부호가 뒤집혔고(+0.094% → −0.065%)
+        수급 하위가 양쪽 모두 더 나았다(+0.308% / +0.035%). 수급은 이제 거르지 않고
+        <b> 정렬로만</b> 쓴다. 모멘텀에서만 방향이 맞아 거기만 필터를 남겼다.
+        <br /><b>20개 격자 전부에서 기준선을 넘은 조건은 하나도 없다.</b>
         <br />순자금은 실제 순매수가 아니라 상승일·하락일 거래대금 비교로 만든 <b>대리지표</b>다
         (미국은 기관 순매수를 실시간 공개하지 않는다).
         <div style={{ marginTop: 8 }}><TvLayoutSetting /></div>
@@ -246,6 +262,28 @@ export default function ScreenerPage() {
       <p style={{ margin: '0 0 6px', fontSize: 11, color: 'var(--text-muted)' }}>
         조건: {CATS.find(c => c.key === tab)?.rule}
       </p>
+
+      {/* 수급 정렬 — 필터가 아니라 순서만 바꾼다.
+          어느 방향이 나은지 검증에서 갈리지 않았으므로 양쪽 다 열어둔다.
+          하위 정렬은 장난이 아니다: 수급 하위 30%가 앞뒤 절반 모두에서
+          상위 30%보다 기댓값이 높았다(+0.308/+0.035 vs +0.094/-0.065). */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>정렬</span>
+        {([
+          ['default', tab === 'pullback' ? '%B 낮은 순' : tab === 'quiet' ? '등락 0에 가까운 순' : '수급 높은 순'],
+          ['flowHigh', '수급 높은 순'],
+          ['flowLow', '수급 낮은 순'],
+        ] as const).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setSort(k)}
+            className={sort === k ? 'pill pill-up' : 'pill'}
+            style={{ cursor: 'pointer', border: 'none', fontSize: 10 }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <MetricGuide show={['flow', 'pctB', 'rvol']} />
 
       {data && <EvidenceBox tier={tier} cat={tab} regime={data.regime} />}

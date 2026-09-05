@@ -42,6 +42,12 @@ interface Data {
 
 const sgn = (v: number | null, d = 0) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(d)}`
 
+// 탭에 띄우지 않는 신호.
+//   brokeD — 숏 전용. /short 메뉴에서 쓴다
+//   touchW — 기댓값 -0.86%, 격자 20개 전부 마이너스라 뺐다 (/rejected 참고).
+//            계산은 계속한다. 성과 추적에 남겨 실제로도 그런지 확인한다
+const HIDDEN = new Set<BreakoutKey>(['brokeD', 'touchW'])
+
 function StockRow({ r, weekly }: { r: Row; weekly: boolean }) {
   // 종가가 VWMA20에서 얼마나 떨어져 있나. 주봉 탭이면 주봉 값으로 잰다
   const px = weekly ? r.wClose : r.price
@@ -129,7 +135,7 @@ export default function BreakoutPage() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   // 기본 탭은 기댓값 1위(강세눌림 터치 일봉)
-  const [tab, setTab] = useState<BreakoutKey>('touchD')
+  const [tab, setTab] = useState<BreakoutKey>('today')
   // 기본 정렬을 여력순으로. 손절 -3% 기준이면 여력이 곧 손익비다
   const [sort, setSort] = useState<'room' | 'flow'>('room')
 
@@ -191,7 +197,7 @@ export default function BreakoutPage() {
         }}>
           기준선 {RR_BASELINE.exp}%/거래 · 연환산 {RR_BASELINE.ann}%
           <br />
-          {BREAKOUTS.filter(b => b.key !== 'brokeD').map(b => {
+          {BREAKOUTS.filter(b => !HIDDEN.has(b.key)).map(b => {
             const q = RR_EVIDENCE[b.key]
             return q ? `${b.label} ${q.exp >= 0 ? '+' : ''}${q.exp}%` : ''
           }).filter(Boolean).join(' · ')}
@@ -212,8 +218,8 @@ export default function BreakoutPage() {
 
       {/* 탭 8개라 가로 스크롤 칩으로 둔다. flex:1로 나누면 글자가 다 뭉개진다 */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 8, paddingBottom: 2 }}>
-        {/* 숏 전용(brokeD)은 여기 안 띄운다. /short 메뉴에서 쓴다 */}
-        {BREAKOUTS.filter(b => b.key !== 'brokeD').map(b => {
+        {/* HIDDEN은 여기 안 띄운다 — brokeD는 /short 전용, touchW는 기각 */}
+        {BREAKOUTS.filter(b => !HIDDEN.has(b.key)).map(b => {
           const n = data?.breakouts
             ? TIERS.reduce((a, t) => a + (data.breakouts![t.id]?.[b.key]?.length ?? 0), 0)
             : 0
