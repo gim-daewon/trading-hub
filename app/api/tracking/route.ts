@@ -45,10 +45,14 @@ interface DbRow {
   symbol: string; name: string | null; sector: string | null; market_cap: number | null
   f5: number | null; f20: number | null; f60: number | null
   rvol: number | null; chg20: number | null; pct_b: number | null; price: number | null
+  vwma20: number | null; vwma60: number | null; above_run: number | null
+  w_close: number | null; w_vwma20: number | null; w_vwma60: number | null
+  w_above_run: number | null; prev_run: number | null; w_prev_run: number | null
+  low: number | null; w_low: number | null
 }
 interface Snap {
   id: number; scanned_at: string; regime: Regime
-  spy_chg20: number | null; spy_price: number | null
+  spy_chg20: number | null; spy_price: number | null; bar_date: string | null
 }
 
 function sbUrl() {
@@ -87,6 +91,12 @@ async function readRows(url: string, headers: HeadersInit, snapshotId: number): 
     tier: tierOf(r.market_cap ?? 0),
     f5: r.f5, f20: r.f20, f60: r.f60,
     rvol: r.rvol, chg20: r.chg20, pctB: r.pct_b,
+    // VWMA 필드를 빠뜨려서 buildBreakouts가 전부 undefined를 보고
+    // 신호를 하나도 못 잡고 있었다. 화면엔 표가 있는데 값이 비었다
+    vwma20: r.vwma20, vwma60: r.vwma60, aboveRun: r.above_run,
+    wClose: r.w_close, wVwma20: r.w_vwma20, wVwma60: r.w_vwma60,
+    wAboveRun: r.w_above_run, prevRun: r.prev_run, wPrevRun: r.w_prev_run,
+    low: r.low, wLow: r.w_low,
     price: r.price,
   }))
 }
@@ -145,7 +155,7 @@ export async function GET() {
     // URL이 바뀌어 자동으로 새로 받는다 — 캐시를 그대로 둬도 안전하다.
     // 비용은 요청당 1행 조회 하나뿐이다.
     const snapRes = await fetch(
-      `${url}/rest/v1/screener_snapshots?select=id,scanned_at,regime,spy_chg20,spy_price&order=scanned_at.desc&limit=90`,
+      `${url}/rest/v1/screener_snapshots?select=id,scanned_at,regime,spy_chg20,spy_price,bar_date&order=scanned_at.desc&limit=90`,
       { headers, cache: 'no-store' }
     )
     if (!snapRes.ok) throw new Error(`snapshots ${snapRes.status}`)
@@ -237,8 +247,10 @@ export async function GET() {
 
       out.push({
         days: h,
-        from: past.scanned_at,
-        to: latest.scanned_at,
+        // 스캔 시각이 아니라 데이터 기준일을 쓴다. 야후가 당일 봉을 늦게 주면
+        // 둘이 하루씩 어긋나 "언제부터 언제까지"가 틀리게 표시된다
+        from: past.bar_date ?? past.scanned_at,
+        to: latest.bar_date ?? latest.scanned_at,
         regime: past.regime,
         spyRet,
         byCat,
