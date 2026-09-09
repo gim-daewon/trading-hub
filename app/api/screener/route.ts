@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { unstable_cache } from 'next/cache'
 import { fetchBars, fetchDatedBars, computeFlow, mapLimit } from '@/lib/flow'
 import {
   tiersFor, tierOf, TIER_EVIDENCE, CAVEATS, buildCategories,
@@ -109,6 +110,34 @@ async function fromSupabase(market: Market) {
 
     // PostgREST는 한 번에 최대 1,000행만 준다 (limit 파라미터로 안 뚫린다).
     // Range 헤더로 페이지를 넘겨 전부 가져온다.
+    return { ...(await loadRows(url, key, market, snap.id)),
+      regime: snap.regime as Regime,
+      spyChg20: snap.spy_chg20,
+      universeSize: snap.universe_size,
+      scannedAt: new Date(snap.scanned_at).getTime(),
+      barDate: snap.bar_date ?? null,
+    }
+  } catch (e) {
+    // 조용히 삼키면 원인을 못 찾는다. 실제로 이것 때문에
+    // "왜 라이브로 떨어지지"를 코드만 보고는 알 수 없었다.
+    console.error('[screener] 스냅샷 조회 실패 — 라이브로 폴백:', e)
+    return null
+  }
+}
+
+/**
+ * 한 스냅샷의 행을 읽어 화면용으로 가공한다. **스냅샷 id로 캐시한다.**
+ *
+ * 스냅샷의 행은 저장된 뒤 절대 변하지 않는다. 그러니 그걸로 만든 결과도
+ * 변하지 않는다. 그런데 지금까지 요청이 올 때마다 2,700행을 다시 받아
+ * 카테고리·신호를 처음부터 다시 계산했다 — 실측 응답이 4.9초였다.
+ *
+ * id가 캐시 키에 들어가므로 새 스캔이 돌면 키가 바뀌어 자동으로 새로 만든다.
+ * 무효화를 따로 신경 쓸 필요가 없다.
+ */
+const loadRows = unstable_cache(
+  async (url: string, key: string, market: Market, snapshotId: number) => {
+    const headers = { apikey: key, Authorization: `Bearer ${key}` }
     // PostgREST 페이징: offset+limit 쿼리 파라미터만 쓴다.
     //
     // Range 헤더는 쓰지 않는다. 두 가지 문제가 겹친다:
@@ -120,10 +149,11 @@ async function fromSupabase(market: Market) {
     const raw: unknown[] = []
     for (let from = 0; from < 10000; from += PAGE) {
       const res = await fetch(
-        `${url}/rest/v1/screener_rows?select=*&snapshot_id=eq.${snap.id}` +
+        `${url}/rest/v1/screener_rows?select=*&snapshot_id=eq.${snapshotId}` +
         `&order=id.asc&offset=${from}&limit=${PAGE}`,
-        // 특정 스냅샷의 행은 절대 변하지 않는다. 길게 캐시해도 된다
-        { headers, next: { revalidate: 43200 } }
+        // 바깥의 unstable_cache가 이미 결과를 잡고 있다.
+        // fetch 캐시를 이중으로 걸면 무효화 시점만 헷갈린다
+        { headers, cache: 'no-store' }
       )
       if (!res.ok) break
       const page = await res.json()
@@ -174,21 +204,12 @@ async function fromSupabase(market: Market) {
       price: r.price,
     }))
 
-    return {
-      rows,
-      regime: snap.regime as Regime,
-      spyChg20: snap.spy_chg20,
-      universeSize: snap.universe_size,
-      scannedAt: new Date(snap.scanned_at).getTime(),
-      barDate: snap.bar_date ?? null,
-    }
-  } catch (e) {
-    // 조용히 삼키면 원인을 못 찾는다. 실제로 이것 때문에
-    // "왜 라이브로 떨어지지"를 코드만 보고는 알 수 없었다.
-    console.error('[screener] 스냅샷 조회 실패 — 라이브로 폴백:', e)
-    return null
-  }
-}
+    return { rows }
+  },
+  ['screener-rows'],
+  // 스냅샷 id가 키에 있어 내용이 바뀔 일이 없다. 길게 잡는다
+  { revalidate: 86400 },
+)
 
 /**
  * scannedAt과 fetchedAt은 다른 값이다.
@@ -196,6 +217,44 @@ async function fromSupabase(market: Market) {
  *   fetchedAt  = 이 응답을 만든 시각 (캐시 10분)
  * 화면에는 scannedAt을 보여줘야 한다. "언제 기준 목록인가"가 사용자에게 필요한 정보다.
  */
+/**
+ * 화면에 실제로 그려지는 필드만 남긴다.
+ *
+ * 응답이 미국 536KB · 한국 423KB였다. 같은 종목이 카테고리·신호마다 중복
+ * 등장하는데(신호 9개 x 구간 3~5개 x 최대 50개) 그때마다 20개 필드를 통째로
+ * 실어 보냈다. 목록이 쓰는 건 그중 절반도 안 된다.
+ *
+ * 빼는 값들(prevRun·wPrevRun·wLow·rvol·persistence 등)은 **신호 판정에만**
+ * 쓰이고 판정은 이미 서버에서 끝났다. 클라이언트로 보낼 이유가 없다.
+ */
+type WireRow = Pick<ScreenerRow,
+  'symbol' | 'display' | 'name' | 'sector' | 'marketCap' | 'tier' | 'price'
+  | 'f20' | 'f5' | 'f60' | 'chg20' | 'pctB'
+  | 'vwma20' | 'vwma60' | 'wClose' | 'wVwma20' | 'wVwma60'
+  | 'aboveRun' | 'dollarVol' | 'capKnown' | 'premium'>
+
+const toWire = (r: ScreenerRow): WireRow => ({
+  symbol: r.symbol, display: r.display, name: r.name, sector: r.sector,
+  marketCap: r.marketCap, tier: r.tier, price: r.price,
+  f20: r.f20, f5: r.f5, f60: r.f60, chg20: r.chg20, pctB: r.pctB,
+  vwma20: r.vwma20, vwma60: r.vwma60,
+  wClose: r.wClose, wVwma20: r.wVwma20, wVwma60: r.wVwma60,
+  aboveRun: r.aboveRun, dollarVol: r.dollarVol,
+  capKnown: r.capKnown, premium: r.premium,
+})
+
+/** 구간 x 키 구조를 유지한 채 행만 얇게 만든다 */
+function thin<K extends string>(
+  m: Record<TierId, Record<K, ScreenerRow[]>>,
+): Record<TierId, Record<K, WireRow[]>> {
+  const out = {} as Record<TierId, Record<K, WireRow[]>>
+  for (const t of Object.keys(m) as TierId[]) {
+    out[t] = {} as Record<K, WireRow[]>
+    for (const k of Object.keys(m[t]) as K[]) out[t][k] = m[t][k].map(toWire)
+  }
+  return out
+}
+
 function payload(market: Market, rows: ScreenerRow[], regime: Regime, spyChg20: number | null,
                  universeSize: number, source: 'snapshot' | 'live', scannedAt: number,
                  barDate: string | null = null) {
@@ -212,8 +271,8 @@ function payload(market: Market, rows: ScreenerRow[], regime: Regime, spyChg20: 
     universeSize,
     source,
     tierCounts,
-    categories: buildCategories(rows, market),
-    breakouts: buildBreakouts(rows, market),
+    categories: thin(buildCategories(rows, market)),
+    breakouts: thin(buildBreakouts(rows, market)),
     breakoutEvidence: BREAKOUT_EVIDENCE,
     // "조건에 맞는 종목이 없다"와 "아직 지표가 안 채워졌다"를 구분한다.
     // 둘 다 목록이 비어 보이지만 사용자가 할 일이 완전히 다르다.
@@ -233,7 +292,7 @@ export async function GET(req: Request) {
   try {
     // 1순위: GitHub Actions 스냅샷 (넓은 유니버스, 즉시 응답)
     const snap = await fromSupabase(market)
-    if (snap) {
+    if (snap?.rows?.length) {
       return NextResponse.json(
         payload(market, snap.rows, snap.regime, snap.spyChg20, snap.universeSize, 'snapshot', snap.scannedAt, snap.barDate)
       )

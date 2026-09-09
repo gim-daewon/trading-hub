@@ -4,7 +4,17 @@
 // 실제 순매수가 아니다. 미국은 기관·외국인 순매수를 실시간 공개하지 않는다(13F 분기 지연).
 // 그래서 "상승일 거래대금 vs 하락일 거래대금"이 무료로 얻을 수 있는 최선이다.
 
-export interface Bar { c: number; v: number; l?: number }
+export interface Bar {
+  c: number; v: number
+  l?: number
+  /**
+   * 고가. 성과 추적에서 익절 도달을 판정하는 데 쓴다.
+   *
+   * 없으면 종가로만 판정하게 되는데, 손절은 저가로(정확) 익절은 종가로(보수적)
+   * 재게 되어 결과가 손실 쪽으로 치우친다. 같은 기준으로 재야 한다.
+   */
+  h?: number
+}
 
 /** 일봉에 주 구분을 붙인 형태. 주봉 파생에 쓴다 */
 export interface DatedBar extends Bar { t: number }
@@ -38,6 +48,13 @@ export interface FlowMetrics {
   wAboveRun: number | null
   /** 당일 저가. 밑꼬리가 VWMA20을 뚫었는지 판정한다 */
   low: number | null
+  /**
+   * 당일 고가. 성과 추적에서 익절 도달을 판정한다.
+   *
+   * 없으면 손절은 저가로(정확) 익절은 종가로(보수적) 재게 되어
+   * 결과가 손실 쪽으로 치우친다. 같은 기준으로 재야 한다.
+   */
+  high: number | null
   /** 마지막 완료 주의 저가 */
   wLow: number | null
   /**
@@ -135,7 +152,7 @@ export async function fetchDatedBars(symbol: string, range = '6mo'): Promise<Dat
       const bars: DatedBar[] = []
       for (let i = 0; i <= lastValid; i++) {
         if (q.close?.[i] == null || q.volume?.[i] == null) continue
-        bars.push({ t: ts[i], c: q.close[i], v: q.volume[i], l: q.low?.[i] ?? undefined })
+        bars.push({ t: ts[i], c: q.close[i], v: q.volume[i], l: q.low?.[i] ?? undefined, h: q.high?.[i] ?? undefined })
       }
       if (bars.length > 0) return bars
     } catch { /* 다음 호스트 */ }
@@ -201,6 +218,7 @@ export function computeFlow(bars: Bar[] | DatedBar[]): FlowMetrics {
     aboveRun: aboveVwmaRun(bars, 20),
     prevRun: bars.length >= 20 ? vwmaRuns(bars, 20).prev : null,
     low: bars[bars.length - 1]?.l ?? null,
+    high: bars[bars.length - 1]?.h ?? null,
     // 날짜가 있는 경우에만 주봉을 계산한다 (fetchDatedBars로 받은 경우)
     ...weeklyVwma(bars, (bars as DatedBar[])[0]?.t != null ? (bars as DatedBar[]).map(b => b.t) : undefined),
   }

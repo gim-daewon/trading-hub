@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { unstable_cache } from 'next/cache'
 import {
   tiersFor, CATS, BREAKOUTS, tierOf, buildCategories, buildBreakouts,
   TIER_EVIDENCE, STOPPING_RULE, changesSince,
@@ -43,6 +44,7 @@ const SHOWN_LIMIT = 25
 const EXTENDED_LIMIT = 50
 
 interface DbRow {
+  high?: number | null
   symbol: string; name: string | null; sector: string | null; market_cap: number | null
   f5: number | null; f20: number | null; f60: number | null
   rvol: number | null; chg20: number | null; pct_b: number | null; price: number | null
@@ -62,9 +64,18 @@ function sbUrl() {
     .replace(/\/+$/, '').replace(/\/rest\/v1$/, '')
 }
 
-async function readRows(
-  url: string, headers: HeadersInit, snapshotId: number, market: Market,
-): Promise<ScreenerRow[]> {
+/**
+ * 스냅샷 행 읽기 — **스냅샷 id로 캐시한다.**
+ *
+ * 저장된 행은 절대 변하지 않는다. 그런데 요청마다 6개 스냅샷 x 2,700행을
+ * 다시 받아 신호를 다시 계산했다 — 실측 응답이 11.3초였다.
+ * id가 키에 들어가므로 새 스캔이 돌면 자동으로 새로 만든다.
+ */
+const readRows = unstable_cache(
+  async (
+    url: string, key: string, snapshotId: number, market: Market,
+  ): Promise<ScreenerRow[]> => {
+  const headers = { apikey: key, Authorization: `Bearer ${key}` }
   // PostgREST 페이징: offset+limit 쿼리 파라미터만 쓴다.
   //
   // Range 헤더는 쓰지 않는다. 두 가지 문제가 겹친다:
@@ -78,8 +89,8 @@ async function readRows(
     const res = await fetch(
       `${url}/rest/v1/screener_rows?select=*&snapshot_id=eq.${snapshotId}` +
       `&order=id.asc&offset=${from}&limit=${PAGE}`,
-      // 특정 스냅샷의 행은 절대 변하지 않는다. 길게 캐시해도 된다
-      { headers, next: { revalidate: 43200 } }
+      // 바깥의 unstable_cache가 이미 결과를 잡는다. 이중 캐시는 무효화만 헷갈린다
+      { headers, cache: 'no-store' }
     )
     if (!res.ok) break
     const page = await res.json()
@@ -103,9 +114,13 @@ async function readRows(
     wClose: r.w_close, wVwma20: r.w_vwma20, wVwma60: r.w_vwma60,
     wAboveRun: r.w_above_run, prevRun: r.prev_run, wPrevRun: r.w_prev_run,
     low: r.low, wLow: r.w_low,
+    high: r.high,
     price: r.price,
   }))
-}
+  },
+  ['tracking-rows'],
+  { revalidate: 86400 },
+)
 
 interface Result {
   n: number
@@ -124,6 +139,66 @@ interface Result {
   rr: number
   /** 거래당 기댓값 = 전체 평균 수익률. 판정은 이걸로 한다 */
   exp: number
+}
+
+/**
+ * 손절 -3% / 익절 +9% 규칙을 **실제 경로로** 판정한다.
+ *
+ * 12월 8일 판정 기준이 "거래당 기댓값(손절 -3%/익절 +9%)"인데
+ * 추적은 단순 수익률만 재고 있었다. 이대로면 12월에 판정할 근거가 없다.
+ *
+ * 두 시점(진입·현재)만으로는 규칙을 못 잰다 — 중간에 손절을 찍고 되돌아왔는지
+ * 알 수 없기 때문이다. 그래서 사이의 스냅샷을 하루씩 걸어가며 판정한다.
+ *
+ * 한계를 분명히 해둔다:
+ *  - 스캔이 빠진 날은 경로에 구멍이 생긴다. 그날 찍힌 손절을 놓친다
+ *  - 같은 날 손절·익절이 둘 다 닿으면 손절로 본다 (보수적)
+ *  - 고가(high)를 저장하기 전 스냅샷은 종가로 익절을 판정한다. 손절은 저가로
+ *    정확히 재므로 그 구간은 손실 쪽으로 치우친다 — hasHigh로 표시한다
+ */
+const RULE_STOP = 3, RULE_TARGET = 9
+
+interface RuleOutcome { ret: number; days: number; hit: 'stop' | 'target' | 'open' }
+
+function judgeRule(
+  entry: number,
+  path: { high: number | null; low: number | null; close: number }[],
+): RuleOutcome {
+  const stopPx = entry * (1 - RULE_STOP / 100)
+  const tgtPx = entry * (1 + RULE_TARGET / 100)
+  for (let k = 0; k < path.length; k++) {
+    const b = path[k]
+    // 같은 날 둘 다 닿으면 손절 (보수적)
+    if ((b.low ?? b.close) <= stopPx) return { ret: -RULE_STOP, days: k + 1, hit: 'stop' }
+    if ((b.high ?? b.close) >= tgtPx) return { ret: RULE_TARGET, days: k + 1, hit: 'target' }
+  }
+  const last = path[path.length - 1]?.close ?? entry
+  return { ret: ((last - entry) / entry) * 100, days: path.length, hit: 'open' }
+}
+
+interface RuleResult {
+  n: number; exp: number; win: number; rr: number
+  stopped: number; hitTarget: number; open: number; days: number
+  /** 경로에 고가가 있었나. false면 익절 판정이 보수적으로 치우친다 */
+  hasHigh: boolean
+}
+
+function summarizeRule(outs: RuleOutcome[], hasHigh: boolean): RuleResult | null {
+  if (!outs.length) return null
+  const rets = outs.map(o => o.ret)
+  const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length
+  const wins = rets.filter(v => v > 0), losses = rets.filter(v => v <= 0)
+  return {
+    n: outs.length,
+    exp: mean(rets),
+    win: (wins.length / rets.length) * 100,
+    rr: losses.length && wins.length ? Math.abs(mean(wins) / mean(losses)) : 0,
+    stopped: outs.filter(o => o.hit === 'stop').length,
+    hitTarget: outs.filter(o => o.hit === 'target').length,
+    open: outs.filter(o => o.hit === 'open').length,
+    days: mean(outs.map(o => o.days)),
+    hasHigh,
+  }
 }
 
 function summarize(pairs: { ret: number; ex: number }[]): Result | null {
@@ -206,7 +281,7 @@ export async function GET(req: Request) {
 
     // 최신 = 현재가 기준
     const latest = snaps[0]
-    const latestRows = await readRows(url, headers, latest.id, market)
+    const latestRows = await readRows(url, key, latest.id, market)
     const nowPrice = new Map(latestRows.filter(r => r.price).map(r => [r.symbol, r.price!]))
     if (nowPrice.size === 0) {
       return NextResponse.json({
@@ -215,13 +290,25 @@ export async function GET(req: Request) {
       })
     }
 
+    // 규칙 판정에 쓸 경로. snaps[0]이 최신이므로 뒤에서 앞으로가 시간순이다.
+    // readRows가 스냅샷 id로 캐시되니 같은 스냅샷을 여러 구간이 재사용해도 싸다
+    const maxH = Math.max(...HORIZONS.filter(h => snaps[h]))
+    const pathSnaps: Map<string, { high: number | null; low: number | null; close: number }>[] = []
+    for (let i = Math.min(maxH, snaps.length - 1); i >= 0; i--) {
+      const rs = await readRows(url, key, snaps[i].id, market)
+      pathSnaps.push(new Map(rs.filter(r => r.price != null)
+        .map(r => [r.symbol, { high: r.high ?? null, low: r.low ?? null, close: r.price! }])))
+    }
+    // pathSnaps[0]이 가장 과거다. 구간 h의 경로는 진입 다음 날부터 오늘까지
+    const pathIndexOf = (h: number) => pathSnaps.length - h   // 진입일 바로 다음 인덱스
+
     const out = []
     for (const h of HORIZONS) {
       // snaps는 거래일 1개씩으로 정리돼 있으므로 인덱스가 곧 거래일 수다
       const past = snaps[h]
       if (!past || past.spy_price == null || latest.spy_price == null) continue
 
-      const rows = await readRows(url, headers, past.id, market)
+      const rows = await readRows(url, key, past.id, market)
       if (!rows.length) continue
       const spyRet = ((latest.spy_price - past.spy_price) / past.spy_price) * 100
       const cats = buildCategories(rows, market, SHOWN_LIMIT)
@@ -235,6 +322,22 @@ export async function GET(req: Request) {
           return { ret, ex: ret - spyRet }
         })
 
+      // 손절 -3% / 익절 +9% 규칙 판정. 12월 8일 판정 기준이 이것이다
+      const start = pathIndexOf(h)
+      const hasHigh = pathSnaps.slice(start).every(m => [...m.values()].some(v => v.high != null))
+      const toRule = (list: ScreenerRow[]) => list
+        .filter(r => r.price != null)
+        .map(r => {
+          const path = pathSnaps.slice(start)
+            .map(m => m.get(r.symbol))
+            .filter((v): v is { high: number | null; low: number | null; close: number } => !!v)
+          return path.length ? judgeRule(r.price!, path) : null
+        })
+        .filter((o): o is RuleOutcome => !!o)
+
+      const byCatRule: Record<string, RuleResult | null> = {}
+      const byBreakoutRule: Record<string, RuleResult | null> = {}
+
       const byCat: Record<string, Record<string, Result | null>> = {}
       // 확장 표본(50개)은 따로 담는다. 화면에 안 뜬 종목이 섞이므로
       // "내가 본 것의 성적"과 절대 합치면 안 된다
@@ -247,13 +350,16 @@ export async function GET(req: Request) {
         }
         byCat[c.key].all = summarize(toPairs(tiersFor(market).flatMap(t => cats[t.id][c.key])))
         byCatExt[c.key] = summarize(toPairs(tiersFor(market).flatMap(t => catsExt[t.id][c.key])))
+        byCatRule[c.key] = summarizeRule(toRule(tiersFor(market).flatMap(t => cats[t.id][c.key])), hasHigh)
       }
 
       // VWMA 신호도 같이 추적한다. 화면에 띄우면서 성적을 안 재고 있었다
       const bo = buildBreakouts(rows, market, SHOWN_LIMIT)
       const byBreakout: Record<string, Result | null> = {}
       for (const b of BREAKOUTS) {
-        byBreakout[b.key] = summarize(toPairs(tiersFor(market).flatMap(t => bo[t.id][b.key])))
+        const list = tiersFor(market).flatMap(t => bo[t.id][b.key])
+        byBreakout[b.key] = summarize(toPairs(list))
+        byBreakoutRule[b.key] = summarizeRule(toRule(list), hasHigh)
       }
 
       out.push({
@@ -270,6 +376,11 @@ export async function GET(req: Request) {
         byCat,
         byCatExt,
         byBreakout,
+        // 12월 8일 판정에 쓸 값. 단순 수익률(byCat)과 다르다 —
+        // 이건 손절 -3% / 익절 +9% 규칙을 실제 경로로 적용한 결과다
+        byCatRule,
+        byBreakoutRule,
+        ruleHasHigh: hasHigh,
       })
     }
 
