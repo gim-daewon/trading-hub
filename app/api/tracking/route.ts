@@ -5,7 +5,7 @@ import {
   TIER_EVIDENCE, STOPPING_RULE, changesSince,
   type TierId, type CatKey, type Regime, type ScreenerRow,
 } from '@/lib/screener-shared'
-import { isMarket, type Market } from '@/lib/markets'
+import { isMarket, exitPrices, MARKETS, type Market } from '@/lib/markets'
 
 // 스크리너에 뜬 종목이 실제로 올랐는지 사후 확인.
 //
@@ -45,6 +45,8 @@ const EXTENDED_LIMIT = 50
 
 interface DbRow {
   high?: number | null
+  atr14?: number | null
+  dollar_vol?: number | null
   symbol: string; name: string | null; sector: string | null; market_cap: number | null
   f5: number | null; f20: number | null; f60: number | null
   rvol: number | null; chg20: number | null; pct_b: number | null; price: number | null
@@ -115,6 +117,8 @@ const readRows = unstable_cache(
     wAboveRun: r.w_above_run, prevRun: r.prev_run, wPrevRun: r.w_prev_run,
     low: r.low, wLow: r.w_low,
     high: r.high,
+    atr14: r.atr14,
+    dollarVol: r.dollar_vol,
     price: r.price,
   }))
   },
@@ -156,28 +160,41 @@ interface Result {
  *  - 고가(high)를 저장하기 전 스냅샷은 종가로 익절을 판정한다. 손절은 저가로
  *    정확히 재므로 그 구간은 손실 쪽으로 치우친다 — hasHigh로 표시한다
  */
-const RULE_STOP = 3, RULE_TARGET = 9
+interface RuleOutcome { ret: number; R: number; days: number; hit: 'stop' | 'target' | 'open' }
 
-interface RuleOutcome { ret: number; days: number; hit: 'stop' | 'target' | 'open' }
-
+/**
+ * 시장별 규칙(MARKETS[m].rule)으로 판정한다.
+ *
+ * 판정 기준(STOPPING_RULE)과 추적이 서로 다른 걸 재면 12월에 비교가 안 된다.
+ * 그래서 규칙 정의를 한 곳(markets.ts)에만 두고 양쪽이 그걸 쓴다.
+ *
+ * R = (청산가 - 진입가) / (진입가 - 손절가). 손절이 항상 -1R이라
+ * 변동성이 다른 종목·시장을 나란히 비교할 수 있다.
+ */
 function judgeRule(
   entry: number,
+  atr14: number | null | undefined,
+  market: Market,
+  dollarVol: number | null | undefined,
   path: { high: number | null; low: number | null; close: number }[],
-): RuleOutcome {
-  const stopPx = entry * (1 - RULE_STOP / 100)
-  const tgtPx = entry * (1 + RULE_TARGET / 100)
+): RuleOutcome | null {
+  const e = exitPrices(entry, atr14, market, dollarVol)
+  if (!e) return null      // ATR 미저장이거나 유동성 하한 아래 — 판정하지 않는다
+  const risk = entry - e.stop
+  const at = (px: number, k: number, hit: RuleOutcome['hit']): RuleOutcome =>
+    ({ ret: ((px - entry) / entry) * 100, R: (px - entry) / risk, days: k, hit })
   for (let k = 0; k < path.length; k++) {
     const b = path[k]
     // 같은 날 둘 다 닿으면 손절 (보수적)
-    if ((b.low ?? b.close) <= stopPx) return { ret: -RULE_STOP, days: k + 1, hit: 'stop' }
-    if ((b.high ?? b.close) >= tgtPx) return { ret: RULE_TARGET, days: k + 1, hit: 'target' }
+    if ((b.low ?? b.close) <= e.stop) return at(e.stop, k + 1, 'stop')
+    if ((b.high ?? b.close) >= e.target) return at(e.target, k + 1, 'target')
   }
   const last = path[path.length - 1]?.close ?? entry
-  return { ret: ((last - entry) / entry) * 100, days: path.length, hit: 'open' }
+  return at(last, path.length, 'open')
 }
 
 interface RuleResult {
-  n: number; exp: number; win: number; rr: number
+  n: number; exp: number; expR: number; win: number; rr: number
   stopped: number; hitTarget: number; open: number; days: number
   /** 경로에 고가가 있었나. false면 익절 판정이 보수적으로 치우친다 */
   hasHigh: boolean
@@ -191,6 +208,8 @@ function summarizeRule(outs: RuleOutcome[], hasHigh: boolean): RuleResult | null
   return {
     n: outs.length,
     exp: mean(rets),
+    // 판정은 R로 한다. %는 변동성 큰 종목의 폭이 커 보여 신호를 왜곡한다
+    expR: mean(outs.map(o => o.R)),
     win: (wins.length / rets.length) * 100,
     rr: losses.length && wins.length ? Math.abs(mean(wins) / mean(losses)) : 0,
     stopped: outs.filter(o => o.hit === 'stop').length,
@@ -275,7 +294,7 @@ const buildHorizons = unstable_cache(
           const path = pathSnaps.slice(start)
             .map(m => m.get(r.symbol))
             .filter((v): v is { high: number | null; low: number | null; close: number } => !!v)
-          return path.length ? judgeRule(r.price!, path) : null
+          return path.length ? judgeRule(r.price!, r.atr14, market, r.dollarVol, path) : null
         })
         .filter((o): o is RuleOutcome => !!o)
 
@@ -325,6 +344,7 @@ const buildHorizons = unstable_cache(
         byCatRule,
         byBreakoutRule,
         ruleHasHigh: hasHigh,
+        ruleLabel: MARKETS[market].rule.label,
       })
     }
 
