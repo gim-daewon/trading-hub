@@ -43,7 +43,15 @@ async function binanceBars(symbol: string, want: number): Promise<DatedBar[] | n
       `https://api.binance.com/api/v3/klines?${q}`, { headers: H })
     if (!k?.length) break
     const page: DatedBar[] = []
+    const now = Date.now()
     for (const row of k) {
+      // 진행 중인 봉은 버린다.
+      //
+      // 크립토는 UTC 자정에 일봉이 바뀐다. 자정 직후에 스캔하면 마지막 봉이
+      // 10분짜리 미완성 봉으로 오고, 그 거래량으로 VWMA를 계산하면 값이 깨진다.
+      // 미국·한국은 마감 후 스캔이라 봉이 완성돼 있다. 크립토도 맞춘다.
+      // row[6] = closeTime(ms). 미래면 아직 안 닫힌 봉이다
+      if (Number(row[6]) > now) continue
       const t = Math.floor(Number(row[0]) / 1000)
       const c = Number(row[4]), v = Number(row[5]), l = Number(row[3])
       if (!Number.isFinite(t) || !Number.isFinite(c) || !Number.isFinite(v)) continue
@@ -75,7 +83,11 @@ async function upbitBars(market: string, want: number): Promise<DatedBar[] | nul
     }[]>(`https://api.upbit.com/v1/candles/days?${q}`, { headers: H })
     if (!j?.length) break
     const page: DatedBar[] = []
+    const today = new Date().toISOString().slice(0, 10)
     for (const c of j) {
+      // 바이낸스와 같은 이유로 진행 중인 UTC 날짜는 버린다.
+      // 업비트는 closeTime을 안 주므로 날짜를 직접 비교한다
+      if (c.candle_date_time_utc.slice(0, 10) === today) continue
       const t = Math.floor(Date.parse(c.candle_date_time_utc + 'Z') / 1000)
       if (!Number.isFinite(t) || !Number.isFinite(c.trade_price)) continue
       page.push({ t, c: c.trade_price, v: c.candle_acc_trade_volume ?? 0, l: c.low_price })

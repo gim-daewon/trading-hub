@@ -53,6 +53,15 @@ export interface MarketDef {
    * 2,552개 중 184개(7%)만 남는다. 거르는 대신 알려준다.
    */
   lowLiquidity: number
+  /**
+   * 시장 국면을 재는 기준 지수.
+   *
+   * 미국은 SPY였다. 한국에 SPY를 쓰면 국면이 엉뚱해진다 —
+   * 미국이 오르는 날 코스피가 빠지는 일이 흔하다.
+   * DB 컬럼 이름은 spy_chg20 그대로 둔다. 이름을 바꾸면 과거 데이터가
+   * 끊기는데, 얻는 건 이름뿐이다.
+   */
+  benchmark: { symbol: string; source: 'yahoo' | 'binance' | 'upbit'; label: string }
 }
 
 /**
@@ -107,6 +116,7 @@ export const MARKETS: Record<Market, MarketDef> = {
     universeNote: '나스닥 스크리너 · 일 거래대금 $5M+ · 시총 $500M+',
     // 유니버스 필터가 이미 $5M을 걸러서 해당되는 종목이 없다
     lowLiquidity: 5e6,
+    benchmark: { symbol: 'SPY', source: 'yahoo', label: 'SPY' },
   },
   kr: {
     id: 'kr', label: '한국', short: '한국', currency: 'KRW', tiers: KR_TIERS,
@@ -114,6 +124,7 @@ export const MARKETS: Record<Market, MarketDef> = {
     ruleNote: '아직 한국에서 재지 않았다. 미국 기준선(+0.24%)을 그대로 쓰면 거짓말이 된다.',
     universeNote: '코스피·코스닥 전 종목 (ETF·ETN·거래정지 제외)',
     lowLiquidity: 1e8,   // 1억원. 실측 중앙값 8,800만원이라 절반 가까이 걸린다
+    benchmark: { symbol: '^KS11', source: 'yahoo', label: '코스피' },
   },
   crypto: {
     id: 'crypto', label: '암호화폐', short: '크립토', currency: 'USD', tiers: CRYPTO_TIERS,
@@ -124,6 +135,8 @@ export const MARKETS: Record<Market, MarketDef> = {
       'ATR 비례 규칙으로 따로 재야 한다.',
     universeNote: '바이낸스 USDT 현물 + 업비트 KRW 마켓 (레버리지·스테이블 제외)',
     lowLiquidity: 1e5,   // $100k
+    // 크립토는 BTC가 곧 국면이다. 알트는 BTC가 빠지면 같이 빠진다
+    benchmark: { symbol: 'BTCUSDT', source: 'binance', label: 'BTC' },
   },
 }
 
