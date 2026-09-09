@@ -221,75 +221,19 @@ function summarize(pairs: { ret: number; ex: number }[]): Result | null {
   }
 }
 
-export async function GET(req: Request) {
-  const rawMarket = new URL(req.url).searchParams.get('market') ?? 'us'
-  const market: Market = isMarket(rawMarket) ? rawMarket : 'us'
-  const url = sbUrl()
-  const key = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '').trim()
-  if (!url || !key) return NextResponse.json({ error: 'supabase 미설정', horizons: [] })
 
-  try {
-    const headers = { apikey: key, Authorization: `Bearer ${key}` }
-    // 스냅샷 메타 조회는 캐시하지 않는다.
-    //
-    // 이걸 캐시하면 새 스캔이 돌아도 앱이 옛 스냅샷 id를 계속 들고 있어
-    // 갱신이 영영 안 온다. 실제로 스캔 후 40분이 지나도 화면이 안 바뀌었다.
-    // 행(rows) 조회는 URL에 snapshot_id가 들어가므로, 스냅샷이 바뀌면
-    // URL이 바뀌어 자동으로 새로 받는다 — 캐시를 그대로 둬도 안전하다.
-    // 비용은 요청당 1행 조회 하나뿐이다.
-    const snapRes = await fetch(
-      `${url}/rest/v1/screener_snapshots` +
-      `?select=id,scanned_at,regime,spy_chg20,spy_price,bar_date` +
-      `&market=eq.${market}&order=scanned_at.desc&limit=90`,
-      { headers, cache: 'no-store' }
-    )
-    if (!snapRes.ok) throw new Error(`snapshots ${snapRes.status}`)
-    const allSnaps: Snap[] = await snapRes.json()
-
-    // "스냅샷 1개 = 1거래일"이 성립해야 snaps[1]을 '1거래일 전'으로 쓸 수 있다.
-    //
-    // 판정은 반드시 bar_date(데이터 기준일)로 한다. scanned_at(스캔 시각)이 아니다.
-    // 실제로 토요일 ET에 수동 실행한 스캔이 '주말'로 걸러졌는데,
-    // 그 데이터의 기준일은 금요일로 멀쩡한 거래일이었다.
-    // 스캔을 언제 돌렸는지는 아무 상관이 없다 — 어느 날 데이터인지가 전부다.
-    //
-    // bar_date가 없는 옛 스냅샷은 scanned_at의 ET 날짜로 대체한다.
-    const etDate = (s: Snap) =>
-      s.bar_date ?? new Date(s.scanned_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-
-    const seen = new Set<string>()
-    const deduped = allSnaps.filter(s => {
-      if (s.spy_price == null) return false
-      const d = etDate(s)
-      if (seen.has(d)) return false
-      // en-CA는 YYYY-MM-DD를 준다. UTC 정오로 파싱해 시간대 밀림을 막는다
-      const dow = new Date(`${d}T12:00:00Z`).getUTCDay()
-      if (dow === 0 || dow === 6) return false     // 거래일 데이터가 아니다
-      seen.add(d)
-      return true
-    })
-
-    // 최신순이므로 뒤쪽이 과거다. spy_price가 같으면 휴장으로 보고 과거 쪽을 버린다
-    const snaps = deduped.filter((s, i) => i === 0 || s.spy_price !== deduped[i - 1].spy_price)
-
-    if (snaps.length < 2) {
-      return NextResponse.json({
-        horizons: [], snapshotCount: snaps.length, rawCount: allSnaps.length,
-        note: `거래일 기준 스냅샷이 2개 이상 쌓여야 추적이 시작된다 (현재 ${snaps.length}개). 평일 1회 스캔이므로 내일부터 보인다.`,
-      })
-    }
-
-    // 최신 = 현재가 기준
+/**
+ * 구간별 성과 계산. 최신 스냅샷 id로 캐시된다.
+ *
+ * 입력이 전부 스냅샷 id이고 저장된 행은 변하지 않으므로 결과도 변하지 않는다.
+ * 새 스캔이 돌면 latest.id가 달라져 캐시 키가 바뀐다.
+ */
+const buildHorizons = unstable_cache(
+  async (url: string, key: string, market: Market, snaps: Snap[]) => {
     const latest = snaps[0]
     const latestRows = await readRows(url, key, latest.id, market)
     const nowPrice = new Map(latestRows.filter(r => r.price).map(r => [r.symbol, r.price!]))
-    if (nowPrice.size === 0) {
-      return NextResponse.json({
-        horizons: [], snapshotCount: snaps.length,
-        note: '진입가(price)가 저장된 스냅샷이 없다. 스캔을 한 번 더 돌려야 추적이 시작된다.',
-      })
-    }
-
+    if (nowPrice.size === 0) return []
     // 규칙 판정에 쓸 경로. snaps[0]이 최신이므로 뒤에서 앞으로가 시간순이다.
     // readRows가 스냅샷 id로 캐시되니 같은 스냅샷을 여러 구간이 재사용해도 싸다
     const maxH = Math.max(...HORIZONS.filter(h => snaps[h]))
@@ -383,6 +327,93 @@ export async function GET(req: Request) {
         ruleHasHigh: hasHigh,
       })
     }
+
+
+    return out
+  },
+  ['tracking-horizons'],
+  { revalidate: 86400 },
+)
+
+export async function GET(req: Request) {
+  const rawMarket = new URL(req.url).searchParams.get('market') ?? 'us'
+  const market: Market = isMarket(rawMarket) ? rawMarket : 'us'
+  const url = sbUrl()
+  const key = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '').trim()
+  if (!url || !key) return NextResponse.json({ error: 'supabase 미설정', horizons: [] })
+
+  try {
+    const headers = { apikey: key, Authorization: `Bearer ${key}` }
+    // 스냅샷 메타 조회는 캐시하지 않는다.
+    //
+    // 이걸 캐시하면 새 스캔이 돌아도 앱이 옛 스냅샷 id를 계속 들고 있어
+    // 갱신이 영영 안 온다. 실제로 스캔 후 40분이 지나도 화면이 안 바뀌었다.
+    // 행(rows) 조회는 URL에 snapshot_id가 들어가므로, 스냅샷이 바뀌면
+    // URL이 바뀌어 자동으로 새로 받는다 — 캐시를 그대로 둬도 안전하다.
+    // 비용은 요청당 1행 조회 하나뿐이다.
+    const snapRes = await fetch(
+      `${url}/rest/v1/screener_snapshots` +
+      `?select=id,scanned_at,regime,spy_chg20,spy_price,bar_date` +
+      `&market=eq.${market}&order=scanned_at.desc&limit=90`,
+      { headers, cache: 'no-store' }
+    )
+    if (!snapRes.ok) throw new Error(`snapshots ${snapRes.status}`)
+    const allSnaps: Snap[] = await snapRes.json()
+
+    // "스냅샷 1개 = 1거래일"이 성립해야 snaps[1]을 '1거래일 전'으로 쓸 수 있다.
+    //
+    // 판정은 반드시 bar_date(데이터 기준일)로 한다. scanned_at(스캔 시각)이 아니다.
+    // 실제로 토요일 ET에 수동 실행한 스캔이 '주말'로 걸러졌는데,
+    // 그 데이터의 기준일은 금요일로 멀쩡한 거래일이었다.
+    // 스캔을 언제 돌렸는지는 아무 상관이 없다 — 어느 날 데이터인지가 전부다.
+    //
+    // bar_date가 없는 옛 스냅샷은 scanned_at의 ET 날짜로 대체한다.
+    const etDate = (s: Snap) =>
+      s.bar_date ?? new Date(s.scanned_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+
+    const seen = new Set<string>()
+    const deduped = allSnaps.filter(s => {
+      if (s.spy_price == null) return false
+      const d = etDate(s)
+      if (seen.has(d)) return false
+      // en-CA는 YYYY-MM-DD를 준다. UTC 정오로 파싱해 시간대 밀림을 막는다
+      const dow = new Date(`${d}T12:00:00Z`).getUTCDay()
+      if (dow === 0 || dow === 6) return false     // 거래일 데이터가 아니다
+      seen.add(d)
+      return true
+    })
+
+    // 최신순이므로 뒤쪽이 과거다. spy_price가 같으면 휴장으로 보고 과거 쪽을 버린다
+    const snaps = deduped.filter((s, i) => i === 0 || s.spy_price !== deduped[i - 1].spy_price)
+
+    if (snaps.length < 2) {
+      return NextResponse.json({
+        horizons: [], snapshotCount: snaps.length, rawCount: allSnaps.length,
+        note: `거래일 기준 스냅샷이 2개 이상 쌓여야 추적이 시작된다 (현재 ${snaps.length}개). 평일 1회 스캔이므로 내일부터 보인다.`,
+      })
+    }
+
+    // 최신 = 현재가 기준
+    const latest = snaps[0]
+    const latestRows = await readRows(url, key, latest.id, market)
+    const nowPrice = new Map(latestRows.filter(r => r.price).map(r => [r.symbol, r.price!]))
+    if (nowPrice.size === 0) {
+      return NextResponse.json({
+        horizons: [], snapshotCount: snaps.length,
+        note: '진입가(price)가 저장된 스냅샷이 없다. 스캔을 한 번 더 돌려야 추적이 시작된다.',
+      })
+    }
+
+
+    // 구간 계산 전체를 **최신 스냅샷 id로** 캐시한다.
+    //
+    // 행 단위 캐시만으로는 부족했다 — 캐시가 적중해도 6개 스냅샷 x 2,700행을
+    // 다시 맵으로 만들고 신호를 다시 판정해 6.6초가 걸렸다.
+    // 60일 구간이 쌓이면 61개 스냅샷을 읽어야 해서 더 나빠진다.
+    //
+    // 입력이 전부 스냅샷 id라 결과가 변할 일이 없다. 새 스캔이 돌면
+    // latest.id가 바뀌어 키가 바뀐다.
+    const out = await buildHorizons(url, key, market, snaps)
 
     return NextResponse.json({
       market,
