@@ -37,11 +37,11 @@ export function ExitPrices({ price, atr14, dollarVol, market, compact }: {
     <>
       <span style={{ color: 'var(--down)' }}>
         손절 <span className="num">{fmtPrice(e.stop, market)}</span>
-        <span style={{ opacity: 0.7 }}> ({e.stopPct.toFixed(1)}%)</span>
+        <span style={{ opacity: 0.7 }}> ({Math.round(e.stopPct)}%)</span>
       </span>
       <span style={{ color: 'var(--up)', marginLeft: compact ? 8 : 10 }}>
         익절 <span className="num">{fmtPrice(e.target, market)}</span>
-        <span style={{ opacity: 0.7 }}> (+{e.targetPct.toFixed(1)}%)</span>
+        <span style={{ opacity: 0.7 }}> (+{Math.round(e.targetPct)}%)</span>
       </span>
     </>
   )

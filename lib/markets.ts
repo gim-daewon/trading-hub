@@ -262,11 +262,20 @@ export function exitPrices(
   }
 }
 
-/** 가격 표기 — 원화는 정수 콤마, 달러는 소수 */
+/**
+ * 가격 표기 — 정수로 끊는다.
+ *
+ * 손절·익절가에 소수점이 붙으면 읽는 데 방해만 된다. 어차피 진입가가
+ * 마지막 종가라 소수점 둘째 자리가 의미를 갖지 않는다.
+ *
+ * 예외는 1달러 미만 코인이다. DOGE(0.09)를 정수로 끊으면 '0'이 되어
+ * 아예 못 읽는다. 그 구간만 유효숫자를 남긴다.
+ */
 export function fmtPrice(v: number | null | undefined, market: Market): string {
   if (v == null || !Number.isFinite(v)) return '—'
-  if (MARKETS[market].currency === 'KRW') return Math.round(v).toLocaleString()
-  return v >= 100 ? v.toFixed(2) : v >= 1 ? v.toFixed(3) : v.toPrecision(4)
+  if (Math.abs(v) >= 1) return Math.round(v).toLocaleString()
+  // 1 미만은 유효숫자 3자리. 0.09005 -> 0.0901
+  return v.toPrecision(3)
 }
 
 /** 시총 표기 — 원화는 조/억, 달러는 B/M */
