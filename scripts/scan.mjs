@@ -139,7 +139,7 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
     const m = computeFlow(bars)
     if (m.f20 === null) { failed++; continue }
     out.push({
-      market: MARKET,
+      // market은 스냅샷에만 있다. 행은 snapshot_id로 따라가므로 중복이다
       symbol: u.symbol,
       display: u.display,
       name: u.name,
@@ -207,11 +207,27 @@ const [snap] = await sb('screener_snapshots', 'POST', {
 
 console.log(`스냅샷 생성 id=${snap.id} market=${MARKET}`)
 
+// 행 저장이 실패하면 **스냅샷도 지운다.**
+//
+// 안 지우면 행이 0개인 스냅샷이 '최신'으로 남는다. 앱은 그걸 읽어 빈 화면을
+// 보여주고, 성과 추적은 그날을 통째로 비운다. 실제로 이 경로로 id=19가 남았다.
+// 반쪽 저장은 저장 안 한 것보다 나쁘다.
 const CHUNK = 500
-for (let i = 0; i < out.length; i += CHUNK) {
-  const chunk = out.slice(i, i + CHUNK).map(r => ({ ...r, snapshot_id: snap.id }))
-  await sb('screener_rows', 'POST', chunk, { Prefer: 'return=minimal' })
-  console.log(`  저장 ${Math.min(i + CHUNK, out.length)}/${out.length}`)
+try {
+  for (let i = 0; i < out.length; i += CHUNK) {
+    const chunk = out.slice(i, i + CHUNK).map(r => ({ ...r, snapshot_id: snap.id }))
+    await sb('screener_rows', 'POST', chunk, { Prefer: 'return=minimal' })
+    console.log(`  저장 ${Math.min(i + CHUNK, out.length)}/${out.length}`)
+  }
+} catch (e) {
+  console.error(`행 저장 실패 — 스냅샷 ${snap.id}을 되돌린다`)
+  try {
+    await sb(`screener_snapshots?id=eq.${snap.id}`, 'DELETE', undefined, { Prefer: 'return=minimal' })
+    console.error(`스냅샷 ${snap.id} 삭제 완료 (행은 cascade로 같이 지워진다)`)
+  } catch (e2) {
+    console.error(`스냅샷 삭제도 실패했다. 수동으로 지워야 한다: id=${snap.id}`, e2.message.slice(0, 120))
+  }
+  throw e
 }
 
 // 보관 정리. 스냅샷당 행이 세 시장 합쳐 약 5,900개라 정리 없이는
