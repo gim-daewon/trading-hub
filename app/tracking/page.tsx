@@ -138,8 +138,8 @@ export default function TrackingPage() {
             background: 'var(--bg-base)', color: 'var(--text-secondary)', fontSize: 11,
           }}>
             판정 지표: {STOPPING_RULE.metric}<br />
-            백테스트 기준선 {STOPPING_RULE.baselineExp}%/거래<br />
-            카테고리 기댓값 &lt;= {STOPPING_RULE.dropBelowExp}% → 화면에서 내림<br />
+            백테스트 기준선 {STOPPING_RULE.baselineExp}R/거래 (미국)<br />
+            카테고리 R 기댓값 &lt;= {STOPPING_RULE.dropBelowExp} → 화면에서 내림<br />
             세 카테고리 모두 &lt; {STOPPING_RULE.demoteAllBelowExp}% → 필터 전용으로 격하<br />
             최소 거래 {STOPPING_RULE.minTrades}건 이상일 때만 판단
           </div>

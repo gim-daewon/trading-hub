@@ -121,10 +121,10 @@ function EvidenceBox({ market, tier, cat, regime }: {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(84px, 1fr))', gap: 8 }}>
         {[
-          { k: '거래당 기댓값', v: `${sgn(q.exp, 2)}%`, sub: `기준선 ${sgn(base.exp, 2)}`, hl: q.exp > base.exp },
-          { k: '연환산',       v: `${sgn(q.ann, 1)}%`, sub: `기준선 ${sgn(base.ann, 1)}`, hl: q.ann > base.ann },
+          { k: '거래당 기댓값', v: `${sgn(q.exp, 3)}R`, sub: `기준선 ${sgn(base.exp, 3)}R`, hl: q.exp > base.exp },
+          { k: '연 R',         v: `${sgn(q.ann, 2)}R`, sub: `기준선 ${sgn(base.ann, 2)}R`, hl: q.ann > base.ann },
           { k: '평균 보유',    v: `${q.days.toFixed(1)}일`, sub: `기준선 ${base.days}`, hl: false },
-          { k: '격자 범위',    v: `${sgn(q.lo, 2)}~${sgn(q.hi, 2)}`, sub: '20개 최소~최대', hl: q.lo > base.exp },
+          { k: '격자 범위',    v: `${sgn(q.lo, 3)}~${sgn(q.hi, 3)}R`, sub: '20개 최소~최대', hl: q.lo > base.exp },
         ].map(x => (
           <div key={x.k}>
             <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>{x.k}</div>

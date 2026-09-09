@@ -231,8 +231,12 @@ export interface RrPerf {
  * 크립토는 null이다 — -3%/+9% 규칙이 애초에 안 맞아 잰 적이 없다.
  */
 export const RR_BASELINE_BY_MARKET: Record<Market, RrPerf | null> = {
-  us: { win: 29, rr: 2.77, exp: 0.24, lo: -0.02, hi: 0.62, days: 8.2, ann: 7.48 },
-  kr: { win: 27, rr: 2.90, exp: 0.13, lo: -0.17, hi: 0.39, days: 6.3, ann: 5.14 },
+  // 단위는 **R**(위험 1단위 대비 손익)이다. exp/lo/hi 전부 R이다.
+  // 2026-09-09 재측정 · ATR 2.0/6.0 · 격자 20개.
+  us: { win: 37, rr: 2.33, exp: 0.147, lo: 0.121, hi: 0.180, days: 20.5, ann: 1.81 },
+  // 한국 lo가 -7.05인 건 저유동성 종목의 갭 때문이다. 중앙값은 +0.074R로 멀쩡하다.
+  // 거래대금 10억원 하한(rule.minVol)을 걸면 사라진다 — 실측으로 확인했다
+  kr: { win: 33, rr: 2.29, exp: 0.074, lo: -7.048, hi: 0.114, days: 20.0, ann: 0.93 },
   crypto: null,
 }
 
@@ -251,49 +255,44 @@ export const RR_BASELINE: RrPerf = RR_BASELINE_BY_MARKET.us!
  * 없는 키는 rrVerdict가 '미측정'으로 돌려준다.
  */
 const KR_EVIDENCE: Record<string, RrPerf> = {
-  // 수급 카테고리 — 2026-09-09 측정. **셋 다 기준선(+0.13%) 대비 우위가 없다.**
-  // 정체 구간이 +0.14%로 가장 높은데 차이가 0.01%p라 사실상 없는 것이다.
-  // 미국에서 통하던 게 한국으로 이전되지 않았다.
-  // 반면 VWMA의 nearW는 +0.31%로 기준선을 +0.18%p 넘겼다 — 아래 참고.
-  quiet:    { win: 27, rr: 2.82, exp:  0.14, lo: -0.12, hi: 0.32, days: 8.7, ann:  4.05 },
-  pullback: { win: 27, rr: 2.81, exp:  0.09, lo: -0.80, hi: 0.58, days: 6.4, ann:  3.73 },
-  momentum: { win: 25, rr: 2.98, exp: -0.05, lo: -0.24, hi: 0.12, days: 2.9, ann: -4.42 },
-  // VWMA 신호
-  nearW:  { win: 29, rr: 2.76, exp:  0.31, lo: -0.09, hi: 0.77, days: 8.2, ann:  9.45 },
-  today:  { win: 27, rr: 2.94, exp:  0.24, lo: -0.02, hi: 0.57, days: 6.2, ann:  9.65 },
-  revD:   { win: 28, rr: 2.93, exp:  0.23, lo:  0.01, hi: 0.86, days: 7.3, ann:  7.94 },
-  nearD:  { win: 29, rr: 2.71, exp:  0.18, lo: -0.16, hi: 0.65, days: 7.9, ann:  5.81 },
-  held:   { win: 27, rr: 2.93, exp:  0.15, lo: -0.04, hi: 0.47, days: 6.2, ann:  6.05 },
-  touchD: { win: 26, rr: 2.91, exp:  0.08, lo: -0.28, hi: 0.35, days: 4.5, ann:  4.61 },
-  revW:   { win: 26, rr: 2.91, exp:  0.01, lo: -0.12, hi: 0.28, days: 7.0, ann:  0.28 },
-  touchW: { win: 20, rr: 2.84, exp: -0.76, lo: -1.17, hi: -0.31, days: 4.2, ann: -45.73 },
+  // 2026-09-09 재측정 — ATR 2.0/6.0, 단위는 R. 기준선 +0.074R.
+  //
+  // %로 재던 때와 순위가 완전히 뒤집혔다. nearD는 %로 +0.68%라 기준선
+  // (+0.76%) 이하로 보였는데 R로는 +0.211R로 기준선의 2.9배다.
+  // 강세눌림이 저변동성 종목을 고르기 때문이다 — 20일선에 조용히 붙은
+  // 종목이라 ATR이 작다. % 폭은 작아도 위험 대비로는 크게 이긴다.
+  // ATR 규칙에서 %로 재면 안 되는 이유의 실증이다.
+  nearW:  { win: 36, rr: 2.09, exp:  0.256, lo:  0.035, hi: 0.582, days: 21.1, ann: 3.06 },
+  nearD:  { win: 34, rr: 2.20, exp:  0.211, lo:  0.075, hi: 0.373, days: 19.4, ann: 2.74 },
+  revD:   { win: 35, rr: 2.45, exp:  0.149, lo:  0.072, hi: 0.326, days: 19.8, ann: 1.90 },
+  today:  { win: 33, rr: 2.36, exp:  0.104, lo:  0.048, hi: 0.206, days: 19.2, ann: 1.36 },
+  held:   { win: 33, rr: 2.37, exp:  0.098, lo:  0.054, hi: 0.162, days: 19.0, ann: 1.30 },
+  touchD: { win: 33, rr: 2.22, exp:  0.082, lo:  0.015, hi: 0.150, days: 18.5, ann: 1.12 },
+  revW:   { win: 31, rr: 2.42, exp:  0.067, lo:  0.003, hi: 0.140, days: 18.3, ann: 0.92 },
+  touchW: { win: 29, rr: 2.11, exp: -0.050, lo: -0.145, hi: 0.026, days: 18.8, ann: -0.67 },
+  // 수급 카테고리는 아직 ATR 규칙으로 재지 않았다. 없는 키는 '미측정'이 된다
 }
 
 const US_EVIDENCE: Record<string, RrPerf> = {
-  // 수급 스크리너 — 2026-09-06 재측정. 눌림목·정체 구간에서 수급 필터를 뺀 정의다
-  pullback: { win: 29, rr: 2.81, exp:  0.30, lo: -0.12, hi: 1.38, days:  7.4, ann: 10.34 },
-  quiet:    { win: 29, rr: 2.67, exp:  0.28, lo:  0.07, hi: 0.45, days: 10.0, ann:  7.15 },
-  momentum: { win: 26, rr: 2.79, exp: -0.01, lo: -0.25, hi: 0.25, days:  6.3, ann: -0.30 },
-  // VWMA 돌파 — 2026-09-06 재측정. 앱의 buildBreakouts()로 직접 판정했다
-  today:    { win: 29, rr: 2.74, exp:  0.32, lo:  0.01, hi: 0.44, days:  8.2, ann:  9.94 },
-  nearW:    { win: 31, rr: 2.54, exp:  0.28, lo: -0.08, hi: 0.58, days: 11.6, ann:  6.10 },
-  revD:     { win: 29, rr: 2.75, exp:  0.27, lo: -0.40, hi: 0.65, days:  8.3, ann:  8.31 },
-  revW:     { win: 28, rr: 2.77, exp:  0.20, lo: -0.43, hi: 1.20, days:  8.3, ann:  5.96 },
-  held:     { win: 28, rr: 2.73, exp:  0.18, lo: -0.09, hi: 0.51, days:  8.4, ann:  5.32 },
-  nearD:    { win: 30, rr: 2.46, exp:  0.14, lo: -0.10, hi: 0.36, days: 12.4, ann:  2.92 },
-  touchD:   { win: 28, rr: 2.68, exp:  0.12, lo: -0.20, hi: 0.56, days:  9.2, ann:  3.41 },
-  // 전 격자 마이너스. 화면에서 뺐다 — /rejected에 근거를 남겼다
-  touchW:   { win: 21, rr: 2.58, exp: -0.86, lo: -1.16, hi: -0.49, days:  7.3, ann: -29.87 },
-  // 인버스 ETF가 있는 14종목만 대상이라 표본이 좁다. 신호 근거로 쓰지 말 것
-  brokeD:   { win: 32, rr: 2.78, exp:  0.66, lo: -0.07, hi: 1.71, days:  5.9, ann: 28.34 },
+  // 2026-09-09 재측정 — ATR 2.0/6.0, 단위는 R. 기준선 +0.147R.
+  //
+  // **기준선을 넘는 신호가 하나도 없다.** 고정 -3%/+9%에서는 today가
+  // 넘었었는데, 규칙을 바꾸니 사라졌다 — 그 우위가 신호가 아니라 규칙에서
+  // 나온 것이었다는 뜻이다. 화면에서 내리지 않고 '기준선 이하'로 표시한다.
+  //
+  // brokeD +0.341R은 인버스 ETF가 있는 14종목만의 표본이라 근거가 아니다.
+  today:  { win: 37, rr: 2.30, exp:  0.138, lo:  0.091, hi: 0.308, days: 20.2, ann: 1.72 },
+  held:   { win: 37, rr: 2.29, exp:  0.135, lo:  0.061, hi: 0.260, days: 20.2, ann: 1.68 },
+  revD:   { win: 37, rr: 2.23, exp:  0.131, lo:  0.002, hi: 0.291, days: 20.8, ann: 1.59 },
+  nearW:  { win: 36, rr: 2.16, exp:  0.117, lo: -0.004, hi: 0.199, days: 20.0, ann: 1.47 },
+  touchD: { win: 35, rr: 2.30, exp:  0.113, lo:  0.031, hi: 0.188, days: 19.3, ann: 1.48 },
+  revW:   { win: 35, rr: 2.24, exp:  0.092, lo: -0.131, hi: 0.287, days: 19.8, ann: 1.17 },
+  nearD:  { win: 35, rr: 2.23, exp:  0.064, lo: -0.012, hi: 0.139, days: 18.8, ann: 0.86 },
+  touchW: { win: 29, rr: 2.16, exp: -0.136, lo: -0.212, hi: -0.015, days: 17.3, ann: -1.98 },
+  brokeD: { win: 42, rr: 2.23, exp:  0.341, lo:  0.263, hi: 0.508, days: 20.6, ann: 4.17 },
+  // 수급 카테고리(quiet·pullback·momentum)는 아직 ATR 규칙으로 재지 않았다
 }
 
-/**
- * 기댓값 기준 판정. 승률이 아니라 이걸로 판단한다.
- *
- * "우위 확인"은 10개 격자 전부에서 기준선을 넘었을 때만 쓴다.
- * 현재 그 조건을 만족하는 신호는 없다.
- */
 /** 시장별 근거. 크립토는 비어 있다 — 규칙이 안 맞아 잰 적이 없다 */
 export const RR_EVIDENCE_BY_MARKET: Record<Market, Record<string, RrPerf>> = {
   us: US_EVIDENCE,

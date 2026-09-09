@@ -1,4 +1,4 @@
-(node:15832) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///F:/MY_THINK-TANK/trading-hub/lib/screener-shared.ts is not specified and it doesn't parse as CommonJS.
+(node:31380) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///F:/MY_THINK-TANK/trading-hub/lib/screener-shared.ts is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to F:\MY_THINK-TANK\trading-hub\package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -6,12 +6,4 @@ To eliminate this warning, add "type": "module" to F:\MY_THINK-TANK\trading-hub\
 수집 2246 · 지표 사전계산...
 lib/flow.ts와 대조 중...
 대조 60건 중 불일치 0건
-격자 1/20격자 2/20격자 3/20격자 4/20격자 5/20격자 6/20격자 7/20격자 8/20격자 9/20격자 10/20격자 11/20격자 12/20격자 13/20격자 14/20격자 15/20격자 16/20격자 17/20격자 18/20격자 19/20격자 20/20file:///F:/MY_THINK-TANK/trading-hub/bt-vwma.mjs:406
-    expR: +expR.toFixed(3),
-           ^
-
-ReferenceError: expR is not defined
-    at file:///F:/MY_THINK-TANK/trading-hub/bt-vwma.mjs:406:12
-    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
-
-Node.js v24.14.0
+격자 1/20격자 2/20격자 3/20격자 4/20격자 5/20격자 6/20격자 7/20격자 8/20격자 9/20격자 10/20격자 11/20격자 12/20격자 13/20격자 14/20격자 15/20격자 16/20격자 17/20격자 18/20격자 19/20격자 20/20

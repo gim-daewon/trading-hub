@@ -201,14 +201,14 @@ export default function PicksPage() {
             return (
               <>
                 10년 실측 (손절 −3% / 익절 +9% 규칙, 격자 20개):
-                거래당 기댓값 <b>{q.exp >= 0 ? '+' : ''}{q.exp}%</b>
-                {' '}· 연환산 <b>{q.ann >= 0 ? '+' : ''}{q.ann}%</b>
-                {' '}(기준선 +{base.exp}% · +{base.ann}%)
+                거래당 기댓값 <b>{q.exp >= 0 ? '+' : ''}{q.exp}R</b>
+                {' '}· 연 <b>{q.ann >= 0 ? '+' : ''}{q.ann}R</b>
+                {' '}(기준선 +{base.exp}R · 연 +{base.ann}R)
                 <br />
                 <span style={{ color: 'var(--warn)' }}>
                   <b>{rrVerdict('pullback', market).text}.</b> 격자 범위가
-                  {' '}{q.lo}~{q.hi}%로 넓어 구간에 따라 기준선에 지기도 한다.
-                  {quiet && <> 기댓값은 정체 구간(+{quiet.exp}%)과 사실상 같은데,
+                  {' '}{q.lo}~{q.hi}R로 넓어 구간에 따라 기준선에 지기도 한다.
+                  {quiet && <> 기댓값은 정체 구간(+{quiet.exp}R)과 사실상 같은데,
                     <b> 정체 구간은 격자 20개 전부에서 플러스였고 눌림목은 아니다.</b></>}
                   {' '}<b>오를 종목 목록이 아니라 살펴볼 후보 목록</b>으로 쓸 것.
                 </span>
