@@ -77,6 +77,13 @@ jobs:
         continue-on-error: true
         run: node scripts/healthcheck.mjs
 
+      # 데이터 소스가 '조용히 절반만' 주고 있지 않은지 확인한다.
+      # 배치 상한·지역 차단·PostgREST 1,000행 상한은 전부 에러 없이
+      # 개수만 줄어들어서 로그만 봐서는 정상으로 보인다
+      - name: Source integrity
+        continue-on-error: true
+        run: node scripts/source-check.mjs
+
       # 캐시 예열.
       #
       # 응답은 스냅샷 id로 캐시된다. 새 스캔이 돌면 키가 바뀌어 첫 요청이

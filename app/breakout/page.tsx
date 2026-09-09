@@ -138,7 +138,7 @@ export default function BreakoutPage() {
   const [includeMicro, setIncludeMicro] = useState(false)
   const [tab, setTab] = useState<BreakoutKey>('today')
   // 기본 정렬을 여력순으로. 손절 -3% 기준이면 여력이 곧 손익비다
-  const [sort, setSort] = useState<'room' | 'flow'>('room')
+  const [sort, setSort] = useState<'room' | 'flow' | 'live'>('room')
 
   const load = useCallback(() => {
     setLoading(true); setErr('')
@@ -315,7 +315,7 @@ export default function BreakoutPage() {
       {/* 정렬 토글. 여력순이 기본이다 —
           손절 -3% 고정이면 여력이 그대로 손익비가 된다 (여력 9% = 3:1) */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-        {([['room', '여력순'], ['flow', '수급순']] as const).map(([k, label]) => {
+        {([['room', '여력순'], ['flow', '수급순'], ['live', '등락률순']] as const).map(([k, label]) => {
           const active = sort === k
           return (
             <button key={k} onClick={() => setSort(k)} style={{
@@ -328,7 +328,9 @@ export default function BreakoutPage() {
           )
         })}
         <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center' }}>
-          {sort === 'room' ? '60선까지 여력이 큰 순 (손익비 큰 순)' : '20일 순자금이 큰 순'}
+          {sort === 'room' ? '60선까지 여력이 큰 순 (손익비 큰 순)'
+            : sort === 'flow' ? '20일 순자금이 큰 순'
+            : '오늘 많이 오른 순 · 값이 없는 종목은 뒤로'}
         </span>
       </div>
 
@@ -365,9 +367,13 @@ export default function BreakoutPage() {
       {!awaitingScan && data?.hasVwma && visibleTiers.map(t => {
         const raw = data.breakouts![t.id]?.[tab] ?? []
         const wk = isWeeklyKey(tab)
-        const rows = [...raw].sort((a, b) => sort === 'room'
-          ? (roomToVwma60(b, wk) ?? -999) - (roomToVwma60(a, wk) ?? -999)
-          : (b.f20 ?? -999) - (a.f20 ?? -999))
+        // 등락률순은 아직 값이 없는 종목을 뒤로 보낸다.
+        // 0으로 두면 '보합'과 '아직 안 받아옴'이 섞여 순서가 거짓말이 된다
+        const pctOf = (r: Row) => liveQuotes[r.symbol]?.pct ?? -Infinity
+        const rows = [...raw].sort((a, b) =>
+          sort === 'room' ? (roomToVwma60(b, wk) ?? -999) - (roomToVwma60(a, wk) ?? -999)
+          : sort === 'flow' ? (b.f20 ?? -999) - (a.f20 ?? -999)
+          : pctOf(b) - pctOf(a))
         if (!rows.length) return null
         return (
           <section key={t.id} style={{ marginBottom: 16 }}>
