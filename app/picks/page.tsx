@@ -106,6 +106,8 @@ function StockRow({ r, market, live }: { r: Row; market: Market; live?: LiveQuot
 export default function PicksPage() {
   const [market, setMarket, marketReady] = useMarket()
   const [includeMicro, setIncludeMicro] = useState(false)
+  // 기본은 서버가 정한 순서(%B 낮은 순 = 가장 깊이 눌린 순)
+  const [sort, setSort] = useState<'default' | 'live'>('default')
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
@@ -166,6 +168,21 @@ export default function PicksPage() {
         onChange={setIncludeMicro}
         counts={(data?.tierCounts?.micro ?? 0) + (data?.tierCounts?.unknown ?? 0)}
       />
+
+      {/* 정렬. 기본은 %B가 낮은 순 — 가장 깊이 눌린 종목이 위로 온다 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>정렬</span>
+        {([['default', '%B 낮은 순'], ['live', '등락률순']] as const).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setSort(k)}
+            className={sort === k ? 'pill pill-up' : 'pill'}
+            style={{ cursor: 'pointer', border: 'none', fontSize: 10 }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       {!MARKETS[market].ruleValidated && (
         <div className="card" style={{
@@ -252,7 +269,12 @@ export default function PicksPage() {
       )}
 
       {!awaitingScan && data && visibleTiers.map(t => {
-        const rows = data.categories?.[t.id]?.pullback ?? []
+        const raw = data.categories?.[t.id]?.pullback ?? []
+        // 등락률순은 값이 없는 종목을 뒤로. 0으로 두면 '보합'과 '미수신'이 섞인다
+        const rows = sort === 'live'
+          ? [...raw].sort((a, b) =>
+              (live.quotes[b.symbol]?.pct ?? -Infinity) - (live.quotes[a.symbol]?.pct ?? -Infinity))
+          : raw
         return (
           <section key={t.id} style={{ marginBottom: 18 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>

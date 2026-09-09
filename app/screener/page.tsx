@@ -183,7 +183,7 @@ export default function ScreenerPage() {
   // 기본 탭은 정체 구간. 기댓값은 눌림목과 사실상 같지만(+0.28 vs +0.30)
   // 격자 20개 전부에서 플러스인 건 이쪽뿐이다. 모멘텀은 기댓값이 마이너스다
   const [tab, setTab] = useState<CatKey>('quiet')
-  const [sort, setSort] = useState<'default' | 'flowHigh' | 'flowLow'>('default')
+  const [sort, setSort] = useState<'default' | 'flowHigh' | 'flowLow' | 'live'>('default')
 
   const load = useCallback(() => {
     setLoading(true); setErr('')
@@ -211,10 +211,17 @@ export default function ScreenerPage() {
   // 내용이 같으면 다시 부르지 않는다
   const live = useLiveQuotes(market, picked.map(r => r.symbol))
 
-  const rows = useMemo(() => sort === 'default' ? picked
-    : [...picked].sort((a, b) => sort === 'flowHigh'
+  // 등락률순은 아직 값이 없는 종목을 뒤로 보낸다.
+  // 0으로 두면 '보합'과 '아직 안 받아옴'이 섞여 순서가 거짓말이 된다
+  const pctOf = (r: Row) => live.quotes[r.symbol]?.pct ?? -Infinity
+  const rows = useMemo(() => {
+    if (sort === 'default') return picked
+    if (sort === 'live') return [...picked].sort((a, b) => pctOf(b) - pctOf(a))
+    return [...picked].sort((a, b) => sort === 'flowHigh'
       ? (b.f20 ?? -999) - (a.f20 ?? -999)
-      : (a.f20 ?? 999) - (b.f20 ?? 999)), [picked, sort])
+      : (a.f20 ?? 999) - (b.f20 ?? 999))
+    // live.quotes가 30초마다 바뀌므로 등락률순일 때만 그걸 의존성에 넣는다
+  }, [picked, sort, sort === 'live' ? live.quotes : null])
 
   // 근거가 약한 카테고리를 뒤로 민다 — 지우지는 않는다.
   // 지우면 "왜 없지?" 하고 나중에 또 만들게 되지만, 근거와 함께 남으면 그게 기록이 된다.
@@ -355,6 +362,7 @@ export default function ScreenerPage() {
           ['default', tab === 'pullback' ? '%B 낮은 순' : tab === 'quiet' ? '등락 0에 가까운 순' : '수급 높은 순'],
           ['flowHigh', '수급 높은 순'],
           ['flowLow', '수급 낮은 순'],
+          ['live', '등락률순'],
         ] as const).map(([k, label]) => (
           <button
             key={k}
