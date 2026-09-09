@@ -30,8 +30,36 @@ export interface LiveResult {
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
-/** 한 번에 요청할 심볼 수. 너무 크면 URL이 길어지고 실패 시 전부 날아간다 */
-const CHUNK = 40
+/**
+ * 한 번에 요청할 심볼 수 — **소스마다 상한이 다르다. 실측값이다.**
+ *
+ *   야후 spark  20까지. 25부터 400 "Number of symbols needs to be less than..."
+ *   네이버      60까지 확인 (더 될 수도 있으나 URL 길이가 부담이라 50으로)
+ *   업비트      287(전 마켓) 한 번에 됨
+ *
+ * 처음에 전부 40으로 잡았다가 **미국만 등락률이 안 떴다.** 40이면 야후가
+ * 400을 주는데 그 응답이 {spark:{result:null,error:{...}}} 형태라
+ * 심볼 하나짜리 객체로 훑고 넘어가 조용히 0개를 돌려줬다.
+ * 상한을 안 재보고 정한 게 원인이다.
+ */
+const CHUNK_YAHOO = 20
+const CHUNK_NAVER = 50
+const CHUNK_UPBIT = 200
+
+/** 배치 여러 개를 동시에. 순차로 하면 134종목에 7번 왕복이라 느리다 */
+const POOL = 4
+async function inPool<T, R>(items: T[], fn: (x: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length)
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(POOL, items.length) }, async () => {
+    for (;;) {
+      const i = next++
+      if (i >= items.length) return
+      out[i] = await fn(items[i])
+    }
+  }))
+  return out
+}
 
 const chunk = <T>(a: T[], n: number): T[][] =>
   Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n))
@@ -60,14 +88,25 @@ interface SparkEntry {
 async function usLive(symbols: string[]): Promise<LiveResult> {
   const quotes: Record<string, LiveQuote> = {}
   let newest = 0
-  for (const part of chunk(symbols, CHUNK)) {
-    const j = await fetchJson<Record<string, SparkEntry>>(
-      `https://query1.finance.yahoo.com/v8/finance/spark` +
-      `?symbols=${part.map(encodeURIComponent).join(',')}&range=1d&interval=5m`,
-      { headers: { 'User-Agent': UA }, next: { revalidate: 30 } },
-    )
+  const pages = await inPool(chunk(symbols, CHUNK_YAHOO), part => fetchJson<
+    Record<string, SparkEntry> & { spark?: { error?: { description?: string } } }
+  >(
+    `https://query1.finance.yahoo.com/v8/finance/spark` +
+    `?symbols=${part.map(encodeURIComponent).join(',')}&range=1d&interval=5m`,
+    { headers: { 'User-Agent': UA }, next: { revalidate: 30 } },
+  ))
+  for (const j of pages) {
     if (!j) continue
-    for (const [sym, e] of Object.entries(j)) {
+    // 야후는 실패해도 200이 아니라 400을 주는데 본문이 {spark:{error:...}} 형태다.
+    // 이걸 심볼 목록처럼 훑으면 조용히 0개가 나온다 — 반드시 걸러내고 남긴다
+    if (j.spark?.error) {
+      console.error(`[live] 야후 spark 거부: ${j.spark.error.description ?? '이유 불명'}`)
+      continue
+    }
+    for (const [sym, raw] of Object.entries(j)) {
+      // 'spark' 키는 위에서 걸렀다. 나머지는 심볼별 항목이다
+      if (sym === 'spark') continue
+      const e = raw as SparkEntry
       const prev = e.previousClose ?? e.chartPreviousClose
       const price = e.fulldayPrice ?? e.close?.filter(v => v != null).at(-1) ?? null
       if (price == null || !(prev! > 0)) continue
@@ -113,14 +152,15 @@ async function krLive(symbols: string[]): Promise<LiveResult> {
   const quotes: Record<string, LiveQuote> = {}
   let open = false, interval = 70_000
 
-  for (const part of chunk(codes, CHUNK)) {
-    const j = await fetchJson<{ datas?: NaverLive[]; pollingInterval?: number }>(
+  const pages = await inPool(chunk(codes, CHUNK_NAVER), part =>
+    fetchJson<{ datas?: NaverLive[]; pollingInterval?: number }>(
       `https://polling.finance.naver.com/api/realtime/domestic/stock/${part.join(',')}`,
       {
         headers: { 'User-Agent': UA, Accept: 'application/json', Referer: 'https://finance.naver.com/' },
         next: { revalidate: 70 },
       },
-    )
+    ))
+  for (const j of pages) {
     if (!j?.datas) continue
     if (j.pollingInterval) interval = j.pollingInterval
     for (const d of j.datas) {
@@ -158,7 +198,7 @@ async function cryptoLive(symbols: string[]): Promise<LiveResult> {
     }
   }
 
-  for (const part of chunk(upbit, 90)) {
+  for (const part of chunk(upbit, CHUNK_UPBIT)) {
     const j = await fetchJson<{ market: string; trade_price: number; signed_change_rate: number }[]>(
       `https://api.upbit.com/v1/ticker?markets=${part.join(',')}`,
       { headers: { 'User-Agent': UA }, next: { revalidate: 30 } },
@@ -175,9 +215,14 @@ async function cryptoLive(symbols: string[]): Promise<LiveResult> {
 
 export async function fetchLive(market: Market, symbols: string[]): Promise<LiveResult> {
   if (!symbols.length) return { quotes: {}, open: false, suggestedIntervalMs: 0, at: Date.now() }
-  switch (market) {
-    case 'us': return usLive(symbols)
-    case 'kr': return krLive(symbols)
-    case 'crypto': return cryptoLive(symbols)
+  const r = market === 'us' ? await usLive(symbols)
+    : market === 'kr' ? await krLive(symbols)
+    : await cryptoLive(symbols)
+  // 절반도 못 받았으면 조용히 넘어가지 않는다.
+  // 미국 등락률이 안 뜬 걸 화면을 보고서야 알았다 — 로그에는 아무것도 없었다
+  const got = Object.keys(r.quotes).length
+  if (got < symbols.length * 0.5) {
+    console.error(`[live] ${market}: ${symbols.length}개 요청했는데 ${got}개만 받았다`)
   }
+  return r
 }
