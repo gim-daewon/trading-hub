@@ -38,7 +38,7 @@ if (!/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(SUPABASE_URL)) {
   console.error('기대 형식: https://<프로젝트ID>.supabase.co')
   process.exit(1)
 }
-console.log(`시장 ${DEF.label} · Supabase ${SUPABASE_URL}`)
+console.log(`시장 ${DEF.label} · 봉 ${DEF.interval} · Supabase ${SUPABASE_URL}`)
 
 // 야후는 데이터센터 IP를 더 조인다. 거래소 API는 여유가 있다
 const CONCURRENCY = MARKET === 'crypto' ? 8 : 10
@@ -110,7 +110,8 @@ async function barsWithRetry(row) {
   for (let i = 0; i <= MAX_RETRY; i++) {
     // 2년치를 받는다. 주봉 VWMA60에 60주(약 14개월)치 일봉이 필요하다.
     // 6개월로는 주봉 지표가 전부 null이 된다.
-    const b = await fetchBarsFor(row, '2y')
+    // 봉 간격은 시장 설정을 따른다. 크립토를 4시간봉으로 바꾸면 여기만 바뀐다
+    const b = await fetchBarsFor(row, '2y', DEF.interval)
     if (b && b.length >= 65) return b
     if (i < MAX_RETRY) await sleep(300 * (i + 1))
   }

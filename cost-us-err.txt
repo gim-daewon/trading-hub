@@ -1,0 +1,7 @@
+(node:23356) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///F:/MY_THINK-TANK/trading-hub/lib/universe.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to F:\MY_THINK-TANK\trading-hub\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+미국 2783종목 수집...
+수집 2628종목 · 봉 2512~
+격자 1/10격자 2/10격자 3/10격자 4/10격자 5/10격자 6/10격자 7/10격자 8/10격자 9/10격자 10/10

@@ -63,6 +63,27 @@ export interface MarketDef {
    */
   benchmark: { symbol: string; source: 'yahoo' | 'binance' | 'upbit'; label: string }
   /**
+   * 지표를 계산할 봉 간격.
+   *
+   * 주식은 '1d'뿐이다 — 개장·마감이 봉에 의미를 준다.
+   * 크립토는 24/7이라 일봉 경계(UTC 자정)가 임의적이고, 4시간봉을 쓰면
+   * 같은 기간에 표본이 6배가 된다.
+   *
+   * 다만 4시간봉은 다른 신호다. VWMA20이 20일에서 3.3일이 되고
+   * ATR도 일봉의 약 1/3(BTC 0.95% vs 3.24%)이라 손절폭이 좁아진다.
+   * 손절이 좁으면 같은 수수료가 위험의 더 큰 몫을 먹는다 —
+   * 왕복 0.2%면 일봉에서 -0.06R, 4시간봉에서 -0.20R이다.
+   * 그래서 비용을 넣고 재보기 전에는 바꾸지 않는다.
+   */
+  interval: '1d' | '4h'
+  /** 스캔 주기(시간). 4시간봉이면 4시간마다 돌아야 신호를 놓치지 않는다 */
+  scanEveryHours: number
+  /**
+   * 왕복 거래비용(%). 진입+청산 합계.
+   * 손익비 계산과 성과 판정에서 빼야 좁은 손절이 과대평가되지 않는다.
+   */
+  roundTripCost: number
+  /**
    * 손절·익절 규칙. **시장마다 다르다.**
    *
    * 10년·격자 10개로 12가지를 비교한 결과(R 기댓값 = 위험 1단위 대비 손익):
@@ -164,6 +185,9 @@ export const MARKETS: Record<Market, MarketDef> = {
     // 유니버스 필터가 이미 $5M을 걸러서 해당되는 종목이 없다
     lowLiquidity: 5e6,
     benchmark: { symbol: 'SPY', source: 'yahoo', label: 'SPY' },
+    interval: '1d', scanEveryHours: 24,
+    // 미국 주식 왕복 수수료. 대형 브로커는 무료지만 슬리피지가 남는다
+    roundTripCost: 0.05,
     // 유니버스가 이미 $5M로 걸러져 있어 추가 하한이 필요 없다
     rule: { kind: 'atr', stop: 1, target: 6, label: '손절 1×ATR / 익절 6×ATR', expR: 0.161, minVol: 5e6 },
   },
@@ -176,6 +200,9 @@ export const MARKETS: Record<Market, MarketDef> = {
     universeNote: '코스피·코스닥 전 종목 (ETF·ETN·거래정지 제외)',
     lowLiquidity: 1e8,   // 1억원. 실측 중앙값 8,800만원이라 절반 가까이 걸린다
     benchmark: { symbol: '^KS11', source: 'yahoo', label: '코스피' },
+    interval: '1d', scanEveryHours: 24,
+    // 수수료 왕복 0.02% + 매도 시 거래세 0.18%
+    roundTripCost: 0.20,
     // 거래대금 10억원 미만은 ATR 손절이 갭에 뚫린다. 실측으로 확인했다
     rule: { kind: 'atr', stop: 1, target: 6, label: '손절 1×ATR / 익절 6×ATR', expR: 0.209, minVol: 1e9 },
   },
@@ -191,6 +218,10 @@ export const MARKETS: Record<Market, MarketDef> = {
     lowLiquidity: 1e5,   // $100k
     // 크립토는 BTC가 곧 국면이다. 알트는 BTC가 빠지면 같이 빠진다
     benchmark: { symbol: 'BTCUSDT', source: 'binance', label: 'BTC' },
+    // 4시간봉 전환은 비용 반영 측정 결과를 보고 정한다
+    interval: '1d', scanEveryHours: 24,
+    // 바이낸스 현물 테이커 0.1% x2. 지정가(메이커)면 0.04%까지 내려간다
+    roundTripCost: 0.20,
     // 크립토만 다른 규칙이다 — 2.0/6.0은 격자최소가 마이너스였고
     // 1.0/2.0만 전 격자 플러스였다. 다만 기준선 자체가 아직 미검증이다
     rule: { kind: 'atr', stop: 1, target: 2, label: '손절 1×ATR / 익절 2×ATR', expR: null, minVol: 1e5 },

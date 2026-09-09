@@ -33,12 +33,14 @@ function rangeToBars(range: string): number {
  * 거래량은 **base 수량**을 쓴다 — `c * v`가 quote 거래대금(USDT)이 되어
  * 순자금 지표가 미국·한국과 같은 의미를 갖는다.
  */
-async function binanceBars(symbol: string, want: number): Promise<DatedBar[] | null> {
+async function binanceBars(
+  symbol: string, want: number, interval: '1d' | '4h' = '1d',
+): Promise<DatedBar[] | null> {
   const out: DatedBar[] = []
   // 최신부터 거꾸로 받는다. limit 1000이 상한이라 필요하면 endTime으로 넘긴다
   let endTime: number | undefined
-  for (let guard = 0; guard < 6 && out.length < want; guard++) {
-    const q = new URLSearchParams({ symbol, interval: '1d', limit: '1000' })
+  for (let guard = 0; guard < 8 && out.length < want; guard++) {
+    const q = new URLSearchParams({ symbol, interval, limit: '1000' })
     if (endTime) q.set('endTime', String(endTime))
     const k = await binanceJson<unknown[][]>(`/api/v3/klines?${q}`)
     if (!k?.length) break
@@ -115,11 +117,17 @@ function dedupeSort(bars: DatedBar[]): DatedBar[] {
 
 /** 시장·소스에 맞는 일봉. 실패하면 null (호출부가 그 종목을 건너뛴다) */
 export async function fetchBarsFor(
-  row: Pick<UniverseRow, 'symbol' | 'source'>, range = '2y',
+  row: Pick<UniverseRow, 'symbol' | 'source'>,
+  range = '2y',
+  /** 크립토만 4시간봉을 쓸 수 있다. 주식은 야후가 장기 4시간봉을 안 준다 */
+  interval: '1d' | '4h' = '1d',
 ): Promise<DatedBar[] | null> {
+  // 4시간봉이면 같은 기간에 6배 봉이 필요하다
+  const want = rangeToBars(range) * (interval === '4h' ? 6 : 1)
   switch (row.source) {
     case 'yahoo': return fetchDatedBars(row.symbol, range)
-    case 'binance': return binanceBars(row.symbol, rangeToBars(range))
+    case 'binance': return binanceBars(row.symbol, want, interval)
+    // 업비트는 4시간봉 엔드포인트가 달라 아직 일봉만 쓴다
     case 'upbit': return upbitBars(row.symbol, rangeToBars(range))
   }
 }

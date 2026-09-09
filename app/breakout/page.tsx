@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle'
-import { MARKETS, tiersFor, fmtCap, type Market } from '@/lib/markets'
+import { useLiveQuotes, type LiveQuote } from '../components/useLiveQuotes'
+import { MARKETS, tiersFor, fmtCap, fmtPrice, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { SymbolLabel } from '../components/SymbolLabel'
 import { ExitPrices } from '../components/ExitPrices'
@@ -49,7 +50,9 @@ interface Data {
 
 const sgn = (v: number | null, d = 0) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(d)}`
 
-function StockRow({ r, weekly, market }: { r: Row; weekly: boolean; market: Market }) {
+function StockRow({ r, weekly, market, live }: {
+  r: Row; weekly: boolean; market: Market; live?: LiveQuote
+}) {
   // 종가가 VWMA20에서 얼마나 떨어져 있나. 주봉 탭이면 주봉 값으로 잰다
   const px = weekly ? r.wClose : r.price
   const ma = weekly ? r.wVwma20 : r.vwma20
@@ -83,8 +86,18 @@ function StockRow({ r, weekly, market }: { r: Row; weekly: boolean; market: Mark
     <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
       <SymbolLabel
         symbol={r.symbol} display={r.display} name={r.name} market={market}
-        trailing={fmtCap(r.marketCap, market)}
-        sub={r.sector ? r.sector.slice(0, 28) : undefined}
+        trailing={
+          live ? (
+            // 실시간 등락률. 스냅샷은 마지막 종가 기준이라 그 뒤 움직임이 여기 보인다
+            <span className={live.pct >= 0 ? 'up' : 'down'} style={{ fontWeight: 700, fontSize: 11 }}>
+              {live.pct >= 0 ? '+' : ''}{live.pct.toFixed(1)}%
+            </span>
+          ) : fmtCap(r.marketCap, market)
+        }
+        sub={<>
+          {r.sector ? `${r.sector.slice(0, 20)} · ` : ''}{fmtCap(r.marketCap, market)}
+          {live && <> · 현재 <span className="num">{fmtPrice(live.price, market)}</span></>}
+        </>}
       />
 
       <div style={{
@@ -158,6 +171,16 @@ export default function BreakoutPage() {
   const total = data?.breakouts
     ? visibleTiers.reduce((a, t) => a + (data.breakouts![t.id]?.[tab]?.length ?? 0), 0)
     : 0
+
+  // 실시간 등락률은 **보이는 종목만** 요청한다.
+  // 전 종목을 물으면 소스에 부담이고 대부분 화면에 안 뜬다.
+  // useLiveQuotes가 심볼 목록을 문자열로 비교하므로 배열을 매번 새로 만들어도
+  // 내용이 같으면 다시 부르지 않는다
+  const visibleSymbols = data?.breakouts
+    ? visibleTiers.flatMap(t => (data.breakouts![t.id]?.[tab] ?? []).map(r => r.symbol))
+    : []
+  const live = useLiveQuotes(market, visibleSymbols)
+  const liveQuotes = live.quotes
   // above_run 컬럼 추가 전 스냅샷이면 전부 null이라 후보가 안 나온다.
   // 목록이 비어 보이는 두 상황을 구분해야 한다 —
   // "오늘 돌파한 종목이 없다"와 "지표가 아직 없다"는 할 일이 다르다.
@@ -177,6 +200,17 @@ export default function BreakoutPage() {
             </span>
             {/* 스캔 시각이 아니라 '데이터 기준일'을 보여준다.
                 야후가 당일 일봉을 늦게 주면 둘이 하루씩 어긋난다 */}
+            {live.at > 0 && (
+              <span
+                className={`pill ${live.open ? 'pill-up' : ''}`}
+                title={live.open
+                  ? '30초마다 갱신한다'
+                  : '장이 닫혀 있다. 아래 등락률은 마지막 거래일 종가 기준이다'}
+              >
+                {live.open ? '실시간' : '장 마감'}
+                {live.loading && ' ·'}
+              </span>
+            )}
             {data.barDate && (
               <span className="num" title="이 목록을 계산한 마지막 거래일. 스캔 시각과 다를 수 있다">
                 {data.barDate.slice(5).replace('-', '/')} 종가 기준
@@ -348,7 +382,7 @@ export default function BreakoutPage() {
               <span className="num" style={{ fontSize: 12, color: 'var(--text-muted)' }}>{rows.length}종목</span>
             </div>
             <div className="card" style={{ overflow: 'hidden' }}>
-              {rows.map(r => <StockRow key={r.symbol} r={r} weekly={tab.endsWith('W')} market={market} />)}
+              {rows.map(r => <StockRow key={r.symbol} r={r} weekly={tab.endsWith('W')} market={market} live={liveQuotes[r.symbol]} />)}
             </div>
           </section>
         )
