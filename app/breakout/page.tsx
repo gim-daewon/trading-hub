@@ -61,68 +61,63 @@ function StockRow({ r, weekly, market }: { r: Row; weekly: boolean; market: Mark
   const rr = room != null ? room / 3 : null
   // 정배열 강도 — 20선과 60선이 벌어진 폭(%). 조건이 아니라 참고용이다
   const align = alignStrength(r, weekly)
+  // 지표 한 칸. 라벨 위 / 값 아래
+  const Cell = ({ label, value, cls, foot }: {
+    label: string; value: string; cls?: string; foot?: string
+  }) => (
+    <div style={{ textAlign: 'right', minWidth: 0 }}>
+      <div style={{ fontSize: 9, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{label}</div>
+      <div className={`num ${cls ?? ''}`} style={{ fontSize: 12, fontWeight: 700 }}>{value}</div>
+      {foot && (
+        <div className="num" style={{ fontSize: 8, color: 'var(--text-muted)' }}>{foot}</div>
+      )}
+    </div>
+  )
+
+  // 5열 그리드를 3줄로 바꿨다.
+  //
+  // 폰(390px)에서 종목 칸이 약 130px밖에 안 남아 '에코프로비엠'이 '에.'로 잘리고
+  // 손절가는 '손절 100,998 (' 에서 끊겼다. 이름과 가격은 잘리면 정보가 0이 된다.
+  // 이름과 손절·익절이 각각 전체 폭을 쓰게 하고, 지표 4개는 아래 한 줄에 나눈다.
   return (
-    <div style={{
-      display: 'grid', gridTemplateColumns: '1fr 62px 46px 46px 56px',
-      alignItems: 'center', gap: 6, minHeight: 52,
-      padding: '8px 12px', borderBottom: '1px solid var(--border)',
-    }}>
+    <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
       <SymbolLabel
         symbol={r.symbol} display={r.display} name={r.name} market={market}
-        sub={<>
-          {r.sector ? `${r.sector.slice(0, 18)} · ` : ''}{fmtCap(r.marketCap, market)}
-          <ExitPrices price={r.price} atr14={r.atr14} dollarVol={r.dollarVol} market={market} compact />
-        </>}
+        trailing={fmtCap(r.marketCap, market)}
+        sub={r.sector ? r.sector.slice(0, 28) : undefined}
       />
 
-      <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{weekly ? '주봉' : ''} VWMA 대비</div>
-        <div className={`num ${(gap ?? 0) >= 0 ? 'up' : 'down'}`} style={{ fontSize: 12, fontWeight: 700 }}>
-          {gap == null ? '—' : `${sgn(gap, 1)}%`}
-        </div>
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: 6, marginTop: 6,
+      }}>
         {/* 정배열 강도 = (VWMA20 - VWMA60) / VWMA60. 부호는 방향, 크기는 벌어진 폭.
             "정배열이냐"만 보면 간신히 붙은 것과 크게 벌어진 것이 같아진다.
             특징 분석에서 클수록 기댓값이 높았지만 살아남은 특징 수가 우연 수준이라
             **거르는 조건으로는 쓰지 않고** 판단 재료로만 보여준다. */}
-        {align != null && (
-          <div className="num" style={{ fontSize: 8, color: 'var(--text-muted)' }}>
-            정배열 {sgn(align, 0)}%
-          </div>
-        )}
+        <Cell
+          label={`${weekly ? '주봉 ' : ''}VWMA 대비`}
+          value={gap == null ? '—' : `${sgn(gap, 1)}%`}
+          cls={(gap ?? 0) >= 0 ? 'up' : 'down'}
+          foot={align == null ? undefined : `정배열 ${sgn(align, 0)}%`}
+        />
+        <Cell label="20일" value={`${sgn(r.chg20, 0)}%`} cls={(r.chg20 ?? 0) >= 0 ? 'up' : 'down'} />
+        <Cell label="수급" value={`${sgn(r.f20, 0)}%`} cls={(r.f20 ?? 0) >= 0 ? 'up' : 'down'} />
+        {/* 60선까지 남은 여력과, 손절 -3% 기준 손익비.
+            바닥잡기에서 여력이 클수록 손익비가 좋아진다는 게 실측으로 확인됐다
+            (여력 15%+ 구간 기댓값 +0.42% vs 기준선 +0.22%).
+            다만 도달률이 76%→22%로 떨어지므로 여력만 보고 고르면 안 된다. */}
+        <Cell
+          label="60선 여력"
+          value={room == null ? '—' : `${sgn(room, 0)}%`}
+          cls={(room ?? 0) >= 9 ? 'up' : undefined}
+          foot={rr != null && room != null && room > 0 ? `${rr.toFixed(1)}:1` : undefined}
+        />
       </div>
 
-      <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>20일</div>
-        <div className={`num ${(r.chg20 ?? 0) >= 0 ? 'up' : 'down'}`} style={{ fontSize: 12, fontWeight: 700 }}>
-          {sgn(r.chg20, 0)}%
-        </div>
-      </div>
-
-      <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>수급</div>
-        <div className={`num ${(r.f20 ?? 0) >= 0 ? 'up' : 'down'}`} style={{ fontSize: 12, fontWeight: 700 }}>
-          {sgn(r.f20, 0)}%
-        </div>
-      </div>
-
-      {/* 60선까지 남은 여력과, 손절 -3% 기준 손익비.
-          바닥잡기에서 여력이 클수록 손익비가 좋아진다는 게 실측으로 확인됐다
-          (여력 15%+ 구간 기댓값 +0.42% vs 기준선 +0.22%).
-          다만 도달률이 76%→22%로 떨어지므로 여력만 보고 고르면 안 된다. */}
-      <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>60선 여력</div>
-        <div className="num" style={{
-          fontSize: 12, fontWeight: 700,
-          color: (room ?? 0) >= 9 ? 'var(--up)' : 'var(--text-secondary)',
-        }}>
-          {room == null ? '—' : `${sgn(room, 0)}%`}
-        </div>
-        {rr != null && room != null && room > 0 && (
-          <div className="num" style={{ fontSize: 8, color: 'var(--text-muted)' }}>
-            {rr.toFixed(1)}:1
-          </div>
-        )}
-      </div>
+      <ExitPrices
+        price={r.price} atr14={r.atr14} dollarVol={r.dollarVol} market={market} compact
+      />
     </div>
   )
 }

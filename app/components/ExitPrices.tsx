@@ -33,13 +33,15 @@ export function ExitPrices({ price, atr14, dollarVol, market, compact }: {
     ) : null
   }
 
+  // 손절/익절 각각은 안 쪼개지되(가격 중간에서 줄바꿈되면 못 읽는다)
+  // 둘 사이에서는 줄바꿈이 되게 한다. 폰에서 한 줄로 강제하면 잘려나간다.
   const body = (
     <>
-      <span style={{ color: 'var(--down)' }}>
+      <span style={{ color: 'var(--down)', whiteSpace: 'nowrap' }}>
         손절 <span className="num">{fmtPrice(e.stop, market)}</span>
         <span style={{ opacity: 0.7 }}> ({Math.round(e.stopPct)}%)</span>
       </span>
-      <span style={{ color: 'var(--up)', marginLeft: compact ? 8 : 10 }}>
+      <span style={{ color: 'var(--up)', whiteSpace: 'nowrap' }}>
         익절 <span className="num">{fmtPrice(e.target, market)}</span>
         <span style={{ opacity: 0.7 }}> (+{Math.round(e.targetPct)}%)</span>
       </span>
@@ -47,10 +49,20 @@ export function ExitPrices({ price, atr14, dollarVol, market, compact }: {
   )
 
   if (compact) {
-    return <div style={{ fontSize: 10, marginTop: 2, whiteSpace: 'nowrap' }}>{body}</div>
+    return (
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', columnGap: 10, rowGap: 1,
+        fontSize: 10, marginTop: 3,
+      }}>
+        {body}
+      </div>
+    )
   }
   return (
-    <div style={{ fontSize: 11, marginTop: 4, lineHeight: 1.6 }}>
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', columnGap: 12, rowGap: 2,
+      fontSize: 11, marginTop: 4, lineHeight: 1.6,
+    }}>
       {body}
       <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>
         {def.rule.label} · 종가 기준 {fmtPrice(price, market)}

@@ -396,12 +396,15 @@ export default function ScreenerPage() {
                 {rows.map(r => (
                   <tr key={r.symbol} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '9px 10px' }}>
+                      {/* ExitPrices를 sub 안에 넣으면 말줄임 컨테이너라 가격이 잘린다.
+                          별도 줄로 뺀다 */}
                       <SymbolLabel
                         symbol={r.symbol} display={r.display} name={r.name} market={market}
-                        sub={<>
-                          {r.sector ? r.sector.slice(0, 22) : fmtCap(r.marketCap, market)}
-                          <ExitPrices price={r.price} atr14={r.atr14} dollarVol={r.dollarVol} market={market} compact />
-                        </>}
+                        sub={r.sector ? r.sector.slice(0, 22) : fmtCap(r.marketCap, market)}
+                      />
+                      <ExitPrices
+                        price={r.price} atr14={r.atr14} dollarVol={r.dollarVol}
+                        market={market} compact
                       />
                     </td>
                     <td style={{ padding: '9px 10px' }}><Bar v={r.f20} /></td>

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle'
-import { MARKETS, tiersFor as tf, type Market } from '@/lib/markets'
+import { MARKETS, tiersFor as tf, fmtCap, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { SymbolLabel } from '../components/SymbolLabel'
 import { ExitPrices } from '../components/ExitPrices'
@@ -64,38 +64,37 @@ function EvidenceLine({ tier, regime }: { tier: TierId; regime: Regime }) {
 function StockRow({ r, market }: { r: Row; market: Market }) {
   const deep = (r.pctB ?? 1) <= 0.05
   return (
-    <div style={{
-      display: 'grid', gridTemplateColumns: '1fr auto auto',
-      alignItems: 'center', gap: 10,
-      padding: '10px 12px', borderBottom: '1px solid var(--border)',
-    }}>
-      <div style={{ minWidth: 0 }}>
-        <SymbolLabel
-          symbol={r.symbol} display={r.display} name={r.name} market={market}
-          sub={<ExitPrices price={r.price} atr14={r.atr14} dollarVol={r.dollarVol} market={market} compact />}
-        />
-        <div style={{
-          fontSize: 10, color: 'var(--text-muted)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {(r.sector || '').slice(0, 24)} · ${(r.marketCap / 1e9).toFixed(1)}B
+    // 이름과 손절·익절이 각 줄 전체 폭을 쓴다.
+    // 좁은 칸에 넣으면 '에코프로비엠'이 '에.'로, 손절가는 '100,998 ('에서 잘린다
+    <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
+      <SymbolLabel
+        symbol={r.symbol} display={r.display} name={r.name} market={market}
+        trailing={fmtCap(r.marketCap, market)}
+        sub={r.sector ? r.sector.slice(0, 28) : undefined}
+      />
+
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: 6, marginTop: 6, maxWidth: 260,
+      }}>
+        <div>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>볼린저</div>
+          <div className="num" style={{
+            fontSize: 13, fontWeight: 700,
+            color: deep ? 'var(--info)' : 'var(--text-secondary)',
+          }}>{r.pctB == null ? '—' : `${(r.pctB * 100).toFixed(0)}%`}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>20일 수급</div>
+          <div className={`num ${(r.f20 ?? 0) >= 0 ? 'up' : 'down'}`} style={{ fontSize: 13, fontWeight: 700 }}>
+            {sgn(r.f20)}%
+          </div>
         </div>
       </div>
 
-      <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>볼린저</div>
-        <div className="num" style={{
-          fontSize: 13, fontWeight: 700,
-          color: deep ? 'var(--info)' : 'var(--text-secondary)',
-        }}>{r.pctB == null ? '—' : `${(r.pctB * 100).toFixed(0)}%`}</div>
-      </div>
-
-      <div style={{ textAlign: 'right', minWidth: 52 }}>
-        <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>20일 수급</div>
-        <div className={`num ${(r.f20 ?? 0) >= 0 ? 'up' : 'down'}`} style={{ fontSize: 13, fontWeight: 700 }}>
-          {sgn(r.f20)}%
-        </div>
-      </div>
+      <ExitPrices
+        price={r.price} atr14={r.atr14} dollarVol={r.dollarVol} market={market} compact
+      />
     </div>
   )
 }
