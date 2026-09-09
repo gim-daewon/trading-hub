@@ -2,9 +2,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle'
-import { MARKETS, tiersFor as tf } from '@/lib/markets'
+import { MARKETS, tiersFor as tf, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
-import { TvLink } from '../components/TvLink'
+import { SymbolLabel } from '../components/SymbolLabel'
 import {
   tiersFor, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
   type TierId, type CatKey, type Regime, type Perf,
@@ -20,6 +20,8 @@ import {
 // 그래서 "추천"을 떼고 후보 목록으로 성격을 되돌렸다.
 
 interface Row {
+  /** 화면용 짧은 이름. 한국은 005930, 크립토는 BTC */
+  display?: string | null
   symbol: string; name: string; sector: string; marketCap: number
   f5: number | null; f20: number | null; f60: number | null
   rvol: number | null; chg20: number | null; pctB: number | null
@@ -57,7 +59,7 @@ function EvidenceLine({ tier, regime }: { tier: TierId; regime: Regime }) {
   )
 }
 
-function StockRow({ r }: { r: Row }) {
+function StockRow({ r, market }: { r: Row; market: Market }) {
   const deep = (r.pctB ?? 1) <= 0.05
   return (
     <div style={{
@@ -66,9 +68,9 @@ function StockRow({ r }: { r: Row }) {
       padding: '10px 12px', borderBottom: '1px solid var(--border)',
     }}>
       <div style={{ minWidth: 0 }}>
-        <div className="num" style={{ fontSize: 14, fontWeight: 700 }}>
-          <TvLink symbol={r.symbol} />
-        </div>
+        <SymbolLabel
+          symbol={r.symbol} display={r.display} name={r.name} market={market}
+        />
         <div style={{
           fontSize: 10, color: 'var(--text-muted)',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -255,7 +257,7 @@ export default function PicksPage() {
               </div>
             ) : (
               <div className="card" style={{ overflow: 'hidden' }}>
-                {rows.map(r => <StockRow key={r.symbol} r={r} />)}
+                {rows.map(r => <StockRow key={r.symbol} r={r} market={market} />)}
               </div>
             )}
           </section>

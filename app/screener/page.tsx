@@ -4,13 +4,16 @@ import PageHeader from '../components/PageHeader'
 import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle'
 import { MARKETS, tiersFor, fmtCap, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
-import { TvLink, TvLayoutSetting } from '../components/TvLink'
+import { TvLayoutSetting } from '../components/TvLink'
+import { SymbolLabel } from '../components/SymbolLabel'
 import {
   CATS, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
   type TierId, type CatKey, type Regime,
 } from '@/lib/screener-shared'
 
 interface Row {
+  /** 화면용 짧은 이름. 한국은 005930, 크립토는 BTC */
+  display?: string | null
   symbol: string; name: string; sector: string; marketCap: number
   f5: number | null; f20: number | null; f60: number | null
   rvol: number | null; chg20: number | null; pctB: number | null
@@ -391,8 +394,10 @@ export default function ScreenerPage() {
                 {rows.map(r => (
                   <tr key={r.symbol} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '9px 10px' }}>
-                      <div className="num" style={{ fontWeight: 700 }}><TvLink symbol={r.symbol} /></div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{(r.sector || '').slice(0, 22)}</div>
+                      <SymbolLabel
+                        symbol={r.symbol} display={r.display} name={r.name} market={market}
+                        sub={r.sector ? r.sector.slice(0, 22) : fmtCap(r.marketCap, market)}
+                      />
                     </td>
                     <td style={{ padding: '9px 10px' }}><Bar v={r.f20} /></td>
                     <td className={`num ${cls(r.f5)}`} style={{ textAlign: 'right', padding: '9px 10px', fontSize: 12 }}>{sgn(r.f5)}%</td>

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import { TvLink } from '../components/TvLink'
+import { SymbolLabel } from '../components/SymbolLabel'
 import { tiersFor, type TierId, type BreakoutKey } from '@/lib/screener-shared'
 import { INVERSE_ETF } from '@/lib/inverse-etf'
 
@@ -153,14 +154,10 @@ export default function ShortPage() {
                   display: 'grid', gridTemplateColumns: '1fr 62px 56px',
                   alignItems: 'center', gap: 8,
                 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="num" style={{ fontSize: 14, fontWeight: 700 }}>
-                      <TvLink symbol={r.symbol} />
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {(r.sector || '').slice(0, 22)} · ${(r.marketCap / 1e9).toFixed(0)}B
-                    </div>
-                  </div>
+                  <SymbolLabel
+                    symbol={r.symbol} name={r.name} market="us"
+                    sub={`${(r.sector || '').slice(0, 22)} · $${(r.marketCap / 1e9).toFixed(0)}B`}
+                  />
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>20선 대비</div>
                     <div className="num down" style={{ fontSize: 13, fontWeight: 700 }}>

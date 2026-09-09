@@ -5,6 +5,7 @@ import {
   getOpenInApp, setOpenInApp, platform,
   getLinkMode, setLinkMode, type LinkMode,
 } from '@/lib/tradingview'
+import { tvSymbol, type Market } from '@/lib/markets'
 
 /**
  * 티커를 누르면 트레이딩뷰 차트로 이동.
@@ -17,27 +18,32 @@ import {
  * 클릭 가능한 행·카드 안에 중첩되는 경우가 많아 이벤트 전파도 막는다
  * (안 막으면 섹터 테이블 행을 눌렀을 때 바텀시트까지 같이 열린다).
  */
-export function TvLink({ symbol, children, style }: {
+export function TvLink({ symbol, market = 'us', children, style }: {
+  /** 우리가 봉을 받는 키 (AAPL / 005930.KS / BTCUSDT). 여기서 변환한다 */
   symbol: string
+  market?: Market
   children?: React.ReactNode
   style?: React.CSSProperties
 }) {
+  // 트레이딩뷰가 아는 형식으로 바꾼다. 야후 형식(005930.KS)을 그대로 보내면
+  // "없는 종목"이 뜬다
+  const tv = tvSymbol(symbol, market)
   // SSR에서는 navigator/localStorage가 없다. 우선 동작하는 웹 URL로 시작하고
   // 마운트 후 플랫폼·설정을 반영해 앱 링크로 교체한다 (href='#'로 두면 그 사이 클릭이 먹통)
   const [a, setA] = useState<{ href: string; target?: string }>(
-    () => ({ href: tvUrl(symbol, ''), target: '_blank' })
+    () => ({ href: tvUrl(tv, ''), target: '_blank' })
   )
 
   useEffect(() => {
-    setA(tvAnchor(symbol, getLayoutId(), getOpenInApp(), getLinkMode()))
-  }, [symbol])
+    setA(tvAnchor(tv, getLayoutId(), getOpenInApp(), getLinkMode()))
+  }, [tv])
 
   return (
     <a
       href={a.href}
       target={a.target}
       rel={a.target ? 'noopener noreferrer' : undefined}
-      title={`트레이딩뷰에서 ${symbol} 보기`}
+      title={`트레이딩뷰에서 ${tv} 보기`}
       onClick={e => e.stopPropagation()}
       style={{
         color: 'inherit', textDecoration: 'none',

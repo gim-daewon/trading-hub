@@ -157,6 +157,33 @@ export function tierOf(cap: number, m: Market): TierId | null {
   return tiersFor(m).find(t => cap >= t.min && cap < t.max)?.id ?? null
 }
 
+/**
+ * 트레이딩뷰 심볼로 변환.
+ *
+ * 우리가 봉을 받는 키를 그대로 넘기면 트레이딩뷰가 못 찾는다.
+ * 실제로 한국 종목을 누르면 "없는 종목"이 떴다 — 야후 형식(005930.KS)을
+ * 그대로 보냈기 때문이다.
+ *
+ *   미국    AAPL        -> AAPL            (그대로)
+ *   한국    005930.KS   -> KRX:005930      (코스피·코스닥 모두 KRX 접두사)
+ *   바이낸스 BTCUSDT     -> BINANCE:BTCUSDT
+ *   업비트   KRW-BTC     -> UPBIT:BTCKRW    (순서가 뒤집힌다)
+ */
+export function tvSymbol(symbol: string, market: Market): string {
+  if (market === 'kr') {
+    // .KS(코스피) / .KQ(코스닥) 모두 트레이딩뷰에서는 KRX다
+    const code = symbol.replace(/\.(KS|KQ)$/i, '')
+    return `KRX:${code}`
+  }
+  if (market === 'crypto') {
+    // 업비트 마켓은 KRW-BTC 형식이고 트레이딩뷰는 BTCKRW 순서를 쓴다
+    const up = /^([A-Z]+)-([A-Z0-9]+)$/.exec(symbol)
+    if (up) return `UPBIT:${up[2]}${up[1]}`
+    return `BINANCE:${symbol}`
+  }
+  return symbol
+}
+
 /** 시총 표기 — 원화는 조/억, 달러는 B/M */
 export function fmtCap(cap: number | null | undefined, m: Market): string {
   if (cap == null || !Number.isFinite(cap)) return '—'

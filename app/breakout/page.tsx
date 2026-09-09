@@ -2,9 +2,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle'
-import { MARKETS, tiersFor } from '@/lib/markets'
+import { MARKETS, tiersFor, fmtCap, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
-import { TvLink } from '../components/TvLink'
+import { SymbolLabel } from '../components/SymbolLabel'
 import {
   BREAKOUTS, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict, roomToVwma60, isWeeklyKey,
   alignStrength, hiddenBreakouts,
@@ -21,6 +21,8 @@ import {
 // 내일 다시 돌파할 수 없기 때문이다(실측 전날 겹침 0%).
 
 interface Row {
+  /** 화면용 짧은 이름. 한국은 005930, 크립토는 BTC */
+  display?: string | null
   symbol: string; name: string; sector: string; marketCap: number
   f5: number | null; f20: number | null; f60: number | null
   rvol: number | null; chg20: number | null; pctB: number | null
@@ -45,7 +47,7 @@ interface Data {
 
 const sgn = (v: number | null, d = 0) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(d)}`
 
-function StockRow({ r, weekly }: { r: Row; weekly: boolean }) {
+function StockRow({ r, weekly, market }: { r: Row; weekly: boolean; market: Market }) {
   // 종가가 VWMA20에서 얼마나 떨어져 있나. 주봉 탭이면 주봉 값으로 잰다
   const px = weekly ? r.wClose : r.price
   const ma = weekly ? r.wVwma20 : r.vwma20
@@ -63,17 +65,10 @@ function StockRow({ r, weekly }: { r: Row; weekly: boolean }) {
       alignItems: 'center', gap: 6, minHeight: 52,
       padding: '8px 12px', borderBottom: '1px solid var(--border)',
     }}>
-      <div style={{ minWidth: 0 }}>
-        <div className="num" style={{ fontSize: 14, fontWeight: 700 }}>
-          <TvLink symbol={r.symbol} />
-        </div>
-        <div style={{
-          fontSize: 10, color: 'var(--text-muted)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {(r.sector || '').slice(0, 20)} · ${(r.marketCap / 1e9).toFixed(1)}B
-        </div>
-      </div>
+      <SymbolLabel
+        symbol={r.symbol} display={r.display} name={r.name} market={market}
+        sub={<>{r.sector ? `${r.sector.slice(0, 18)} · ` : ''}{fmtCap(r.marketCap, market)}</>}
+      />
 
       <div style={{ textAlign: 'right' }}>
         <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{weekly ? '주봉' : ''} VWMA 대비</div>
@@ -353,7 +348,7 @@ export default function BreakoutPage() {
               <span className="num" style={{ fontSize: 12, color: 'var(--text-muted)' }}>{rows.length}종목</span>
             </div>
             <div className="card" style={{ overflow: 'hidden' }}>
-              {rows.map(r => <StockRow key={r.symbol} r={r} weekly={tab.endsWith('W')} />)}
+              {rows.map(r => <StockRow key={r.symbol} r={r} weekly={tab.endsWith('W')} market={market} />)}
             </div>
           </section>
         )
