@@ -78,13 +78,15 @@ create index if not exists idx_caps_updated
 -- 스캔 빈도가 높은 시장이 낮은 시장의 이력을 밀어낸다.
 
 create or replace function public.prune_snapshots(keep_per_market int default 120)
-returns table (market text, deleted bigint)
+returns table (mkt text, n_deleted bigint)
 language plpgsql
 as $$
 begin
+  -- OUT 파라미터 이름을 market이 아니라 mkt로 둔다.
+  -- plpgsql은 OUT 파라미터와 같은 이름의 컬럼 참조를 모호하다고 거부한다.
   return query
   with ranked as (
-    select id, s.market,
+    select s.id, s.market as m,
            row_number() over (partition by s.market order by s.scanned_at desc) as rn
       from public.screener_snapshots s
   ),
@@ -92,9 +94,9 @@ begin
     delete from public.screener_snapshots s
      using ranked r
      where s.id = r.id and r.rn > keep_per_market
-    returning s.market
+    returning s.market as m
   )
-  select g.market, count(*) from gone g group by g.market;
+  select g.m, count(*) from gone g group by g.m;
 end;
 $$;
 
@@ -103,15 +105,21 @@ comment on function public.prune_snapshots is
 
 -- ── 기존 뷰 갱신 ────────────────────────────────────────────────────────
 --
--- screener_latest가 시장을 구분하지 않으면 세 시장이 섞여 나온다.
--- market을 노출해 호출부가 걸러 쓰게 한다.
+-- 앱은 이 뷰를 쓰지 않는다 (대시보드에서 직접 조회할 때만 쓴다).
+-- 그래도 시장을 구분하지 않으면 세 시장이 섞여 나오므로 같이 고친다.
+--
+-- create or replace가 아니라 drop 후 create인 이유:
+-- r.* 에 새 컬럼(display·dollar_vol 등)이 끼면서 뷰의 컬럼 순서가 바뀐다.
+-- replace는 컬럼 이름·순서 변경을 거부한다.
 
-create or replace view public.screener_latest as
+drop view if exists public.screener_latest;
+
+create view public.screener_latest as
 select r.*, s.scanned_at, s.regime, s.spy_chg20, s.market
   from public.screener_rows r
   join public.screener_snapshots s on s.id = r.snapshot_id
  where s.id = (
-   select id from public.screener_snapshots s2
+   select s2.id from public.screener_snapshots s2
     where s2.market = s.market
     order by s2.scanned_at desc
     limit 1
