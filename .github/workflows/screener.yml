@@ -72,3 +72,19 @@ jobs:
       - name: Health check
         continue-on-error: true
         run: node scripts/healthcheck.mjs
+
+      # 캐시 예열.
+      #
+      # 응답은 스냅샷 id로 캐시된다. 새 스캔이 돌면 키가 바뀌어 첫 요청이
+      # 전부 다시 계산한다 — 실측 31초였다. 그 비용을 사용자가 내면 안 된다.
+      # 스캔 직후 여기서 한 번 불러 채워둔다.
+      - name: Warm cache
+        continue-on-error: true
+        env:
+          MARKET: ${{ steps.m.outputs.market }}
+        run: |
+          BASE=https://trading-hub-nu-orcin.vercel.app
+          for path in "/api/screener?market=$MARKET" "/api/tracking?market=$MARKET"; do
+            t=$(curl -s -o /dev/null -w "%{time_total}" --max-time 120 "$BASE$path" || echo "실패")
+            echo "예열 $path -> ${t}s"
+          done
