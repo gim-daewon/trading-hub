@@ -72,3 +72,5 @@ probe-bars.mjs
 kr-out.txt
 kr-err.txt
 atr-*.txt
+bt-sweep.mjs
+sweep-*.txt

@@ -132,9 +132,10 @@ export const MARKETS: Record<Market, MarketDef> = {
     id: 'crypto', label: '암호화폐', short: '크립토', currency: 'USD', tiers: CRYPTO_TIERS,
     ruleValidated: false,
     ruleNote:
-      '손절 -3%가 일중 변동폭 중앙값보다 작다 (BTC 3.24% · SOL 5.74%). ' +
-      '아무 날에 사도 절반 이상 당일 손절이라 이 규칙으로는 잴 수 없다. ' +
-      'ATR 비례 규칙으로 따로 재야 한다.',
+      '손절 -3%로는 평균 2.2일 만에 잘린다 (일중 변동폭 중앙값 BTC 3.24% · SOL 5.74%). ' +
+      '실측으로 규칙을 12가지 바꿔봤는데 넓힐수록 좋아졌고 ATR 3.0/9.0이 최고(+0.84%)였다. ' +
+      '다만 그때 보유가 28일이라 측정 창(40일) 안에서 상당수가 시간 만료로 끝난다 — ' +
+      '사실상 매수 후 보유에 가까워 "규칙을 찾았다"고 말할 수 없다. 아직 미검증이다.',
     universeNote: '바이낸스 USDT 현물 + 업비트 KRW 마켓 (레버리지·스테이블 제외)',
     lowLiquidity: 1e5,   // $100k
     // 크립토는 BTC가 곧 국면이다. 알트는 BTC가 빠지면 같이 빠진다
