@@ -18,9 +18,12 @@ const URL_ = process.env.SOURCE_HEALTH_URL
 const out = []
 const write = (s) => {
   out.push(s)
+  // 요약 파일과 stdout 양쪽에 쓴다.
+  // 요약에만 쓰면 실행 로그가 비어서 '무엇을 확인했는지'를 로그로 못 본다 —
+  // 조용한 실패를 잡으려고 만든 검사가 정작 자기 결과를 조용히 숨기고 있었다
   const f = process.env.GITHUB_STEP_SUMMARY
   if (f) appendFileSync(f, s + '\n')
-  else console.log(s)
+  console.log(s)
 }
 
 const ICON = { ok: '✓', warn: '!', fail: 'X' }
