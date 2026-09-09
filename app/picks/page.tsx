@@ -1,10 +1,12 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
+import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle'
+import { MARKETS, tiersFor as tf } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { TvLink } from '../components/TvLink'
 import {
-  tiersFor, TIER_EVIDENCE, RR_EVIDENCE, RR_BASELINE, rrVerdict,
+  tiersFor, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
   type TierId, type CatKey, type Regime, type Perf,
 } from '@/lib/screener-shared'
 
@@ -23,6 +25,7 @@ interface Row {
   rvol: number | null; chg20: number | null; pctB: number | null
 }
 interface Data {
+  tierCounts?: Partial<Record<TierId, number>>
   regime: Regime
   spyChg20: number | null
   scanned: number
@@ -93,23 +96,27 @@ function StockRow({ r }: { r: Row }) {
 }
 
 export default function PicksPage() {
+  const [market, setMarket, marketReady] = useMarket()
+  const [includeMicro, setIncludeMicro] = useState(false)
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
 
   const load = useCallback(() => {
     setLoading(true); setErr('')
-    fetch('/api/screener')
+    fetch(`/api/screener?market=${market}`)
       .then(r => r.json())
       .then(j => { setData(j); if (j.error) setErr(j.error) })
       .catch(e => setErr(String(e)))
       .finally(() => setLoading(false))
-  }, [])
+  }, [market])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { if (marketReady) load() }, [load, marketReady])
 
+  const visibleTiers = tf(market)
+    .filter(t => includeMicro || (t.id !== 'micro' && t.id !== 'unknown'))
   const total = data
-    ? tiersFor('us').reduce((a, t) => a + (data.categories?.[t.id]?.pullback?.length ?? 0), 0)
+    ? visibleTiers.reduce((a, t) => a + (data.categories?.[t.id]?.pullback?.length ?? 0), 0)
     : 0
   // pct_b 컬럼 추가 전 스냅샷이면 전부 null이라 후보가 안 나온다
   const awaitingScan = !!data && !loading && total === 0
@@ -138,6 +145,25 @@ export default function PicksPage() {
         )}
       />
 
+      <MarketToggle value={market} onChange={setMarket} />
+
+      <MicroToggle
+        on={includeMicro}
+        onChange={setIncludeMicro}
+        counts={(data?.tierCounts?.micro ?? 0) + (data?.tierCounts?.unknown ?? 0)}
+      />
+
+      {!MARKETS[market].ruleValidated && (
+        <div className="card" style={{
+          padding: '10px 12px', marginBottom: 12, fontSize: 11, lineHeight: 1.6,
+          borderLeft: '3px solid var(--warn)',
+        }}>
+          <b style={{ color: 'var(--warn)' }}>{MARKETS[market].label}은 검증 전이다.</b>
+          {' '}{MARKETS[market].ruleNote}
+          <br />아래 기댓값·연환산은 <b>미국에서 잰 값</b>이라 여기엔 해당되지 않는다.
+        </div>
+      )}
+
       <div className="card" style={{ padding: '12px 14px', marginBottom: 14, fontSize: 11, lineHeight: 1.6 }}>
         <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
           눌림목 — 볼린저 하단권
@@ -152,19 +178,38 @@ export default function PicksPage() {
             기댓값 부호가 뒤집혔다(앞절반 −0.417% → 뒤절반 +0.454%).
           </span>
           <br />
-          10년 실측 (손절 −3% / 익절 +9% 규칙, 격자 20개):
-          거래당 기댓값 <b>{RR_EVIDENCE.pullback.exp >= 0 ? '+' : ''}{RR_EVIDENCE.pullback.exp}%</b>
-          {' '}· 연환산 <b>{RR_EVIDENCE.pullback.ann >= 0 ? '+' : ''}{RR_EVIDENCE.pullback.ann}%</b>
-          {' '}(기준선 +{RR_BASELINE.exp}% · +{RR_BASELINE.ann}%)
-          <br />
-          <span style={{ color: 'var(--warn)' }}>
-            <b>{rrVerdict('pullback').text}.</b> 격자 범위가
-            {' '}{RR_EVIDENCE.pullback.lo}~{RR_EVIDENCE.pullback.hi}%로 넓어
-            구간에 따라 기준선에 지기도 한다. 기댓값은 정체 구간
-            (+{RR_EVIDENCE.quiet.exp}%)과 사실상 같은데,
-            <b> 정체 구간은 격자 20개 전부에서 플러스였고 눌림목은 아니다.</b>
-            {' '}<b>오를 종목 목록이 아니라 살펴볼 후보 목록</b>으로 쓸 것.
-          </span>
+          {/* 근거는 그 시장에서 잰 것만 띄운다.
+              한국은 수급 카테고리를 아직 안 쟀다 — VWMA 신호만 측정했다 */}
+          {(() => {
+            const q = RR_EVIDENCE_BY_MARKET[market].pullback
+            const base = RR_BASELINE_BY_MARKET[market]
+            const quiet = RR_EVIDENCE_BY_MARKET[market].quiet
+            if (!q || !base) {
+              return (
+                <span style={{ color: 'var(--warn)' }}>
+                  <b>이 시장에서는 눌림목을 아직 측정하지 않았다.</b>{' '}
+                  목록은 같은 조건(볼린저 %B ≤ 0.2)으로 걸러낸 것이지만 성과 근거가 없다.
+                  {' '}<b>오를 종목 목록이 아니라 살펴볼 후보 목록</b>으로 쓸 것.
+                </span>
+              )
+            }
+            return (
+              <>
+                10년 실측 (손절 −3% / 익절 +9% 규칙, 격자 20개):
+                거래당 기댓값 <b>{q.exp >= 0 ? '+' : ''}{q.exp}%</b>
+                {' '}· 연환산 <b>{q.ann >= 0 ? '+' : ''}{q.ann}%</b>
+                {' '}(기준선 +{base.exp}% · +{base.ann}%)
+                <br />
+                <span style={{ color: 'var(--warn)' }}>
+                  <b>{rrVerdict('pullback', market).text}.</b> 격자 범위가
+                  {' '}{q.lo}~{q.hi}%로 넓어 구간에 따라 기준선에 지기도 한다.
+                  {quiet && <> 기댓값은 정체 구간(+{quiet.exp}%)과 사실상 같은데,
+                    <b> 정체 구간은 격자 20개 전부에서 플러스였고 눌림목은 아니다.</b></>}
+                  {' '}<b>오를 종목 목록이 아니라 살펴볼 후보 목록</b>으로 쓸 것.
+                </span>
+              </>
+            )
+          })()}
         </p>
       </div>
 
@@ -192,7 +237,7 @@ export default function PicksPage() {
         </div>
       )}
 
-      {!awaitingScan && data && tiersFor('us').map(t => {
+      {!awaitingScan && data && visibleTiers.map(t => {
         const rows = data.categories?.[t.id]?.pullback ?? []
         return (
           <section key={t.id} style={{ marginBottom: 18 }}>

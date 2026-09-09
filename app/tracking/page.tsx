@@ -1,9 +1,12 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
+import { MarketToggle, useMarket } from '../components/MarketToggle'
+import { MARKETS } from '@/lib/markets'
 import {
-  tiersFor, CATS, BREAKOUTS, STOPPING_RULE, RR_BASELINE,
+  tiersFor, CATS, BREAKOUTS, STOPPING_RULE,
   type TierId, type CatKey, type Regime,
+  RR_BASELINE_BY_MARKET,
 } from '@/lib/screener-shared'
 
 // 스크리너에 뜬 종목이 실제로 올랐는지 사후 확인.
@@ -64,20 +67,21 @@ function Cell({ r }: { r: Result | null }) {
 }
 
 export default function TrackingPage() {
+  const [market, setMarket, marketReady] = useMarket()
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
 
   const load = useCallback(() => {
     setLoading(true); setErr('')
-    fetch('/api/tracking')
+    fetch(`/api/tracking?market=${market}`)
       .then(r => r.json())
       .then(j => { setData(j); if (j.error) setErr(j.error) })
       .catch(e => setErr(String(e)))
       .finally(() => setLoading(false))
-  }, [])
+  }, [market])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { if (marketReady) load() }, [load, marketReady])
 
   return (
     <div style={{ padding: 16, maxWidth: 860, margin: '0 auto' }}>
@@ -88,6 +92,21 @@ export default function TrackingPage() {
         showMarketStatus={false}
         sub={data && <span>스냅샷 {data.snapshotCount}개 누적</span>}
       />
+
+      <MarketToggle value={market} onChange={setMarket} />
+
+      {/* 시장마다 표본이 쌓인 날부터가 다르다. 한국·크립토는 2026-09-09부터다.
+          그 사실을 안 적으면 "왜 기록이 적지"를 알 수 없다 */}
+      {!MARKETS[market].ruleValidated && (
+        <div className="card" style={{
+          padding: '10px 12px', marginBottom: 12, fontSize: 11, lineHeight: 1.6,
+          borderLeft: '3px solid var(--warn)',
+        }}>
+          <b style={{ color: 'var(--warn)' }}>{MARKETS[market].label}은 판정 기준이 없다.</b>
+          {' '}{MARKETS[market].ruleNote}
+          {' '}아래 수치는 기록일 뿐 기준선과 비교할 수 없다.
+        </div>
+      )}
 
       <div className="card" style={{ padding: '11px 13px', marginBottom: 14, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
         스크리너에 뜬 종목이 그 뒤 실제로 올랐는지 추적한다. 백테스트와 달리
@@ -283,7 +302,7 @@ export default function TrackingPage() {
             손절 −3%/익절 +9% 규칙의 손익비(2.5~2.9)와는 다른 값이다 —
             그건 규칙이 만드는 값이고 이건 신호가 고른 종목의 성질이다</div>
           <div>· 1거래일 결과는 다음 스캔이면 바로 나온다. 5일을 기다릴 필요가 없다</div>
-          <div>· 백테스트 기준선: 기댓값 +{RR_BASELINE.exp}%/거래 (손절 −3%/익절 +9% 규칙)</div>
+          <div>· 백테스트 기준선: 기댓값 {RR_BASELINE_BY_MARKET[market] ? `+${RR_BASELINE_BY_MARKET[market]!.exp}%/거래` : '미측정'} (손절 −3%/익절 +9% 규칙)</div>
           <div>· 스캔은 평일 1회라 스냅샷 1개 = 1거래일이다</div>
         </div>
       )}

@@ -6,7 +6,7 @@ import { MARKETS, tiersFor } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { TvLink } from '../components/TvLink'
 import {
-  BREAKOUTS, RR_EVIDENCE, RR_BASELINE, rrVerdict, roomToVwma60, isWeeklyKey,
+  BREAKOUTS, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict, roomToVwma60, isWeeklyKey,
   alignStrength, hiddenBreakouts,
   type TierId, type BreakoutKey, type Regime,
 } from '@/lib/screener-shared'
@@ -229,10 +229,10 @@ export default function BreakoutPage() {
           margin: '6px 0', padding: '7px 9px', borderRadius: 6,
           background: 'var(--bg-base)', color: 'var(--text-muted)', fontSize: 10, lineHeight: 1.7,
         }}>
-          기준선 {RR_BASELINE.exp}%/거래 · 연환산 {RR_BASELINE.ann}%
+          기준선 {RR_BASELINE_BY_MARKET[market]?.exp ?? '—'}%/거래 · 연환산 {RR_BASELINE_BY_MARKET[market]?.ann ?? '—'}%
           <br />
           {BREAKOUTS.filter(b => !hidden.has(b.key)).map(b => {
-            const q = RR_EVIDENCE[b.key]
+            const q = RR_EVIDENCE_BY_MARKET[market][b.key]
             return q ? `${b.label} ${q.exp >= 0 ? '+' : ''}${q.exp}%` : ''
           }).filter(Boolean).join(' · ')}
         </div>
@@ -278,8 +278,8 @@ export default function BreakoutPage() {
       <p style={{ margin: '0 0 8px', fontSize: 10, color: 'var(--text-muted)' }}>
         {/* 탭마다 실측치를 붙여둔다. 한 번 읽고 잊는 것보다 매번 보이는 게 낫다 */}
         <span className="num" style={{ color: 'var(--warn)' }}>
-          기댓값 {(() => { const q = RR_EVIDENCE[tab]; return q ? `${q.exp >= 0 ? '+' : ''}${q.exp}%/거래 · 연환산 ${q.ann >= 0 ? '+' : ''}${q.ann}%` : '미측정' })()}
-          {' '}(기준선 +{RR_BASELINE.exp}% · +{RR_BASELINE.ann}%)
+          기댓값 {(() => { const q = RR_EVIDENCE_BY_MARKET[market][tab]; return q ? `${q.exp >= 0 ? '+' : ''}${q.exp}%/거래 · 연환산 ${q.ann >= 0 ? '+' : ''}${q.ann}%` : '미측정' })()}
+          {' '}(기준선 {RR_BASELINE_BY_MARKET[market] ? `+${RR_BASELINE_BY_MARKET[market]!.exp}% · +${RR_BASELINE_BY_MARKET[market]!.ann}%` : '미측정'})
         </span>
         {' · '}
         {tab === 'today'

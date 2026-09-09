@@ -120,8 +120,10 @@ export const MARKETS: Record<Market, MarketDef> = {
   },
   kr: {
     id: 'kr', label: '한국', short: '한국', currency: 'KRW', tiers: KR_TIERS,
-    ruleValidated: false,
-    ruleNote: '아직 한국에서 재지 않았다. 미국 기준선(+0.24%)을 그대로 쓰면 거짓말이 된다.',
+    // 2026-09-09에 측정했다. 규칙(-3%/+9%)이 한국에서도 성립한다 —
+    // 기준선 +0.13% · 승률 27% · 손익비 2.90으로 미국과 같은 구조가 나왔다.
+    // 다만 기준선 자체는 미국(+0.24%)의 절반이라 잣대를 따로 쓴다.
+    ruleValidated: true,
     universeNote: '코스피·코스닥 전 종목 (ETF·ETN·거래정지 제외)',
     lowLiquidity: 1e8,   // 1억원. 실측 중앙값 8,800만원이라 절반 가까이 걸린다
     benchmark: { symbol: '^KS11', source: 'yahoo', label: '코스피' },

@@ -219,10 +219,45 @@ export interface RrPerf {
  * 주의: 10개 격자 전부에서 기준선을 넘은 신호는 하나도 없다.
  * 중앙값이 높아도 일부 구간에서는 기준선에 진다.
  */
-export const RR_BASELINE: RrPerf =
-  { win: 29, rr: 2.77, exp: 0.24, lo: -0.02, hi: 0.62, days: 8.2, ann: 7.48 }
+/**
+ * 시장별 기준선 — "아무 종목이나 같은 규칙으로 사면 이만큼 나온다".
+ *
+ * 시장마다 다르다. 한국은 +0.13%로 미국(+0.24%)의 절반이다.
+ * 미국 기준선으로 한국 신호를 판정하면 전부 '기준선 이하'로 나온다.
+ * 크립토는 null이다 — -3%/+9% 규칙이 애초에 안 맞아 잰 적이 없다.
+ */
+export const RR_BASELINE_BY_MARKET: Record<Market, RrPerf | null> = {
+  us: { win: 29, rr: 2.77, exp: 0.24, lo: -0.02, hi: 0.62, days: 8.2, ann: 7.48 },
+  kr: { win: 27, rr: 2.90, exp: 0.13, lo: -0.17, hi: 0.39, days: 6.3, ann: 5.14 },
+  crypto: null,
+}
 
-export const RR_EVIDENCE: Record<string, RrPerf> = {
+/** 미국 기준선. 시장 구분이 없는 옛 호출부가 쓴다 */
+export const RR_BASELINE: RrPerf = RR_BASELINE_BY_MARKET.us!
+
+/**
+ * 한국 VWMA 신호 — 2026-09-09 측정. 미국과 같은 코드(buildBreakouts)로 판정했다.
+ * 유니버스 2,555종목 · 10년 · 격자 20개 · 손절 -3% / 익절 +9%.
+ *
+ * 두 가지가 미국과 독립적으로 확인됐다:
+ *   touchW  -0.76%, 격자 20개 전부 마이너스 (미국 -0.86%와 같은 실패)
+ *   주봉 정배열 조건이 nearD를 +0.22%p 올린다 (미국은 +0.07%p)
+ *
+ * 수급 카테고리(눌림목·정체·모멘텀)는 아직 한국에서 재지 않았다.
+ * 없는 키는 rrVerdict가 '미측정'으로 돌려준다.
+ */
+const KR_EVIDENCE: Record<string, RrPerf> = {
+  nearW:  { win: 29, rr: 2.76, exp:  0.31, lo: -0.09, hi: 0.77, days: 8.2, ann:  9.45 },
+  today:  { win: 27, rr: 2.94, exp:  0.24, lo: -0.02, hi: 0.57, days: 6.2, ann:  9.65 },
+  revD:   { win: 28, rr: 2.93, exp:  0.23, lo:  0.01, hi: 0.86, days: 7.3, ann:  7.94 },
+  nearD:  { win: 29, rr: 2.71, exp:  0.18, lo: -0.16, hi: 0.65, days: 7.9, ann:  5.81 },
+  held:   { win: 27, rr: 2.93, exp:  0.15, lo: -0.04, hi: 0.47, days: 6.2, ann:  6.05 },
+  touchD: { win: 26, rr: 2.91, exp:  0.08, lo: -0.28, hi: 0.35, days: 4.5, ann:  4.61 },
+  revW:   { win: 26, rr: 2.91, exp:  0.01, lo: -0.12, hi: 0.28, days: 7.0, ann:  0.28 },
+  touchW: { win: 20, rr: 2.84, exp: -0.76, lo: -1.17, hi: -0.31, days: 4.2, ann: -45.73 },
+}
+
+const US_EVIDENCE: Record<string, RrPerf> = {
   // 수급 스크리너 — 2026-09-06 재측정. 눌림목·정체 구간에서 수급 필터를 뺀 정의다
   pullback: { win: 29, rr: 2.81, exp:  0.30, lo: -0.12, hi: 1.38, days:  7.4, ann: 10.34 },
   quiet:    { win: 29, rr: 2.67, exp:  0.28, lo:  0.07, hi: 0.45, days: 10.0, ann:  7.15 },
@@ -247,10 +282,31 @@ export const RR_EVIDENCE: Record<string, RrPerf> = {
  * "우위 확인"은 10개 격자 전부에서 기준선을 넘었을 때만 쓴다.
  * 현재 그 조건을 만족하는 신호는 없다.
  */
-export function rrVerdict(key: string): { text: string; tone: 'ok' | 'weak' | 'none'; note: string } {
-  const p = RR_EVIDENCE[key]
-  if (!p) return { text: '미측정', tone: 'weak', note: '' }
-  const b = RR_BASELINE.exp
+/** 시장별 근거. 크립토는 비어 있다 — 규칙이 안 맞아 잰 적이 없다 */
+export const RR_EVIDENCE_BY_MARKET: Record<Market, Record<string, RrPerf>> = {
+  us: US_EVIDENCE,
+  kr: KR_EVIDENCE,
+  crypto: {},
+}
+
+/** 미국 근거. 시장 구분이 없는 옛 호출부가 쓴다 */
+export const RR_EVIDENCE = US_EVIDENCE
+
+/**
+ * 신호 판정 — **반드시 그 시장의 기준선과 비교한다.**
+ *
+ * 한국 기준선은 +0.13%로 미국(+0.24%)의 절반이다. 미국 기준선으로 한국
+ * 신호를 재면 멀쩡한 신호가 전부 '기준선 이하'로 나온다. 반대도 마찬가지다.
+ * 기준선이 없는 시장(크립토)은 판정 자체를 하지 않는다 — 없는 잣대로
+ * 재는 것보다 '미측정'이라고 말하는 게 정확하다.
+ */
+export function rrVerdict(
+  key: string, market: Market = 'us',
+): { text: string; tone: 'ok' | 'weak' | 'none'; note: string } {
+  const p = RR_EVIDENCE_BY_MARKET[market][key]
+  const base = RR_BASELINE_BY_MARKET[market]
+  if (!p || !base) return { text: '미측정', tone: 'weak', note: '' }
+  const b = base.exp
   if (p.exp <= 0) return { text: '기댓값 마이너스', tone: 'none', note: '규칙대로 매매하면 잃는다' }
   if (p.lo > b) return { text: '우위 확인', tone: 'ok', note: '전 격자에서 기준선 상회' }
   if (p.exp > b) return {

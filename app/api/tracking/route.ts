@@ -4,6 +4,7 @@ import {
   TIER_EVIDENCE, STOPPING_RULE, changesSince,
   type TierId, type CatKey, type Regime, type ScreenerRow,
 } from '@/lib/screener-shared'
+import { isMarket, type Market } from '@/lib/markets'
 
 // 스크리너에 뜬 종목이 실제로 올랐는지 사후 확인.
 //
@@ -45,6 +46,7 @@ interface DbRow {
   symbol: string; name: string | null; sector: string | null; market_cap: number | null
   f5: number | null; f20: number | null; f60: number | null
   rvol: number | null; chg20: number | null; pct_b: number | null; price: number | null
+  cap_known?: boolean | null
   vwma20: number | null; vwma60: number | null; above_run: number | null
   w_close: number | null; w_vwma20: number | null; w_vwma60: number | null
   w_above_run: number | null; prev_run: number | null; w_prev_run: number | null
@@ -60,7 +62,9 @@ function sbUrl() {
     .replace(/\/+$/, '').replace(/\/rest\/v1$/, '')
 }
 
-async function readRows(url: string, headers: HeadersInit, snapshotId: number): Promise<ScreenerRow[]> {
+async function readRows(
+  url: string, headers: HeadersInit, snapshotId: number, market: Market,
+): Promise<ScreenerRow[]> {
   // PostgREST 페이징: offset+limit 쿼리 파라미터만 쓴다.
   //
   // Range 헤더는 쓰지 않는다. 두 가지 문제가 겹친다:
@@ -88,7 +92,9 @@ async function readRows(url: string, headers: HeadersInit, snapshotId: number): 
     name: r.name ?? '',
     sector: r.sector ?? '',
     marketCap: r.market_cap ?? 0,
-    tier: tierOf(r.market_cap ?? 0, 'us'),
+        // cap_known이 false면 시총 미상이다. 초소형으로 단정하면 통계가 오염된다.
+    // 컬럼 추가 전 스냅샷은 undefined라 시총으로 판정한다
+    tier: r.cap_known === false ? 'unknown' : tierOf(r.market_cap ?? 0, market),
     f5: r.f5, f20: r.f20, f60: r.f60,
     rvol: r.rvol, chg20: r.chg20, pctB: r.pct_b,
     // VWMA 필드를 빠뜨려서 buildBreakouts가 전부 undefined를 보고
@@ -140,7 +146,9 @@ function summarize(pairs: { ret: number; ex: number }[]): Result | null {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const rawMarket = new URL(req.url).searchParams.get('market') ?? 'us'
+  const market: Market = isMarket(rawMarket) ? rawMarket : 'us'
   const url = sbUrl()
   const key = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '').trim()
   if (!url || !key) return NextResponse.json({ error: 'supabase 미설정', horizons: [] })
@@ -155,7 +163,9 @@ export async function GET() {
     // URL이 바뀌어 자동으로 새로 받는다 — 캐시를 그대로 둬도 안전하다.
     // 비용은 요청당 1행 조회 하나뿐이다.
     const snapRes = await fetch(
-      `${url}/rest/v1/screener_snapshots?select=id,scanned_at,regime,spy_chg20,spy_price,bar_date&order=scanned_at.desc&limit=90`,
+      `${url}/rest/v1/screener_snapshots` +
+      `?select=id,scanned_at,regime,spy_chg20,spy_price,bar_date` +
+      `&market=eq.${market}&order=scanned_at.desc&limit=90`,
       { headers, cache: 'no-store' }
     )
     if (!snapRes.ok) throw new Error(`snapshots ${snapRes.status}`)
@@ -196,7 +206,7 @@ export async function GET() {
 
     // 최신 = 현재가 기준
     const latest = snaps[0]
-    const latestRows = await readRows(url, headers, latest.id)
+    const latestRows = await readRows(url, headers, latest.id, market)
     const nowPrice = new Map(latestRows.filter(r => r.price).map(r => [r.symbol, r.price!]))
     if (nowPrice.size === 0) {
       return NextResponse.json({
@@ -211,11 +221,11 @@ export async function GET() {
       const past = snaps[h]
       if (!past || past.spy_price == null || latest.spy_price == null) continue
 
-      const rows = await readRows(url, headers, past.id)
+      const rows = await readRows(url, headers, past.id, market)
       if (!rows.length) continue
       const spyRet = ((latest.spy_price - past.spy_price) / past.spy_price) * 100
-      const cats = buildCategories(rows, 'us', SHOWN_LIMIT)
-      const catsExt = buildCategories(rows, 'us', EXTENDED_LIMIT)
+      const cats = buildCategories(rows, market, SHOWN_LIMIT)
+      const catsExt = buildCategories(rows, market, EXTENDED_LIMIT)
 
       // 진입가와 현재가를 심볼로 이어 수익률 쌍을 만든다
       const toPairs = (list: ScreenerRow[]) => list
@@ -232,18 +242,18 @@ export async function GET() {
 
       for (const c of CATS) {
         byCat[c.key] = {}
-        for (const t of tiersFor('us')) {
+        for (const t of tiersFor(market)) {
           byCat[c.key][t.id] = summarize(toPairs(cats[t.id][c.key]))
         }
-        byCat[c.key].all = summarize(toPairs(tiersFor('us').flatMap(t => cats[t.id][c.key])))
-        byCatExt[c.key] = summarize(toPairs(tiersFor('us').flatMap(t => catsExt[t.id][c.key])))
+        byCat[c.key].all = summarize(toPairs(tiersFor(market).flatMap(t => cats[t.id][c.key])))
+        byCatExt[c.key] = summarize(toPairs(tiersFor(market).flatMap(t => catsExt[t.id][c.key])))
       }
 
       // VWMA 신호도 같이 추적한다. 화면에 띄우면서 성적을 안 재고 있었다
-      const bo = buildBreakouts(rows, 'us', SHOWN_LIMIT)
+      const bo = buildBreakouts(rows, market, SHOWN_LIMIT)
       const byBreakout: Record<string, Result | null> = {}
       for (const b of BREAKOUTS) {
-        byBreakout[b.key] = summarize(toPairs(tiersFor('us').flatMap(t => bo[t.id][b.key])))
+        byBreakout[b.key] = summarize(toPairs(tiersFor(market).flatMap(t => bo[t.id][b.key])))
       }
 
       out.push({
@@ -264,6 +274,7 @@ export async function GET() {
     }
 
     return NextResponse.json({
+      market,
       horizons: out,
       snapshotCount: snaps.length,
       rawCount: allSnaps.length,

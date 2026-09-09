@@ -81,10 +81,17 @@ export default function ShortPage() {
         )}
       />
 
+      {/* 시장 토글을 붙이지 않는다.
+          이 화면의 근거는 lib/inverse-etf.ts의 14개 매핑인데 **전부 미국 종목**이다.
+          한국·크립토에는 대응하는 인버스 상품 목록이 없다.
+          토글만 달아두면 "빈 화면 = 후보 없음"으로 읽혀 오해가 된다. */}
       <div className="card" style={{
         padding: '11px 13px', marginBottom: 12, fontSize: 11, lineHeight: 1.6,
         borderLeft: '3px solid var(--down)',
       }}>
+        <b style={{ color: 'var(--info)' }}>이 메뉴는 미국 전용이다.</b>
+        {' '}인버스 ETF 매핑이 미국 종목 14개뿐이라 한국·크립토는 대상이 없다.
+        <br />
         <b>강세 구조가 깨진 종목</b> 중 <b>인버스 ETF가 있는 것</b>만 추렸다.
         <br />
         조건: <b>종가가 VWMA20 아래</b>. 얼마나 최근에 깨졌는지(이탈 일수)와

@@ -6,7 +6,7 @@ import { MARKETS, tiersFor, fmtCap, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { TvLink, TvLayoutSetting } from '../components/TvLink'
 import {
-  CATS, TIER_EVIDENCE, RR_EVIDENCE, RR_BASELINE, rrVerdict,
+  CATS, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
   type TierId, type CatKey, type Regime,
 } from '@/lib/screener-shared'
 
@@ -75,8 +75,11 @@ const TONE = {
 function EvidenceBox({ market, tier, cat, regime }: {
   market: Market; tier: TierId; cat: CatKey; regime: Regime
 }) {
-  const q = RR_EVIDENCE[cat]
-  const v = rrVerdict(cat)
+  // 반드시 그 시장의 근거·기준선을 쓴다.
+  // 한국 기준선은 미국의 절반이라 미국 잣대로 재면 멀쩡한 신호가 다 미달로 나온다
+  const q = RR_EVIDENCE_BY_MARKET[market][cat]
+  const base = RR_BASELINE_BY_MARKET[market]
+  const v = rrVerdict(cat, market)
   const tone = TONE[v.tone]
   // 실측치는 **미국 3구간**뿐이다. 한국·크립토, 그리고 초소형·시총 미상은
   // 잰 적이 없다. 없는 걸 0으로 채우면 근거가 거짓말이 된다
@@ -84,6 +87,19 @@ function EvidenceBox({ market, tier, cat, regime }: {
   const p = ev?.[cat][regime]
   const b = ev?.base[regime]
 
+  // 아직 재지 않은 시장·카테고리는 근거 상자를 그리지 않는다.
+  // 빈 숫자를 0으로 채우면 "기댓값 0%"라는 잘못된 사실이 화면에 뜬다
+  if (!q || !base) {
+    return (
+      <div style={{
+        background: 'var(--bg-base)', borderRadius: 10, padding: '10px 12px',
+        marginBottom: 12, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6,
+      }}>
+        <b style={{ color: 'var(--warn)' }}>이 조건은 이 시장에서 아직 측정하지 않았다.</b>
+        {' '}목록은 같은 규칙으로 걸러낸 것이지만 성과 근거가 없다.
+      </div>
+    )
+  }
   return (
     <div style={{
       background: 'var(--bg-base)',
@@ -100,10 +116,10 @@ function EvidenceBox({ market, tier, cat, regime }: {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(84px, 1fr))', gap: 8 }}>
         {[
-          { k: '거래당 기댓값', v: `${sgn(q.exp, 2)}%`, sub: `기준선 ${sgn(RR_BASELINE.exp, 2)}`, hl: q.exp > RR_BASELINE.exp },
-          { k: '연환산',       v: `${sgn(q.ann, 1)}%`, sub: `기준선 ${sgn(RR_BASELINE.ann, 1)}`, hl: q.ann > RR_BASELINE.ann },
-          { k: '평균 보유',    v: `${q.days.toFixed(1)}일`, sub: `기준선 ${RR_BASELINE.days}`, hl: false },
-          { k: '격자 범위',    v: `${sgn(q.lo, 2)}~${sgn(q.hi, 2)}`, sub: '10개 최소~최대', hl: q.lo > RR_BASELINE.exp },
+          { k: '거래당 기댓값', v: `${sgn(q.exp, 2)}%`, sub: `기준선 ${sgn(base.exp, 2)}`, hl: q.exp > base.exp },
+          { k: '연환산',       v: `${sgn(q.ann, 1)}%`, sub: `기준선 ${sgn(base.ann, 1)}`, hl: q.ann > base.ann },
+          { k: '평균 보유',    v: `${q.days.toFixed(1)}일`, sub: `기준선 ${base.days}`, hl: false },
+          { k: '격자 범위',    v: `${sgn(q.lo, 2)}~${sgn(q.hi, 2)}`, sub: '20개 최소~최대', hl: q.lo > base.exp },
         ].map(x => (
           <div key={x.k}>
             <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>{x.k}</div>
@@ -121,7 +137,7 @@ function EvidenceBox({ market, tier, cat, regime }: {
 
       <div className="num" style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)' }}>
         참고 · 승률 {q.win}% · 손익비 {q.rr.toFixed(2)}
-        <span style={{ opacity: 0.75 }}> (기준선 {RR_BASELINE.win}% · {RR_BASELINE.rr.toFixed(2)})</span>
+        <span style={{ opacity: 0.75 }}> (기준선 {base.win}% · {base.rr.toFixed(2)})</span>
         <br />
         <span style={{ opacity: 0.75 }}>
           승률·손익비는 신호와 거의 무관하다 — 규칙(−3%/+9%)이 만드는 값이다.
@@ -296,7 +312,7 @@ export default function ScreenerPage() {
         {orderedCats.map(c => {
           const n = data?.categories?.[tier]?.[c.key]?.length ?? 0
           const active = tab === c.key
-          const strong = rrVerdict(c.key).tone === 'ok'
+          const strong = rrVerdict(c.key, market).tone === 'ok'
           return (
             <button key={c.key} onClick={() => setTab(c.key)} style={{
               flexShrink: 0, minHeight: 38, padding: '0 14px', borderRadius: 19,
