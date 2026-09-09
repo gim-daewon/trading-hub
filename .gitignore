@@ -68,3 +68,4 @@ vwma2-*.txt
 flow-out.txt
 vwma3-*.txt
 probe-uni.mjs
+probe-bars.mjs

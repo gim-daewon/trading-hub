@@ -8,6 +8,23 @@
 import { fetchJson, pool } from './fetch-retry'
 import { type Market, type TierId, tierOf } from './markets'
 
+/**
+ * 크립토 시총 캐시.
+ *
+ * 코인게코 무료 티어 레이트리밋 때문에 시총 수집이 실측 123초 걸린다.
+ * 시총은 하루 만에 구간이 바뀔 값이 아니므로(1천억/1조 경계) 캐시해두고
+ * 주 1회만 갱신한다. 스캔이 그만큼 빨라진다.
+ *
+ * 구현은 호출부(스캔 스크립트)가 준다 — 이 파일이 Supabase를 알 필요가 없다.
+ */
+export interface CapSource {
+  load(): Promise<{ caps: Map<string, number>; names: Map<string, string>; ageDays: number } | null>
+  save(caps: Map<string, number>, names: Map<string, string>): Promise<void>
+}
+
+/** 이 일수를 넘으면 캐시를 버리고 다시 받는다 */
+export const CAP_CACHE_DAYS = 7
+
 export interface UniverseRow {
   /** 봉 조회에 쓰는 키. 시장마다 형식이 다르다 (AAPL / 005930.KS / BTCUSDT) */
   symbol: string
@@ -197,12 +214,12 @@ interface CgResult { caps: Map<string, number>; names: Map<string, string> }
  * 있으므로 **시총이 큰 쪽**을 택한다. 완벽하지 않다 — 소형 코인에서
  * 엉뚱한 시총이 붙을 수 있고, 그래서 구간이 틀릴 수 있다.
  */
-async function cryptoUniverse(): Promise<UniverseRow[]> {
+async function cryptoUniverse(capSource?: CapSource): Promise<UniverseRow[]> {
   const [ei, t24, upMarkets, cg] = await Promise.all([
     fetchJson<{ symbols?: BinanceSymbol[] }>('https://api.binance.com/api/v3/exchangeInfo', { headers: JSON_H }),
     fetchJson<{ symbol: string; quoteVolume: string; lastPrice: string }[]>('https://api.binance.com/api/v3/ticker/24hr', { headers: JSON_H }),
     fetchJson<{ market: string; korean_name: string; english_name: string }[]>('https://api.upbit.com/v1/market/all?isDetails=false', { headers: JSON_H }),
-    coingeckoCaps(),
+    cachedCaps(capSource),
   ])
   const { caps: cgCaps, names: cgNames } = cg
 
@@ -303,6 +320,33 @@ async function coingeckoCaps(): Promise<CgResult> {
 }
 
 /**
+ * 캐시가 신선하면 그걸 쓰고, 아니면 코인게코에서 받아 저장한다.
+ *
+ * 캐시 조회 자체가 실패하면 그냥 받는다 — 캐시는 최적화이지
+ * 정확성의 근거가 아니다. 여기서 던지면 스캔 전체가 멈춘다.
+ */
+async function cachedCaps(src?: CapSource): Promise<CgResult> {
+  if (src) {
+    try {
+      const hit = await src.load()
+      if (hit && hit.caps.size > 0 && hit.ageDays < CAP_CACHE_DAYS) {
+        console.error(`[coingecko] 캐시 사용 — ${hit.caps.size}개 · ${hit.ageDays.toFixed(1)}일 전`)
+        return { caps: hit.caps, names: hit.names }
+      }
+    } catch (e) {
+      console.error('[coingecko] 캐시 조회 실패 — 새로 받는다:', e instanceof Error ? e.message : e)
+    }
+  }
+  const fresh = await coingeckoCaps()
+  if (src && fresh.caps.size > 0) {
+    try { await src.save(fresh.caps, fresh.names) } catch (e) {
+      console.error('[coingecko] 캐시 저장 실패:', e instanceof Error ? e.message : e)
+    }
+  }
+  return fresh
+}
+
+/**
  * 1차 조회에서 못 찾은 심볼을 /coins/list 로 보완한다.
  *
  * 코인게코 심볼이 거래소와 다른 경우가 있다 (BTTC→BTT, RONIN→RON, BEAMX→BEAM).
@@ -364,10 +408,12 @@ async function usdKrwRate(): Promise<number> {
 
 // ----------------------------------------------------------------
 
-export async function fetchUniverse(market: Market): Promise<UniverseRow[]> {
+export async function fetchUniverse(
+  market: Market, capSource?: CapSource,
+): Promise<UniverseRow[]> {
   switch (market) {
     case 'us': return usUniverse()
     case 'kr': return krUniverse()
-    case 'crypto': return cryptoUniverse()
+    case 'crypto': return cryptoUniverse(capSource)
   }
 }
