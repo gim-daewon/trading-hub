@@ -160,6 +160,8 @@ interface Result {
  *  - 고가(high)를 저장하기 전 스냅샷은 종가로 익절을 판정한다. 손절은 저가로
  *    정확히 재므로 그 구간은 손실 쪽으로 치우친다 — hasHigh로 표시한다
  */
+type Bar3 = { high: number | null; low: number | null; close: number }
+
 interface RuleOutcome { ret: number; R: number; days: number; hit: 'stop' | 'target' | 'open' }
 
 /**
@@ -255,8 +257,15 @@ const buildHorizons = unstable_cache(
     if (nowPrice.size === 0) return []
     // 규칙 판정에 쓸 경로. snaps[0]이 최신이므로 뒤에서 앞으로가 시간순이다.
     // readRows가 스냅샷 id로 캐시되니 같은 스냅샷을 여러 구간이 재사용해도 싸다
+    // 경로 스냅샷을 심볼별 배열로 접어둔다.
+    //
+    // 원래는 스냅샷마다 Map을 만들고 구간마다 slice + get을 반복했다.
+    // 스냅샷 6개에서도 /api/tracking 예열이 25.5초였다. 60일 구간이 쌓이면
+    // 61개가 되어 지금 구조로는 못 버틴다.
+    //
+    // 심볼 하나당 시간순 배열을 한 번만 만들면 구간별로는 slice만 하면 된다.
     const maxH = Math.max(...HORIZONS.filter(h => snaps[h]))
-    const pathSnaps: Map<string, { high: number | null; low: number | null; close: number }>[] = []
+    const pathSnaps: Map<string, Bar3>[] = []
     for (let i = Math.min(maxH, snaps.length - 1); i >= 0; i--) {
       const rs = await readRows(url, key, snaps[i].id, market)
       pathSnaps.push(new Map(rs.filter(r => r.price != null)
@@ -264,6 +273,16 @@ const buildHorizons = unstable_cache(
     }
     // pathSnaps[0]이 가장 과거다. 구간 h의 경로는 진입 다음 날부터 오늘까지
     const pathIndexOf = (h: number) => pathSnaps.length - h   // 진입일 바로 다음 인덱스
+
+    // 심볼 -> 시간순 봉 배열. 한 번만 만든다
+    const bySymbol = new Map<string, (Bar3 | null)[]>()
+    for (let i = 0; i < pathSnaps.length; i++) {
+      for (const [sym, bar] of pathSnaps[i]) {
+        let arr = bySymbol.get(sym)
+        if (!arr) { arr = new Array(pathSnaps.length).fill(null); bySymbol.set(sym, arr) }
+        arr[i] = bar
+      }
+    }
 
     const out = []
     for (const h of HORIZONS) {
@@ -287,13 +306,16 @@ const buildHorizons = unstable_cache(
 
       // 손절 -3% / 익절 +9% 규칙 판정. 12월 8일 판정 기준이 이것이다
       const start = pathIndexOf(h)
-      const hasHigh = pathSnaps.slice(start).every(m => [...m.values()].some(v => v.high != null))
+      const hasHigh = pathSnaps.slice(start).every(m => {
+        for (const v of m.values()) if (v.high != null) return true
+        return false
+      })
       const toRule = (list: ScreenerRow[]) => list
         .filter(r => r.price != null)
         .map(r => {
-          const path = pathSnaps.slice(start)
-            .map(m => m.get(r.symbol))
-            .filter((v): v is { high: number | null; low: number | null; close: number } => !!v)
+          const full = bySymbol.get(r.symbol)
+          if (!full) return null
+          const path = full.slice(start).filter(v => v != null) as Bar3[]
           return path.length ? judgeRule(r.price!, r.atr14, market, r.dollarVol, path) : null
         })
         .filter((o): o is RuleOutcome => !!o)
