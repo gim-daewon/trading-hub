@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle'
 import { useLiveQuotes, type LiveQuote } from '../components/useLiveQuotes'
+import { LivePct } from '../components/LivePct'
 import { MARKETS, tiersFor, fmtCap, fmtPrice, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { SymbolLabel } from '../components/SymbolLabel'
@@ -86,14 +87,7 @@ function StockRow({ r, weekly, market, live }: {
     <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
       <SymbolLabel
         symbol={r.symbol} display={r.display} name={r.name} market={market}
-        trailing={
-          live ? (
-            // 실시간 등락률. 스냅샷은 마지막 종가 기준이라 그 뒤 움직임이 여기 보인다
-            <span className={live.pct >= 0 ? 'up' : 'down'} style={{ fontWeight: 700, fontSize: 11 }}>
-              {live.pct >= 0 ? '+' : ''}{live.pct.toFixed(1)}%
-            </span>
-          ) : fmtCap(r.marketCap, market)
-        }
+        trailing={live ? <LivePct live={live} market={market} /> : fmtCap(r.marketCap, market)}
         sub={<>
           {r.sector ? `${r.sector.slice(0, 20)} · ` : ''}{fmtCap(r.marketCap, market)}
           {live && <> · 현재 <span className="num">{fmtPrice(live.price, market)}</span></>}

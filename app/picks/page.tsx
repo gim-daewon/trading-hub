@@ -5,6 +5,8 @@ import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle
 import { MARKETS, tiersFor as tf, fmtCap, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { SymbolLabel } from '../components/SymbolLabel'
+import { useLiveQuotes, type LiveQuote } from '../components/useLiveQuotes'
+import { LivePct } from '../components/LivePct'
 import { ExitPrices } from '../components/ExitPrices'
 import {
   tiersFor, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
@@ -61,7 +63,7 @@ function EvidenceLine({ tier, regime }: { tier: TierId; regime: Regime }) {
   )
 }
 
-function StockRow({ r, market }: { r: Row; market: Market }) {
+function StockRow({ r, market, live }: { r: Row; market: Market; live?: LiveQuote }) {
   const deep = (r.pctB ?? 1) <= 0.05
   return (
     // 이름과 손절·익절이 각 줄 전체 폭을 쓴다.
@@ -69,8 +71,10 @@ function StockRow({ r, market }: { r: Row; market: Market }) {
     <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
       <SymbolLabel
         symbol={r.symbol} display={r.display} name={r.name} market={market}
-        trailing={fmtCap(r.marketCap, market)}
-        sub={r.sector ? r.sector.slice(0, 28) : undefined}
+        trailing={live ? <LivePct live={live} market={market} /> : fmtCap(r.marketCap, market)}
+        sub={<>
+          {r.sector ? `${r.sector.slice(0, 20)} · ` : ''}{fmtCap(r.marketCap, market)}
+        </>}
       />
 
       <div style={{
@@ -124,6 +128,12 @@ export default function PicksPage() {
     : 0
   // pct_b 컬럼 추가 전 스냅샷이면 전부 null이라 후보가 안 나온다
   const awaitingScan = !!data && !loading && total === 0
+
+  // 실시간 등락률 — 보이는 종목만
+  const live = useLiveQuotes(
+    market,
+    visibleTiers.flatMap(t => data?.categories?.[t.id]?.pullback ?? []).map(r => r.symbol),
+  )
 
   return (
     <div style={{ padding: 16, maxWidth: 760, margin: '0 auto' }}>
@@ -259,7 +269,7 @@ export default function PicksPage() {
               </div>
             ) : (
               <div className="card" style={{ overflow: 'hidden' }}>
-                {rows.map(r => <StockRow key={r.symbol} r={r} market={market} />)}
+                {rows.map(r => <StockRow key={r.symbol} r={r} market={market} live={live.quotes[r.symbol]} />)}
               </div>
             )}
           </section>

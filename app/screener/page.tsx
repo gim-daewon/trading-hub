@@ -6,6 +6,8 @@ import { MARKETS, tiersFor, fmtCap, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { TvLayoutSetting } from '../components/TvLink'
 import { SymbolLabel } from '../components/SymbolLabel'
+import { useLiveQuotes } from '../components/useLiveQuotes'
+import { LivePct } from '../components/LivePct'
 import { ExitPrices } from '../components/ExitPrices'
 import {
   CATS, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
@@ -204,6 +206,11 @@ export default function ScreenerPage() {
   // 서버가 이미 25개로 자른 뒤라 이 정렬은 **보이는 것의 순서만** 바꾼다.
   // 종목 선정에는 관여하지 않는다 — 그게 필터와 다른 점이다.
   const picked = data?.categories?.[tier]?.[tab] ?? []
+  // 실시간 등락률은 보이는 종목만 요청한다.
+  // useLiveQuotes가 심볼 목록을 문자열로 비교하므로 배열이 매번 새로 만들어져도
+  // 내용이 같으면 다시 부르지 않는다
+  const live = useLiveQuotes(market, picked.map(r => r.symbol))
+
   const rows = useMemo(() => sort === 'default' ? picked
     : [...picked].sort((a, b) => sort === 'flowHigh'
       ? (b.f20 ?? -999) - (a.f20 ?? -999)
@@ -400,6 +407,7 @@ export default function ScreenerPage() {
                           별도 줄로 뺀다 */}
                       <SymbolLabel
                         symbol={r.symbol} display={r.display} name={r.name} market={market}
+                        trailing={<LivePct live={live.quotes[r.symbol]} market={market} />}
                         sub={r.sector ? r.sector.slice(0, 22) : fmtCap(r.marketCap, market)}
                       />
                       <ExitPrices
