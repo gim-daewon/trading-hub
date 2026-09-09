@@ -67,8 +67,19 @@ export interface MarketDef {
    *
    * 10년·격자 10개로 12가지를 비교한 결과(R 기댓값 = 위험 1단위 대비 손익):
    *
-   *   미국   고정 -3%/+9% +0.099R  <  ATR 2.0/6.0 +0.150R (격자최소 +0.128)
-   *   한국   고정 -3%/+9% +0.055R  <  ATR 2.0/6.0 +0.163R (격자최소 +0.141)
+   *   미국   고정 -3%/+9% +0.099R  <  ATR 2.0/6.0 +0.150R  <  ATR 1.0/6.0 +0.161R
+   *   한국   고정 -3%/+9% +0.055R  <  ATR 2.0/6.0 +0.163R  <  ATR 1.0/6.0 +0.209R
+   *
+   * 2026-09-09 손절만 2.0 -> 1.0으로 좁혔다. 익절은 6.0 그대로다.
+   * 좁힌 손절은 승률을 37% -> 22%로 떨어뜨리지만 손익비가 2.3 -> 4.8로 올라
+   * 그 이상을 상쇄한다. 보유도 20.2일 -> 12.3일로 줄어 연 단위로는
+   * 1.85R -> 3.29R(미국) / 2.03R -> 4.47R(한국)로 1.8~2.2배가 된다.
+   *
+   * 대가 하나: 미국 R 격자최소가 +0.128 -> +0.113으로 내려간다.
+   * 구간에 따른 흔들림이 조금 커진다는 뜻이다. 한국은 반대로 +0.141 -> +0.155.
+   *
+   * 18가지를 비교해 고른 것이라 다중 비교 위험이 있다. 아웃오브샘플
+   * (2016~2021 -> 2021~2026) 확인은 아직 안 했다.
    *   크립토 고정 -3%/+9%는 평균 2.2일에 잘린다. ATR 1.0/2.0만 전 격자 플러스.
    *
    * 한국은 처음에 ATR이 위험해 보였다 — 전 종목 기준 R 격자최소가 -9.2였다.
@@ -154,7 +165,7 @@ export const MARKETS: Record<Market, MarketDef> = {
     lowLiquidity: 5e6,
     benchmark: { symbol: 'SPY', source: 'yahoo', label: 'SPY' },
     // 유니버스가 이미 $5M로 걸러져 있어 추가 하한이 필요 없다
-    rule: { kind: 'atr', stop: 2, target: 6, label: '손절 2×ATR / 익절 6×ATR', expR: 0.150, minVol: 5e6 },
+    rule: { kind: 'atr', stop: 1, target: 6, label: '손절 1×ATR / 익절 6×ATR', expR: 0.161, minVol: 5e6 },
   },
   kr: {
     id: 'kr', label: '한국', short: '한국', currency: 'KRW', tiers: KR_TIERS,
@@ -166,7 +177,7 @@ export const MARKETS: Record<Market, MarketDef> = {
     lowLiquidity: 1e8,   // 1억원. 실측 중앙값 8,800만원이라 절반 가까이 걸린다
     benchmark: { symbol: '^KS11', source: 'yahoo', label: '코스피' },
     // 거래대금 10억원 미만은 ATR 손절이 갭에 뚫린다. 실측으로 확인했다
-    rule: { kind: 'atr', stop: 2, target: 6, label: '손절 2×ATR / 익절 6×ATR', expR: 0.163, minVol: 1e9 },
+    rule: { kind: 'atr', stop: 1, target: 6, label: '손절 1×ATR / 익절 6×ATR', expR: 0.209, minVol: 1e9 },
   },
   crypto: {
     id: 'crypto', label: '암호화폐', short: '크립토', currency: 'USD', tiers: CRYPTO_TIERS,
