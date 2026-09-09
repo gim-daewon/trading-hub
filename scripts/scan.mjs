@@ -67,8 +67,22 @@ async function sb(path, method, body, extraHeaders = {}) {
  */
 const capSource = MARKET !== 'crypto' ? undefined : {
   async load() {
-    const rows = await sb('crypto_market_caps?select=symbol,name,market_cap,updated_at', 'GET')
-    if (!rows?.length) return null
+    // PostgREST는 한 번에 최대 1,000행만 준다. offset으로 넘겨야 한다.
+    //
+    // 이 함정에 걸린 게 세 번째다 — 스냅샷 행 조회에서 2,124행 중 1,000행만
+    // 받아 조용히 라이브로 폴백했고, 코인게코 캐시도 2,380개 중 1,000개만
+    // 읽어서 매 스캔마다 158개를 2차 조회하고 있었다.
+    // 조용히 절반만 가져오는 실패는 로그만 봐서는 정상으로 보인다.
+    const rows = []
+    for (let from = 0; from < 20000; from += 1000) {
+      const page = await sb(
+        `crypto_market_caps?select=symbol,name,market_cap,updated_at` +
+        `&order=symbol.asc&offset=${from}&limit=1000`, 'GET')
+      if (!page?.length) break
+      rows.push(...page)
+      if (page.length < 1000) break
+    }
+    if (!rows.length) return null
     const caps = new Map(), names = new Map()
     let newest = 0
     for (const r of rows) {
@@ -83,7 +97,9 @@ const capSource = MARKET !== 'crypto' ? undefined : {
       symbol, market_cap, name: names.get(symbol) ?? null, updated_at: new Date().toISOString(),
     }))
     for (let i = 0; i < rows.length; i += 500) {
-      await sb('crypto_market_caps', 'POST', rows.slice(i, i + 500),
+      // on_conflict를 명시해야 merge-duplicates가 실제로 upsert가 된다.
+      // 빠지면 기본키 충돌로 409가 난다
+      await sb('crypto_market_caps?on_conflict=symbol', 'POST', rows.slice(i, i + 500),
         { Prefer: 'resolution=merge-duplicates,return=minimal' })
     }
     console.log(`시총 캐시 저장 ${rows.length}개 (${CAP_CACHE_DAYS}일간 재사용)`)
