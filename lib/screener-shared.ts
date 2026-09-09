@@ -43,6 +43,8 @@ export interface ScreenerRow {
   low?: number | null
   /** 고가 — 성과 추적에서 익절 도달을 판정한다 */
   high?: number | null
+  /** ATR(14) — 손절·익절가 계산 */
+  atr14?: number | null
   wLow?: number | null
   price: number | null
   /** 화면에 쓰는 짧은 이름. BTCUSDT -> BTC, 005930.KS -> 005930 */

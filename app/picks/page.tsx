@@ -5,6 +5,7 @@ import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle
 import { MARKETS, tiersFor as tf, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { SymbolLabel } from '../components/SymbolLabel'
+import { ExitPrices } from '../components/ExitPrices'
 import {
   tiersFor, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
   type TierId, type CatKey, type Regime, type Perf,
@@ -20,6 +21,7 @@ import {
 // 그래서 "추천"을 떼고 후보 목록으로 성격을 되돌렸다.
 
 interface Row {
+  atr14?: number | null; dollarVol?: number | null; price?: number | null
   /** 화면용 짧은 이름. 한국은 005930, 크립토는 BTC */
   display?: string | null
   symbol: string; name: string; sector: string; marketCap: number
@@ -70,6 +72,7 @@ function StockRow({ r, market }: { r: Row; market: Market }) {
       <div style={{ minWidth: 0 }}>
         <SymbolLabel
           symbol={r.symbol} display={r.display} name={r.name} market={market}
+          sub={<ExitPrices price={r.price} atr14={r.atr14} dollarVol={r.dollarVol} market={market} compact />}
         />
         <div style={{
           fontSize: 10, color: 'var(--text-muted)',

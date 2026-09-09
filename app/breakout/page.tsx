@@ -5,6 +5,7 @@ import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle
 import { MARKETS, tiersFor, fmtCap, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { SymbolLabel } from '../components/SymbolLabel'
+import { ExitPrices } from '../components/ExitPrices'
 import {
   BREAKOUTS, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict, roomToVwma60, isWeeklyKey,
   alignStrength, hiddenBreakouts,
@@ -27,6 +28,7 @@ interface Row {
   f5: number | null; f20: number | null; f60: number | null
   rvol: number | null; chg20: number | null; pctB: number | null
   vwma20?: number | null; vwma60?: number | null; aboveRun?: number | null
+  atr14?: number | null; dollarVol?: number | null
   wClose?: number | null; wVwma20?: number | null; wVwma60?: number | null
   price: number | null
 }
@@ -67,7 +69,10 @@ function StockRow({ r, weekly, market }: { r: Row; weekly: boolean; market: Mark
     }}>
       <SymbolLabel
         symbol={r.symbol} display={r.display} name={r.name} market={market}
-        sub={<>{r.sector ? `${r.sector.slice(0, 18)} · ` : ''}{fmtCap(r.marketCap, market)}</>}
+        sub={<>
+          {r.sector ? `${r.sector.slice(0, 18)} · ` : ''}{fmtCap(r.marketCap, market)}
+          <ExitPrices price={r.price} atr14={r.atr14} dollarVol={r.dollarVol} market={market} compact />
+        </>}
       />
 
       <div style={{ textAlign: 'right' }}>

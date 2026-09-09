@@ -124,3 +124,16 @@ select r.*, s.scanned_at, s.regime, s.spy_chg20, s.market
     order by s2.scanned_at desc
     limit 1
  );
+
+-- ── 손절·익절가 계산용 (2026-09-09 추가) ────────────────────────────────
+--
+--   high    당일 고가. 성과 추적에서 익절 도달을 판정한다.
+--           없으면 손절은 저가로(정확) 익절은 종가로(보수적) 재게 되어
+--           결과가 손실 쪽으로 치우친다.
+--   atr14   ATR(14) = 갭 포함 평상시 하루 진폭.
+--           손절폭을 종목 진폭에 비례해 잡는다. 실측으로 고정 -3%보다
+--           ATR 2.0/6.0이 미국 +0.150R vs +0.099R, 한국(거래대금 10억원+)
+--           +0.163R vs +0.055R로 확실히 나았다.
+
+alter table public.screener_rows add column if not exists high  numeric;
+alter table public.screener_rows add column if not exists atr14 numeric;

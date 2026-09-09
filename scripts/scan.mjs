@@ -186,6 +186,7 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
       w_prev_run: m.wPrevRun,
       low: m.low,                       // 밑꼬리 판정용
       high: m.high,                     // 성과 추적의 익절 도달 판정용
+      atr14: m.atr14,                   // 손절·익절폭 계산용
       w_low: m.wLow,
       price: bars[bars.length - 1].c,   // 진입가 — 사후 성과 추적용
       persistence: persistence(m),

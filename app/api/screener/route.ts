@@ -170,7 +170,7 @@ const loadRows = unstable_cache(
       vwma20: number | null; vwma60: number | null; above_run: number | null
       w_close: number | null; w_vwma20: number | null; w_vwma60: number | null
       w_above_run: number | null; prev_run: number | null; w_prev_run: number | null
-      low: number | null; w_low: number | null
+      low: number | null; w_low: number | null; atr14: number | null
       price: number | null
       display: string | null; dollar_vol: number | null
       cap_known: boolean | null; premium: number | null
@@ -201,6 +201,7 @@ const loadRows = unstable_cache(
       wPrevRun: r.w_prev_run,
       low: r.low,
       wLow: r.w_low,
+      atr14: r.atr14,
       price: r.price,
     }))
 
@@ -231,7 +232,7 @@ type WireRow = Pick<ScreenerRow,
   'symbol' | 'display' | 'name' | 'sector' | 'marketCap' | 'tier' | 'price'
   | 'f20' | 'f5' | 'f60' | 'chg20' | 'pctB'
   | 'vwma20' | 'vwma60' | 'wClose' | 'wVwma20' | 'wVwma60'
-  | 'aboveRun' | 'dollarVol' | 'capKnown' | 'premium'>
+  | 'aboveRun' | 'dollarVol' | 'capKnown' | 'premium' | 'atr14'>
 
 const toWire = (r: ScreenerRow): WireRow => ({
   symbol: r.symbol, display: r.display, name: r.name, sector: r.sector,
@@ -241,6 +242,8 @@ const toWire = (r: ScreenerRow): WireRow => ({
   wClose: r.wClose, wVwma20: r.wVwma20, wVwma60: r.wVwma60,
   aboveRun: r.aboveRun, dollarVol: r.dollarVol,
   capKnown: r.capKnown, premium: r.premium,
+  // 손절가·익절가 계산에 필요하다
+  atr14: r.atr14,
 })
 
 /** 구간 x 키 구조를 유지한 채 행만 얇게 만든다 */

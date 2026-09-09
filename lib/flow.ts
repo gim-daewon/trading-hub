@@ -48,6 +48,8 @@ export interface FlowMetrics {
   wAboveRun: number | null
   /** 당일 저가. 밑꼬리가 VWMA20을 뚫었는지 판정한다 */
   low: number | null
+  /** ATR(14). 손절·익절폭을 종목 진폭에 비례해 잡는 데 쓴다 */
+  atr14: number | null
   /**
    * 당일 고가. 성과 추적에서 익절 도달을 판정한다.
    *
@@ -75,6 +77,31 @@ export interface FlowMetrics {
    * 0으로 뭉뚱그리면 아래에서 올라와 닿은 종목과 구분이 안 된다.
    */
   aboveRun: number | null
+}
+
+/**
+ * ATR(N) — 갭까지 포함한 '평상시 하루 진폭'.
+ *
+ *   True Range = max(고가-저가, |고가-전일종가|, |저가-전일종가|)
+ *   ATR = 그 값의 N일 단순평균
+ *
+ * 단순평균을 쓴다. 와일더 평활은 초기값 선택이 결과에 섞여, 같은 종목도
+ * 언제부터 계산했느냐에 따라 값이 달라진다.
+ *
+ * 쓰임: 손절폭을 종목 진폭에 비례해 잡는다. 고정 -3%는 하루에 5% 움직이는
+ * 종목에서는 노이즈에 매번 걸리고, 1% 움직이는 종목에서는 너무 늦게 자른다.
+ * 같은 규칙이라는 이름 아래 서로 다른 실험을 하게 된다.
+ */
+export function atr(bars: Bar[], n = 14): number | null {
+  if (bars.length < n + 1) return null
+  let sum = 0, cnt = 0
+  for (let i = bars.length - n; i < bars.length; i++) {
+    const h = bars[i].h, l = bars[i].l, pc = bars[i - 1]?.c
+    if (h == null || l == null || pc == null) return null
+    sum += Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc))
+    cnt++
+  }
+  return cnt === n ? sum / n : null
 }
 
 /** VWMA(N) = sum(종가 x 거래량) / sum(거래량) */
@@ -219,6 +246,7 @@ export function computeFlow(bars: Bar[] | DatedBar[]): FlowMetrics {
     prevRun: bars.length >= 20 ? vwmaRuns(bars, 20).prev : null,
     low: bars[bars.length - 1]?.l ?? null,
     high: bars[bars.length - 1]?.h ?? null,
+    atr14: atr(bars, 14),
     // 날짜가 있는 경우에만 주봉을 계산한다 (fetchDatedBars로 받은 경우)
     ...weeklyVwma(bars, (bars as DatedBar[])[0]?.t != null ? (bars as DatedBar[]).map(b => b.t) : undefined),
   }

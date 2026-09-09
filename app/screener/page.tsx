@@ -6,12 +6,14 @@ import { MARKETS, tiersFor, fmtCap, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { TvLayoutSetting } from '../components/TvLink'
 import { SymbolLabel } from '../components/SymbolLabel'
+import { ExitPrices } from '../components/ExitPrices'
 import {
   CATS, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
   type TierId, type CatKey, type Regime,
 } from '@/lib/screener-shared'
 
 interface Row {
+  atr14?: number | null; dollarVol?: number | null; price?: number | null
   /** 화면용 짧은 이름. 한국은 005930, 크립토는 BTC */
   display?: string | null
   symbol: string; name: string; sector: string; marketCap: number
@@ -396,7 +398,10 @@ export default function ScreenerPage() {
                     <td style={{ padding: '9px 10px' }}>
                       <SymbolLabel
                         symbol={r.symbol} display={r.display} name={r.name} market={market}
-                        sub={r.sector ? r.sector.slice(0, 22) : fmtCap(r.marketCap, market)}
+                        sub={<>
+                          {r.sector ? r.sector.slice(0, 22) : fmtCap(r.marketCap, market)}
+                          <ExitPrices price={r.price} atr14={r.atr14} dollarVol={r.dollarVol} market={market} compact />
+                        </>}
                       />
                     </td>
                     <td style={{ padding: '9px 10px' }}><Bar v={r.f20} /></td>

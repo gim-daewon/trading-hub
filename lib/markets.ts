@@ -62,6 +62,42 @@ export interface MarketDef {
    * 끊기는데, 얻는 건 이름뿐이다.
    */
   benchmark: { symbol: string; source: 'yahoo' | 'binance' | 'upbit'; label: string }
+  /**
+   * 손절·익절 규칙. **시장마다 다르다.**
+   *
+   * 10년·격자 10개로 12가지를 비교한 결과(R 기댓값 = 위험 1단위 대비 손익):
+   *
+   *   미국   고정 -3%/+9% +0.099R  <  ATR 2.0/6.0 +0.150R (격자최소 +0.128)
+   *   한국   고정 -3%/+9% +0.055R  <  ATR 2.0/6.0 +0.163R (격자최소 +0.141)
+   *   크립토 고정 -3%/+9%는 평균 2.2일에 잘린다. ATR 1.0/2.0만 전 격자 플러스.
+   *
+   * 한국은 처음에 ATR이 위험해 보였다 — 전 종목 기준 R 격자최소가 -9.2였다.
+   * 저변동성 종목은 ATR이 주가의 0.5%인데 -6% 갭이면 -12R이 되기 때문이다.
+   * **유동성으로 거르니 완전히 사라졌다**: 거래대금 1억원+로는 안 고쳐졌고
+   * (-9.21 그대로), 10억원+에서 +0.141로 뒤집혔다. 그래서 규칙이 아니라
+   * 유동성 하한(minVol)을 시장별로 둔다.
+   *
+   * 결과적으로 미국·한국이 같은 규칙을 쓴다 — 두 시장은 나란히 비교할 수 있다.
+   */
+  rule: RuleDef
+}
+
+export interface RuleDef {
+  /** 'pct'는 진입가 대비 %, 'atr'은 ATR(14)의 배수 */
+  kind: 'pct' | 'atr'
+  stop: number
+  target: number
+  label: string
+  /** 이 시장에서 실측으로 확인된 R 기댓값 (기준선 기준) */
+  expR: number | null
+  /**
+   * 이 거래대금 미만에서는 규칙이 검증되지 않았다.
+   *
+   * 한국 전 종목에서 ATR 손절이 -9.2R까지 무너진 게 여기서 왔다.
+   * 화면에서 이 아래 종목에는 손절가·익절가를 띄우지 않는다 —
+   * 검증 안 된 구간에 숫자를 띄우면 그게 근거처럼 읽힌다.
+   */
+  minVol: number
 }
 
 /**
@@ -117,6 +153,8 @@ export const MARKETS: Record<Market, MarketDef> = {
     // 유니버스 필터가 이미 $5M을 걸러서 해당되는 종목이 없다
     lowLiquidity: 5e6,
     benchmark: { symbol: 'SPY', source: 'yahoo', label: 'SPY' },
+    // 유니버스가 이미 $5M로 걸러져 있어 추가 하한이 필요 없다
+    rule: { kind: 'atr', stop: 2, target: 6, label: '손절 2×ATR / 익절 6×ATR', expR: 0.150, minVol: 5e6 },
   },
   kr: {
     id: 'kr', label: '한국', short: '한국', currency: 'KRW', tiers: KR_TIERS,
@@ -127,6 +165,8 @@ export const MARKETS: Record<Market, MarketDef> = {
     universeNote: '코스피·코스닥 전 종목 (ETF·ETN·거래정지 제외)',
     lowLiquidity: 1e8,   // 1억원. 실측 중앙값 8,800만원이라 절반 가까이 걸린다
     benchmark: { symbol: '^KS11', source: 'yahoo', label: '코스피' },
+    // 거래대금 10억원 미만은 ATR 손절이 갭에 뚫린다. 실측으로 확인했다
+    rule: { kind: 'atr', stop: 2, target: 6, label: '손절 2×ATR / 익절 6×ATR', expR: 0.163, minVol: 1e9 },
   },
   crypto: {
     id: 'crypto', label: '암호화폐', short: '크립토', currency: 'USD', tiers: CRYPTO_TIERS,
@@ -140,6 +180,9 @@ export const MARKETS: Record<Market, MarketDef> = {
     lowLiquidity: 1e5,   // $100k
     // 크립토는 BTC가 곧 국면이다. 알트는 BTC가 빠지면 같이 빠진다
     benchmark: { symbol: 'BTCUSDT', source: 'binance', label: 'BTC' },
+    // 크립토만 다른 규칙이다 — 2.0/6.0은 격자최소가 마이너스였고
+    // 1.0/2.0만 전 격자 플러스였다. 다만 기준선 자체가 아직 미검증이다
+    rule: { kind: 'atr', stop: 1, target: 2, label: '손절 1×ATR / 익절 2×ATR', expR: null, minVol: 1e5 },
   },
 }
 
@@ -182,6 +225,48 @@ export function tvSymbol(symbol: string, market: Market): string {
     return `BINANCE:${symbol}`
   }
   return symbol
+}
+
+/**
+ * 진입가 기준 손절가·익절가.
+ *
+ * 진입가는 **마지막 종가**다. 실제 체결가가 아니라는 걸 화면에도 적어야 한다.
+ * ATR 규칙인데 atr 값이 없으면 null — 없는 값을 %로 대체하면
+ * 화면에 뜬 가격이 실제 규칙과 달라진다.
+ */
+export function exitPrices(
+  price: number | null | undefined,
+  atr14: number | null | undefined,
+  market: Market,
+  dollarVol?: number | null,
+): { stop: number; target: number; stopPct: number; targetPct: number } | null {
+  if (price == null || !(price > 0)) return null
+  // 검증 안 된 유동성 구간에는 숫자를 띄우지 않는다.
+  // 띄우면 그게 근거처럼 읽힌다 — 한국 전 종목에서 -9.2R까지 무너진 구간이다
+  if (dollarVol != null && dollarVol < MARKETS[market].rule.minVol) return null
+  const r = MARKETS[market].rule
+  let stop: number, target: number
+  if (r.kind === 'atr') {
+    if (atr14 == null || !(atr14 > 0)) return null
+    stop = price - r.stop * atr14
+    target = price + r.target * atr14
+    if (stop <= 0) return null
+  } else {
+    stop = price * (1 - r.stop / 100)
+    target = price * (1 + r.target / 100)
+  }
+  return {
+    stop, target,
+    stopPct: ((stop - price) / price) * 100,
+    targetPct: ((target - price) / price) * 100,
+  }
+}
+
+/** 가격 표기 — 원화는 정수 콤마, 달러는 소수 */
+export function fmtPrice(v: number | null | undefined, market: Market): string {
+  if (v == null || !Number.isFinite(v)) return '—'
+  if (MARKETS[market].currency === 'KRW') return Math.round(v).toLocaleString()
+  return v >= 100 ? v.toFixed(2) : v >= 1 ? v.toFixed(3) : v.toPrecision(4)
 }
 
 /** 시총 표기 — 원화는 조/억, 달러는 B/M */
