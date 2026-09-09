@@ -69,3 +69,6 @@ flow-out.txt
 vwma3-*.txt
 probe-uni.mjs
 probe-bars.mjs
+kr-out.txt
+kr-err.txt
+atr-*.txt
