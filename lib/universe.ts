@@ -6,6 +6,7 @@
  * `krUniverse`만 갈아끼우면 되도록 경계를 여기서 끊는다.
  */
 import { fetchJson, pool } from './fetch-retry'
+import { binanceJson } from './binance'
 import { type Market, type TierId, tierOf } from './markets'
 
 /**
@@ -216,8 +217,8 @@ interface CgResult { caps: Map<string, number>; names: Map<string, string> }
  */
 async function cryptoUniverse(capSource?: CapSource): Promise<UniverseRow[]> {
   const [ei, t24, upMarkets, cg] = await Promise.all([
-    fetchJson<{ symbols?: BinanceSymbol[] }>('https://api.binance.com/api/v3/exchangeInfo', { headers: JSON_H }),
-    fetchJson<{ symbol: string; quoteVolume: string; lastPrice: string }[]>('https://api.binance.com/api/v3/ticker/24hr', { headers: JSON_H }),
+    binanceJson<{ symbols?: BinanceSymbol[] }>('/api/v3/exchangeInfo'),
+    binanceJson<{ symbol: string; quoteVolume: string; lastPrice: string }[]>('/api/v3/ticker/24hr'),
     fetchJson<{ market: string; korean_name: string; english_name: string }[]>('https://api.upbit.com/v1/market/all?isDetails=false', { headers: JSON_H }),
     cachedCaps(capSource),
   ])
@@ -231,6 +232,12 @@ async function cryptoUniverse(capSource?: CapSource): Promise<UniverseRow[]> {
     // 레버리지 토큰은 원주와 움직임이 비례하지 않는다. 지표가 무의미하다
     && !/(UP|DOWN|BULL|BEAR)$/.test(s.baseAsset)
     && !isPegged(s.baseAsset) && !isDerivative(s.baseAsset))
+
+  // 바이낸스가 막히면 업비트만 남아 유니버스가 절반으로 준다.
+  // 조용히 넘어가면 '크립토 전 종목'이라고 표시하면서 절반만 보여주게 된다
+  if (!ei?.symbols?.length) {
+    throw new Error('바이낸스 exchangeInfo를 받지 못했다. 지역 차단(451)일 수 있다 — 업비트만으로는 유니버스가 반쪽이다')
+  }
 
   const upKrw = (upMarkets ?? []).filter(m => m.market.startsWith('KRW-'))
   // 업비트 시세는 마켓을 확정한 뒤 한 번에 받는다 (쿼리 길이 때문에 나눠서)

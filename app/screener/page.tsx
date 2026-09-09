@@ -1,11 +1,13 @@
 'use client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import PageHeader from '../components/PageHeader'
+import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle'
+import { MARKETS, tiersFor, fmtCap, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { TvLink, TvLayoutSetting } from '../components/TvLink'
 import {
-  TIERS, CATS, TIER_EVIDENCE, RR_EVIDENCE, RR_BASELINE, rrVerdict,
-  type TierId, type CatKey, type Regime, type Perf,
+  CATS, TIER_EVIDENCE, RR_EVIDENCE, RR_BASELINE, rrVerdict,
+  type TierId, type CatKey, type Regime,
 } from '@/lib/screener-shared'
 
 interface Row {
@@ -70,12 +72,17 @@ const TONE = {
  * 모멘텀은 승률 1위인데 기댓값은 유일한 마이너스였다.
  * 그래서 판정을 거래당 기댓값으로 바꿨다. 승률·손익비는 참고로만 둔다.
  */
-function EvidenceBox({ tier, cat, regime }: { tier: TierId; cat: CatKey; regime: Regime }) {
+function EvidenceBox({ market, tier, cat, regime }: {
+  market: Market; tier: TierId; cat: CatKey; regime: Regime
+}) {
   const q = RR_EVIDENCE[cat]
   const v = rrVerdict(cat)
   const tone = TONE[v.tone]
-  const p: Perf = TIER_EVIDENCE[tier][cat][regime]
-  const b: Perf = TIER_EVIDENCE[tier].base[regime]
+  // 실측치는 **미국 3구간**뿐이다. 한국·크립토, 그리고 초소형·시총 미상은
+  // 잰 적이 없다. 없는 걸 0으로 채우면 근거가 거짓말이 된다
+  const ev = market === 'us' ? TIER_EVIDENCE[tier] : undefined
+  const p = ev?.[cat][regime]
+  const b = ev?.base[regime]
 
   return (
     <div style={{
@@ -121,19 +128,23 @@ function EvidenceBox({ tier, cat, regime }: { tier: TierId; cat: CatKey; regime:
         </span>
       </div>
 
-      <details style={{ marginTop: 8 }}>
-        <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 10 }}>
-          시총·국면별 참고값 (20일 보유 기준 · 표본이 겹쳐 과대평가된다)
-        </summary>
-        <div className="num" style={{ marginTop: 6, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-          {TIERS.find(t => t.id === tier)?.label} · {regime === 'up' ? 'SPY 상승' : 'SPY 하락'} 구간 ·
-          2년 · 표본 {p.n.toLocaleString()}
-          <br />
-          평균 {sgn(p.avg, 2)}%p (기준 {sgn(b.avg, 2)}) ·
-          중앙값 {sgn(p.md, 2)} (기준 {sgn(b.md, 2)}) ·
-          상회율 {p.hit}% (기준 {b.hit}%)
-        </div>
-      </details>
+      {/* 시총·국면별 참고값은 미국 3구간만 실측했다.
+          한국·크립토나 초소형 구간에서는 아예 그리지 않는다 */}
+      {p && b && (
+        <details style={{ marginTop: 8 }}>
+          <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 10 }}>
+            시총·국면별 참고값 (20일 보유 기준 · 표본이 겹쳐 과대평가된다)
+          </summary>
+          <div className="num" style={{ marginTop: 6, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+            {tiersFor(market).find(t => t.id === tier)?.label} · {regime === 'up' ? '상승' : '하락'} 구간 ·
+            2년 · 표본 {p.n.toLocaleString()}
+            <br />
+            평균 {sgn(p.avg, 2)}%p (기준 {sgn(b.avg, 2)}) ·
+            중앙값 {sgn(p.md, 2)} (기준 {sgn(b.md, 2)}) ·
+            상회율 {p.hit}% (기준 {b.hit}%)
+          </div>
+        </details>
+      )}
     </div>
   )
 }
@@ -142,6 +153,9 @@ export default function ScreenerPage() {
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
+  const [market, setMarket, marketReady] = useMarket()
+  // 기본은 꺼짐. 한국은 거래대금 1억원 미만이 52%라 켜두면 목록이 잠긴다
+  const [includeMicro, setIncludeMicro] = useState(false)
   const [tier, setTier] = useState<TierId>('large')
   // 기본 탭은 정체 구간. 기댓값은 눌림목과 사실상 같지만(+0.28 vs +0.30)
   // 격자 20개 전부에서 플러스인 건 이쪽뿐이다. 모멘텀은 기댓값이 마이너스다
@@ -150,14 +164,15 @@ export default function ScreenerPage() {
 
   const load = useCallback(() => {
     setLoading(true); setErr('')
-    fetch('/api/screener')
+    fetch(`/api/screener?market=${market}`)
       .then(r => r.json())
       .then(j => { setData(j); if (j.error) setErr(j.error) })
       .catch(e => setErr(String(e)))
       .finally(() => setLoading(false))
-  }, [])
+  }, [market])
 
-  useEffect(() => { load() }, [load])
+  // 저장된 시장을 읽기 전에 부르면 미국을 한 번 받았다가 다시 받는다
+  useEffect(() => { if (marketReady) load() }, [load, marketReady])
 
   // 수급은 이제 **거르지 않고 정렬만 한다.**
   //
@@ -179,6 +194,17 @@ export default function ScreenerPage() {
   // CATS가 이미 기댓값 순으로 정의돼 있다. 여기서 다시 정렬하지 않는다 —
   // 정렬 기준이 두 곳에 있으면 갈라진다
   const orderedCats = CATS
+
+  // 초소형·시총 미상은 토글이 켜져야 보인다.
+  // 지우지 않는 이유: "모든 종목"이 요구사항이다. 볼지 말지를 고르게 한다
+  const visibleTiers = tiersFor(market)
+    .filter(t => includeMicro || (t.id !== 'micro' && t.id !== 'unknown'))
+
+  // 시장을 바꾸거나 토글을 끄면 지금 구간이 사라질 수 있다.
+  // 그대로 두면 빈 화면이 뜨고 사용자는 "종목이 없다"고 오해한다
+  useEffect(() => {
+    if (!visibleTiers.some(t => t.id === tier)) setTier(visibleTiers[0]?.id ?? 'large')
+  }, [visibleTiers, tier])
 
   return (
     <div style={{ padding: 16, maxWidth: 900, margin: '0 auto' }}>
@@ -204,6 +230,27 @@ export default function ScreenerPage() {
         )}
       />
 
+      <MarketToggle value={market} onChange={setMarket} />
+
+      {/* 규칙이 검증되지 않은 시장은 근거 문구를 통째로 바꾼다.
+          미국에서 잰 숫자를 그대로 띄우면 그건 거짓말이 된다 */}
+      {!MARKETS[market].ruleValidated && (
+        <div className="card" style={{
+          padding: '10px 12px', marginBottom: 14, fontSize: 11, lineHeight: 1.6,
+          borderLeft: '3px solid var(--warn)',
+        }}>
+          <b style={{ color: 'var(--warn)' }}>{MARKETS[market].label}은 아직 검증 전이다.</b>
+          {' '}{MARKETS[market].ruleNote}
+          <br />
+          아래 목록은 <b>같은 조건으로 걸러낸 종목</b>일 뿐, 성과 근거가 붙어 있지 않다.
+          화면에 뜨는 기댓값·손익비는 전부 <b>미국에서 잰 값</b>이라 여기엔 해당되지 않는다.
+          <div style={{ marginTop: 6, color: 'var(--text-muted)' }}>
+            유니버스: {MARKETS[market].universeNote}
+          </div>
+        </div>
+      )}
+
+      {MARKETS[market].ruleValidated && (
       <div className="card" style={{ padding: '10px 12px', marginBottom: 14, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
         <b style={{ color: 'var(--warn)' }}>이건 예측이 아니라 탐색 도구다.</b> 2,700종목을 수십 개로 좁혀줄 뿐,
         오를 종목을 고르지 않는다. 판정 기준을 <b>승률에서 거래당 기댓값</b>으로 바꿨다
@@ -218,10 +265,17 @@ export default function ScreenerPage() {
         (미국은 기관 순매수를 실시간 공개하지 않는다).
         <div style={{ marginTop: 8 }}><TvLayoutSetting /></div>
       </div>
+      )}
 
-      {/* 시총 구간 */}
+      <MicroToggle
+        on={includeMicro}
+        onChange={setIncludeMicro}
+        counts={(data?.tierCounts?.micro ?? 0) + (data?.tierCounts?.unknown ?? 0)}
+      />
+
+      {/* 시총 구간 — 경계가 시장마다 다르다 */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 10, paddingBottom: 2 }}>
-        {TIERS.map(t => {
+        {visibleTiers.map(t => {
           const active = tier === t.id
           const n = data?.tierCounts?.[t.id] ?? 0
           return (
@@ -286,7 +340,7 @@ export default function ScreenerPage() {
       </div>
       <MetricGuide show={['flow', 'pctB', 'rvol']} />
 
-      {data && <EvidenceBox tier={tier} cat={tab} regime={data.regime} />}
+      {data && <EvidenceBox market={market} tier={tier} cat={tab} regime={data.regime} />}
 
       {err && <div className="card" style={{ padding: 16, color: 'var(--down)', fontSize: 13 }}>{err}</div>}
 

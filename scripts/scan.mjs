@@ -114,14 +114,21 @@ if (!list.length) {
 // 시장 국면 — 카테고리별 성과가 국면에 따라 갈리므로 같이 저장한다.
 // 기준 지수는 시장마다 다르다 (미국 SPY / 한국 코스피 / 크립토 BTC)
 const benchBars = await barsWithRetry(DEF.benchmark)
-let regime = 'up', benchChg20 = null, benchPrice = null
-if (benchBars && benchBars.length >= 21) {
-  const a = benchBars[benchBars.length - 21].c, b = benchBars[benchBars.length - 1].c
-  benchChg20 = ((b - a) / a) * 100
-  benchPrice = b
-  regime = benchChg20 >= 0 ? 'up' : 'down'
+if (!benchBars || benchBars.length < 21) {
+  // 기본값 'up'을 그대로 저장하면 안 된다.
+  //
+  // 첫 크립토 스캔이 정확히 이렇게 돌았다 — 바이낸스가 지역 차단으로 막혀
+  // BTC 봉을 못 받았는데 "국면 up (BTC 20일 ?%)"으로 저장하고 성공으로 끝났다.
+  // 국면은 카테고리 성과 판정의 축이라 틀리면 근거 전체가 어긋난다.
+  console.error(`기준 지수(${DEF.benchmark.symbol}) 봉을 받지 못했다. 국면을 알 수 없으므로 중단한다`)
+  console.error('데이터 소스가 막혔을 가능성이 높다 — 지역 차단이나 API 변경을 확인할 것')
+  process.exit(1)
 }
-console.log(`국면 ${regime} (${DEF.benchmark.label} 20일 ${benchChg20?.toFixed(2) ?? '?'}%)`)
+const a = benchBars[benchBars.length - 21].c, b = benchBars[benchBars.length - 1].c
+const benchChg20 = ((b - a) / a) * 100
+const benchPrice = b
+const regime = benchChg20 >= 0 ? 'up' : 'down'
+console.log(`국면 ${regime} (${DEF.benchmark.label} 20일 ${benchChg20.toFixed(2)}%)`)
 
 const out = []
 let done = 0, failed = 0, pegged = 0

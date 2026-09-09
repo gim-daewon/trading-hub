@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { fetchBars, fetchDatedBars, computeFlow, mapLimit } from '@/lib/flow'
 import {
-  TIERS, tierOf, TIER_EVIDENCE, CAVEATS, buildCategories,
+  tiersFor, tierOf, TIER_EVIDENCE, CAVEATS, buildCategories,
   buildBreakouts, BREAKOUT_EVIDENCE,
   type Regime, type TierId, type CatKey, type ScreenerRow,
 } from '@/lib/screener-shared'
+import { MARKETS, isMarket, type Market } from '@/lib/markets'
 
 // 수급 스크리너.
 //
@@ -74,7 +75,7 @@ async function marketRegime(): Promise<{ regime: Regime; spyChg20: number | null
 }
 
 /** GitHub Actions가 저장한 스냅샷. 없으면 null → 호출부가 라이브 스캔으로 폴백 */
-async function fromSupabase() {
+async function fromSupabase(market: Market) {
   // 대시보드가 REST 엔드포인트(.../rest/v1/)만 보여주는 경우가 있어 정규화한다
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
     .replace(/\/+$/, '').replace(/\/rest\/v1$/, '')
@@ -91,15 +92,20 @@ async function fromSupabase() {
     // URL이 바뀌어 자동으로 새로 받는다 — 캐시를 그대로 둬도 안전하다.
     // 비용은 요청당 1행 조회 하나뿐이다.
     const snapRes = await fetch(
-      `${url}/rest/v1/screener_snapshots?select=*&order=scanned_at.desc&limit=1`,
+      `${url}/rest/v1/screener_snapshots?select=*&market=eq.${market}` +
+      `&order=scanned_at.desc&limit=1`,
       { headers, cache: 'no-store' }
     )
     if (!snapRes.ok) return null
     const [snap] = await snapRes.json()
     if (!snap) return null
 
-    // 이틀 넘게 묵었으면 신선한 라이브 스캔이 낫다
-    if ((Date.now() - new Date(snap.scanned_at).getTime()) / 3.6e6 > 48) return null
+    // 너무 묵은 스냅샷은 버린다.
+    //
+    // 주식은 주말·연휴가 있어 금요일 스캔이 월요일 아침에 72시간이 된다.
+    // 크립토는 매일 도니 48시간이면 확실히 뭔가 잘못된 것이다.
+    const maxAgeHours = market === 'crypto' ? 48 : 96
+    if ((Date.now() - new Date(snap.scanned_at).getTime()) / 3.6e6 > maxAgeHours) return null
 
     // PostgREST는 한 번에 최대 1,000행만 준다 (limit 파라미터로 안 뚫린다).
     // Range 헤더로 페이지를 넘겨 전부 가져온다.
@@ -136,13 +142,21 @@ async function fromSupabase() {
       w_above_run: number | null; prev_run: number | null; w_prev_run: number | null
       low: number | null; w_low: number | null
       price: number | null
+      display: string | null; dollar_vol: number | null
+      cap_known: boolean | null; premium: number | null
     }
     const rows: ScreenerRow[] = (raw as DbRow[]).map(r => ({
       symbol: r.symbol,
       name: r.name ?? '',
       sector: r.sector ?? '',
       marketCap: r.market_cap ?? 0,
-      tier: tierOf(r.market_cap ?? 0),
+      // 시총을 못 알아낸 종목은 초소형이 아니라 '미상'이다.
+      // 모르는 걸 작다고 단정하면 구간 통계가 오염된다
+      tier: r.cap_known === false ? 'unknown' : tierOf(r.market_cap ?? 0, market),
+      display: r.display ?? r.symbol,
+      dollarVol: r.dollar_vol,
+      capKnown: r.cap_known ?? true,
+      premium: r.premium,
       f5: r.f5, f20: r.f20, f60: r.f60,
       rvol: r.rvol, chg20: r.chg20,
       pctB: r.pct_b,
@@ -182,20 +196,24 @@ async function fromSupabase() {
  *   fetchedAt  = 이 응답을 만든 시각 (캐시 10분)
  * 화면에는 scannedAt을 보여줘야 한다. "언제 기준 목록인가"가 사용자에게 필요한 정보다.
  */
-function payload(rows: ScreenerRow[], regime: Regime, spyChg20: number | null,
+function payload(market: Market, rows: ScreenerRow[], regime: Regime, spyChg20: number | null,
                  universeSize: number, source: 'snapshot' | 'live', scannedAt: number,
                  barDate: string | null = null) {
   const tierCounts = {} as Record<TierId, number>
-  for (const t of TIERS) tierCounts[t.id] = rows.filter(r => r.tier === t.id).length
+  for (const t of tiersFor(market)) tierCounts[t.id] = rows.filter(r => r.tier === t.id).length
 
   return {
+    market,
+    // 시장 정의를 응답에 실어 보낸다. 규칙 검증 여부·유동성 임계값·구간 라벨을
+    // 화면이 다시 정의하면 두 곳이 갈라진다
+    marketDef: MARKETS[market],
     regime, spyChg20,
     scanned: rows.length,
     universeSize,
     source,
     tierCounts,
-    categories: buildCategories(rows),
-    breakouts: buildBreakouts(rows),
+    categories: buildCategories(rows, market),
+    breakouts: buildBreakouts(rows, market),
     breakoutEvidence: BREAKOUT_EVIDENCE,
     // "조건에 맞는 종목이 없다"와 "아직 지표가 안 채워졌다"를 구분한다.
     // 둘 다 목록이 비어 보이지만 사용자가 할 일이 완전히 다르다.
@@ -209,14 +227,29 @@ function payload(rows: ScreenerRow[], regime: Regime, spyChg20: number | null,
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const raw = new URL(req.url).searchParams.get('market') ?? 'us'
+  const market: Market = isMarket(raw) ? raw : 'us'
   try {
     // 1순위: GitHub Actions 스냅샷 (넓은 유니버스, 즉시 응답)
-    const snap = await fromSupabase()
+    const snap = await fromSupabase(market)
     if (snap) {
       return NextResponse.json(
-        payload(snap.rows, snap.regime, snap.spyChg20, snap.universeSize, 'snapshot', snap.scannedAt, snap.barDate)
+        payload(market, snap.rows, snap.regime, snap.spyChg20, snap.universeSize, 'snapshot', snap.scannedAt, snap.barDate)
       )
+    }
+
+    // 라이브 폴백은 미국 전용이다.
+    //
+    // 나스닥 스크리너 + 야후로 만들어진 경로라 한국·크립토에는 쓸 수 없고,
+    // 억지로 미국 데이터를 돌려주면 **다른 시장을 보고 있다고 착각하게 된다.**
+    // 스냅샷이 없다는 사실을 그대로 알린다.
+    if (market !== 'us') {
+      return NextResponse.json({
+        ...payload(market, [], 'up', null, 0, 'snapshot', 0, null),
+        awaitingScan: true,
+        error: `${MARKETS[market].label} 스냅샷이 아직 없다. 스캔을 한 번 돌려야 한다.`,
+      })
     }
 
     // 2순위: 라이브 스캔 (705종목, Vercel 10초 제한)
@@ -228,7 +261,7 @@ export async function GET() {
       const m = computeFlow(bars)
       if (m.f20 === null) return null
       return {
-        ...u, tier: tierOf(u.marketCap),
+        ...u, tier: tierOf(u.marketCap, 'us'),
         f5: m.f5, f20: m.f20, f60: m.f60, rvol: m.rvol, chg20: m.chg20, pctB: m.pctB,
         vwma20: m.vwma20, vwma60: m.vwma60, aboveRun: m.aboveRun,
         wClose: m.wClose, wVwma20: m.wVwma20, wVwma60: m.wVwma60, wAboveRun: m.wAboveRun,
@@ -238,16 +271,21 @@ export async function GET() {
     })
 
     return NextResponse.json(
-      payload(rows, regimeInfo.regime, regimeInfo.spyChg20, list.length, 'live', Date.now())
+      payload('us', rows, regimeInfo.regime, regimeInfo.spyChg20, list.length, 'live', Date.now())
     )
   } catch (e) {
     // 500이면 ISR이 실패 응답을 12시간 물고 있을 수 있다
     const empty = {} as Record<TierId, Record<CatKey, ScreenerRow[]>>
-    for (const t of TIERS) empty[t.id] = { pullback: [], momentum: [], quiet: [] }
+    const counts = {} as Record<TierId, number>
+    for (const t of tiersFor(market)) {
+      empty[t.id] = { pullback: [], momentum: [], quiet: [] }
+      counts[t.id] = 0
+    }
     return NextResponse.json({
       error: String(e),
+      market, marketDef: MARKETS[market],
       regime: 'up' as Regime, spyChg20: null, scanned: 0, universeSize: 0,
-      source: 'live', tierCounts: { large: 0, mid: 0, small: 0 },
+      source: 'live', tierCounts: counts,
       categories: empty, evidence: TIER_EVIDENCE, caveats: CAVEATS,
       fetchedAt: Date.now(),
     })

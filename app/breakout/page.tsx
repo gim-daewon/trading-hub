@@ -1,11 +1,13 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
+import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle'
+import { MARKETS, tiersFor } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { TvLink } from '../components/TvLink'
 import {
-  TIERS, BREAKOUTS, RR_EVIDENCE, RR_BASELINE, rrVerdict, roomToVwma60, isWeeklyKey,
-  alignStrength,
+  BREAKOUTS, RR_EVIDENCE, RR_BASELINE, rrVerdict, roomToVwma60, isWeeklyKey,
+  alignStrength, hiddenBreakouts,
   type TierId, type BreakoutKey, type Regime,
 } from '@/lib/screener-shared'
 
@@ -29,6 +31,7 @@ interface Row {
 interface Data {
   regime: Regime
   scanned: number
+  tierCounts?: Partial<Record<TierId, number>>
   source: 'snapshot' | 'live'
   breakouts?: Record<TierId, Record<BreakoutKey, Row[]>>
   /** false면 스냅샷에 VWMA 지표가 아직 없다 (컬럼 추가 + 스캔 필요) */
@@ -41,12 +44,6 @@ interface Data {
 }
 
 const sgn = (v: number | null, d = 0) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(d)}`
-
-// 탭에 띄우지 않는 신호.
-//   brokeD — 숏 전용. /short 메뉴에서 쓴다
-//   touchW — 기댓값 -0.86%, 격자 20개 전부 마이너스라 뺐다 (/rejected 참고).
-//            계산은 계속한다. 성과 추적에 남겨 실제로도 그런지 확인한다
-const HIDDEN = new Set<BreakoutKey>(['brokeD', 'touchW'])
 
 function StockRow({ r, weekly }: { r: Row; weekly: boolean }) {
   // 종가가 VWMA20에서 얼마나 떨어져 있나. 주봉 탭이면 주봉 값으로 잰다
@@ -135,23 +132,36 @@ export default function BreakoutPage() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   // 기본 탭은 기댓값 1위(강세눌림 터치 일봉)
+  const [market, setMarket, marketReady] = useMarket()
+  const [includeMicro, setIncludeMicro] = useState(false)
   const [tab, setTab] = useState<BreakoutKey>('today')
   // 기본 정렬을 여력순으로. 손절 -3% 기준이면 여력이 곧 손익비다
   const [sort, setSort] = useState<'room' | 'flow'>('room')
 
   const load = useCallback(() => {
     setLoading(true); setErr('')
-    fetch('/api/screener')
+    fetch(`/api/screener?market=${market}`)
       .then(r => r.json())
       .then(j => { setData(j); if (j.error) setErr(j.error) })
       .catch(e => setErr(String(e)))
       .finally(() => setLoading(false))
-  }, [])
+  }, [market])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { if (marketReady) load() }, [load, marketReady])
+
+  // 크립토는 주봉 신호를 통째로 숨긴다. 7일 캘린더 주는 주식의 주와 다르다
+  const hidden = hiddenBreakouts(market)
+  const visibleTiers = tiersFor(market)
+    .filter(t => includeMicro || (t.id !== 'micro' && t.id !== 'unknown'))
+
+  // 시장을 바꾸면 지금 탭이 사라질 수 있다 (크립토에서 주봉 탭을 보던 중 등).
+  // 그대로 두면 빈 화면이 뜨고 "종목이 없다"고 오해한다
+  useEffect(() => {
+    if (hidden.has(tab)) setTab('today')
+  }, [market, tab, hidden])
 
   const total = data?.breakouts
-    ? TIERS.reduce((a, t) => a + (data.breakouts![t.id]?.[tab]?.length ?? 0), 0)
+    ? visibleTiers.reduce((a, t) => a + (data.breakouts![t.id]?.[tab]?.length ?? 0), 0)
     : 0
   // above_run 컬럼 추가 전 스냅샷이면 전부 null이라 후보가 안 나온다.
   // 목록이 비어 보이는 두 상황을 구분해야 한다 —
@@ -183,6 +193,30 @@ export default function BreakoutPage() {
 
       {/* 성과 근거가 없다는 걸 목록보다 먼저 말한다.
           숫자를 보고 나서 읽으면 이미 늦다. */}
+      <MarketToggle value={market} onChange={setMarket} />
+
+      <MicroToggle
+        on={includeMicro}
+        onChange={setIncludeMicro}
+        counts={(data?.tierCounts?.micro ?? 0) + (data?.tierCounts?.unknown ?? 0)}
+      />
+
+      {!MARKETS[market].ruleValidated && (
+        <div className="card" style={{
+          padding: '10px 12px', marginBottom: 12, fontSize: 11, lineHeight: 1.6,
+          borderLeft: '3px solid var(--warn)',
+        }}>
+          <b style={{ color: 'var(--warn)' }}>{MARKETS[market].label}은 검증 전이다.</b>
+          {' '}{MARKETS[market].ruleNote}
+          <br />
+          아래 신호별 기댓값·손익비는 전부 <b>미국에서 잰 값</b>이라 여기엔 해당되지 않는다.
+          {market === 'crypto' && (
+            <><br /><b>주봉 신호는 뺐다.</b> 7일 캘린더 주는 주식의 5거래일 주와 다른 개념이고,
+            그 차이로 신호가 망가지는 걸 이미 봤다 (touchW). 일봉만 먼저 붙였다.</>
+          )}
+        </div>
+      )}
+
       <div className="card" style={{
         padding: '11px 13px', marginBottom: 12, fontSize: 11, lineHeight: 1.6,
         borderLeft: '3px solid var(--warn)',
@@ -197,7 +231,7 @@ export default function BreakoutPage() {
         }}>
           기준선 {RR_BASELINE.exp}%/거래 · 연환산 {RR_BASELINE.ann}%
           <br />
-          {BREAKOUTS.filter(b => !HIDDEN.has(b.key)).map(b => {
+          {BREAKOUTS.filter(b => !hidden.has(b.key)).map(b => {
             const q = RR_EVIDENCE[b.key]
             return q ? `${b.label} ${q.exp >= 0 ? '+' : ''}${q.exp}%` : ''
           }).filter(Boolean).join(' · ')}
@@ -219,9 +253,9 @@ export default function BreakoutPage() {
       {/* 탭 8개라 가로 스크롤 칩으로 둔다. flex:1로 나누면 글자가 다 뭉개진다 */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 8, paddingBottom: 2 }}>
         {/* HIDDEN은 여기 안 띄운다 — brokeD는 /short 전용, touchW는 기각 */}
-        {BREAKOUTS.filter(b => !HIDDEN.has(b.key)).map(b => {
+        {BREAKOUTS.filter(b => !hidden.has(b.key)).map(b => {
           const n = data?.breakouts
-            ? TIERS.reduce((a, t) => a + (data.breakouts![t.id]?.[b.key]?.length ?? 0), 0)
+            ? visibleTiers.reduce((a, t) => a + (data.breakouts![t.id]?.[b.key]?.length ?? 0), 0)
             : 0
           const active = tab === b.key
           return (
@@ -305,7 +339,7 @@ export default function BreakoutPage() {
         </div>
       )}
 
-      {!awaitingScan && data?.hasVwma && TIERS.map(t => {
+      {!awaitingScan && data?.hasVwma && visibleTiers.map(t => {
         const raw = data.breakouts![t.id]?.[tab] ?? []
         const wk = isWeeklyKey(tab)
         const rows = [...raw].sort((a, b) => sort === 'room'

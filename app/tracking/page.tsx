@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import {
-  TIERS, CATS, BREAKOUTS, STOPPING_RULE, RR_BASELINE,
+  tiersFor, CATS, BREAKOUTS, STOPPING_RULE, RR_BASELINE,
   type TierId, type CatKey, type Regime,
 } from '@/lib/screener-shared'
 
@@ -179,7 +179,7 @@ export default function TrackingPage() {
                   <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11 }}>
                     <th style={{ textAlign: 'left', padding: '8px 10px' }}>카테고리</th>
                     <th style={{ textAlign: 'right', padding: '8px 10px' }}>전체</th>
-                    {TIERS.map(t => (
+                    {tiersFor('us').map(t => (
                       <th key={t.id} style={{ textAlign: 'right', padding: '8px 10px' }}>
                         {t.label.split(' ')[0]}
                       </th>
@@ -193,7 +193,7 @@ export default function TrackingPage() {
                       <td style={{ padding: '10px', textAlign: 'right' }}>
                         <Cell r={h.byCat[c.key]?.all ?? null} />
                       </td>
-                      {TIERS.map(t => (
+                      {tiersFor('us').map(t => (
                         <td key={t.id} style={{ padding: '10px', textAlign: 'right' }}>
                           <Cell r={h.byCat[c.key]?.[t.id as TierId] ?? null} />
                         </td>

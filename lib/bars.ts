@@ -10,6 +10,7 @@
  */
 import { type DatedBar, fetchDatedBars } from './flow'
 import { fetchJson } from './fetch-retry'
+import { binanceJson } from './binance'
 import type { UniverseRow } from './universe'
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
@@ -39,8 +40,7 @@ async function binanceBars(symbol: string, want: number): Promise<DatedBar[] | n
   for (let guard = 0; guard < 6 && out.length < want; guard++) {
     const q = new URLSearchParams({ symbol, interval: '1d', limit: '1000' })
     if (endTime) q.set('endTime', String(endTime))
-    const k = await fetchJson<unknown[][]>(
-      `https://api.binance.com/api/v3/klines?${q}`, { headers: H })
+    const k = await binanceJson<unknown[][]>(`/api/v3/klines?${q}`)
     if (!k?.length) break
     const page: DatedBar[] = []
     const now = Date.now()

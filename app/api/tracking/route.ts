@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import {
-  TIERS, CATS, BREAKOUTS, tierOf, buildCategories, buildBreakouts,
+  tiersFor, CATS, BREAKOUTS, tierOf, buildCategories, buildBreakouts,
   TIER_EVIDENCE, STOPPING_RULE, changesSince,
   type TierId, type CatKey, type Regime, type ScreenerRow,
 } from '@/lib/screener-shared'
@@ -88,7 +88,7 @@ async function readRows(url: string, headers: HeadersInit, snapshotId: number): 
     name: r.name ?? '',
     sector: r.sector ?? '',
     marketCap: r.market_cap ?? 0,
-    tier: tierOf(r.market_cap ?? 0),
+    tier: tierOf(r.market_cap ?? 0, 'us'),
     f5: r.f5, f20: r.f20, f60: r.f60,
     rvol: r.rvol, chg20: r.chg20, pctB: r.pct_b,
     // VWMA 필드를 빠뜨려서 buildBreakouts가 전부 undefined를 보고
@@ -214,8 +214,8 @@ export async function GET() {
       const rows = await readRows(url, headers, past.id)
       if (!rows.length) continue
       const spyRet = ((latest.spy_price - past.spy_price) / past.spy_price) * 100
-      const cats = buildCategories(rows, SHOWN_LIMIT)
-      const catsExt = buildCategories(rows, EXTENDED_LIMIT)
+      const cats = buildCategories(rows, 'us', SHOWN_LIMIT)
+      const catsExt = buildCategories(rows, 'us', EXTENDED_LIMIT)
 
       // 진입가와 현재가를 심볼로 이어 수익률 쌍을 만든다
       const toPairs = (list: ScreenerRow[]) => list
@@ -232,18 +232,18 @@ export async function GET() {
 
       for (const c of CATS) {
         byCat[c.key] = {}
-        for (const t of TIERS) {
+        for (const t of tiersFor('us')) {
           byCat[c.key][t.id] = summarize(toPairs(cats[t.id][c.key]))
         }
-        byCat[c.key].all = summarize(toPairs(TIERS.flatMap(t => cats[t.id][c.key])))
-        byCatExt[c.key] = summarize(toPairs(TIERS.flatMap(t => catsExt[t.id][c.key])))
+        byCat[c.key].all = summarize(toPairs(tiersFor('us').flatMap(t => cats[t.id][c.key])))
+        byCatExt[c.key] = summarize(toPairs(tiersFor('us').flatMap(t => catsExt[t.id][c.key])))
       }
 
       // VWMA 신호도 같이 추적한다. 화면에 띄우면서 성적을 안 재고 있었다
-      const bo = buildBreakouts(rows, SHOWN_LIMIT)
+      const bo = buildBreakouts(rows, 'us', SHOWN_LIMIT)
       const byBreakout: Record<string, Result | null> = {}
       for (const b of BREAKOUTS) {
-        byBreakout[b.key] = summarize(toPairs(TIERS.flatMap(t => bo[t.id][b.key])))
+        byBreakout[b.key] = summarize(toPairs(tiersFor('us').flatMap(t => bo[t.id][b.key])))
       }
 
       out.push({

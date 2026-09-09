@@ -4,7 +4,7 @@ import PageHeader from '../components/PageHeader'
 import MetricGuide from '../components/MetricGuide'
 import { TvLink } from '../components/TvLink'
 import {
-  TIERS, TIER_EVIDENCE, RR_EVIDENCE, RR_BASELINE, rrVerdict,
+  tiersFor, TIER_EVIDENCE, RR_EVIDENCE, RR_BASELINE, rrVerdict,
   type TierId, type CatKey, type Regime, type Perf,
 } from '@/lib/screener-shared'
 
@@ -40,8 +40,12 @@ const sgn = (v: number | null, d = 0) => v == null ? '—' : `${v >= 0 ? '+' : '
 
 /** 시총 구간별 참고값. 판정은 구간 단위(PERIOD_EVIDENCE)로만 하므로 배지를 달지 않는다 */
 function EvidenceLine({ tier, regime }: { tier: TierId; regime: Regime }) {
-  const p: Perf = TIER_EVIDENCE[tier].pullback[regime]
-  const b: Perf = TIER_EVIDENCE[tier].base[regime]
+  // 미국 3구간만 실측했다. 초소형·시총 미상은 잰 적이 없어 값이 없다 —
+  // 없으면 아무것도 안 그린다. 없는 숫자를 0으로 채우면 근거가 거짓말이 된다
+  const ev = TIER_EVIDENCE[tier]
+  if (!ev) return null
+  const p: Perf = ev.pullback[regime]
+  const b: Perf = ev.base[regime]
   return (
     <span className="num" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
       참고 · 2년 뭉친 값 {sgn(p.avg, 2)}%p · 중앙값 {sgn(p.md, 2)} · 상회율 {p.hit}%
@@ -105,7 +109,7 @@ export default function PicksPage() {
   useEffect(() => { load() }, [load])
 
   const total = data
-    ? TIERS.reduce((a, t) => a + (data.categories?.[t.id]?.pullback?.length ?? 0), 0)
+    ? tiersFor('us').reduce((a, t) => a + (data.categories?.[t.id]?.pullback?.length ?? 0), 0)
     : 0
   // pct_b 컬럼 추가 전 스냅샷이면 전부 null이라 후보가 안 나온다
   const awaitingScan = !!data && !loading && total === 0
@@ -188,7 +192,7 @@ export default function PicksPage() {
         </div>
       )}
 
-      {!awaitingScan && data && TIERS.map(t => {
+      {!awaitingScan && data && tiersFor('us').map(t => {
         const rows = data.categories?.[t.id]?.pullback ?? []
         return (
           <section key={t.id} style={{ marginBottom: 18 }}>

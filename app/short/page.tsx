@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import { TvLink } from '../components/TvLink'
-import { TIERS, type TierId, type BreakoutKey } from '@/lib/screener-shared'
+import { tiersFor, type TierId, type BreakoutKey } from '@/lib/screener-shared'
 import { INVERSE_ETF } from '@/lib/inverse-etf'
 
 // 숏 후보 — 강세 구조가 깨진 종목 중 인버스 ETF가 있는 것.
@@ -50,7 +50,7 @@ export default function ShortPage() {
 
   // 이탈 종목 중 인버스 ETF가 있는 것만. 이탈 폭이 큰 순으로 정렬한다
   const rows = data?.breakouts
-    ? TIERS.flatMap(t => data.breakouts![t.id]?.brokeD ?? [])
+    ? tiersFor('us').flatMap(t => data.breakouts![t.id]?.brokeD ?? [])
         .filter(r => r.symbol in INVERSE_ETF)
         // 최근에 깨진 것부터. 같은 날이면 깊게 빠진 것부터
         .sort((a, b) => {

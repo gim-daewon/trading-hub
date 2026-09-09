@@ -1,11 +1,15 @@
 import { hasInverse } from './inverse-etf'
+import { type Market, type TierId, tiersFor } from './markets'
 // 스크리너 공용 정의 — API·스캔 스크립트·UI가 같은 기준을 쓴다.
 
 export type Regime = 'up' | 'down'
-export type TierId = 'large' | 'mid' | 'small'
 export type CatKey = 'pullback' | 'momentum' | 'quiet'
 
-export interface Tier { id: TierId; label: string; min: number; max: number }
+// 구간 정의는 lib/markets.ts 한 곳에만 둔다.
+// 여기에도 두면 시장을 넓힐 때 두 정의가 갈라진다 — 신호를 두 번 구현했다가
+// 정의 불일치 버그를 네 번 낸 것과 같은 실수다.
+export { tiersFor, tierOf, MARKETS, MARKET_IDS, isMarket, fmtCap } from './markets'
+export type { Market, TierId, Tier } from './markets'
 
 /** 스크리너 한 종목. 진입가(price)는 사후 성과 추적에 쓴다 */
 export interface ScreenerRow {
@@ -39,18 +43,14 @@ export interface ScreenerRow {
   low?: number | null
   wLow?: number | null
   price: number | null
-}
-
-// 시총 구간을 나눠야 하는 이유: 같은 지표라도 구간마다 결과가 정반대다.
-// 소형주 하락장은 기준선 자체가 -1.11%p, 상회율 43%로 뭘 사도 진다.
-export const TIERS: Tier[] = [
-  { id: 'large', label: '대형 $10B+',   min: 1e10, max: Infinity },
-  { id: 'mid',   label: '중형 $2~10B',  min: 2e9,  max: 1e10 },
-  { id: 'small', label: '소형 $0.5~2B', min: 5e8,  max: 2e9 },
-]
-
-export function tierOf(marketCap: number): TierId | null {
-  return TIERS.find(t => marketCap >= t.min && marketCap < t.max)?.id ?? null
+  /** 화면에 쓰는 짧은 이름. BTCUSDT -> BTC, 005930.KS -> 005930 */
+  display?: string
+  /** 일 거래대금. 한국은 원, 미국·크립토는 USD */
+  dollarVol?: number | null
+  /** 시총을 실제로 알아냈나. false면 '미상'으로 표시한다 */
+  capKnown?: boolean
+  /** 김치 프리미엄(%). 바이낸스·업비트 동시상장 코인만 */
+  premium?: number | null
 }
 
 export interface Perf { avg: number; md: number; hit: number; n: number }
@@ -70,7 +70,10 @@ export type CatEvidence = Record<Regime, Perf>
  * 실제 매매는 구간 단위로 이뤄지므로 판정의 근거로는 PERIOD_EVIDENCE를 써야 한다.
  * 여기 값은 "시총 구간·국면별로 어떻게 갈리는가"를 보는 참고용으로만 남긴다.
  */
-export const TIER_EVIDENCE: Record<TierId, Record<CatKey | 'base', CatEvidence>> = {
+// Partial인 이유: 이 값은 **미국 3구간**의 실측치다.
+// 한국·크립토의 초소형(micro)과 시총 미상(unknown)은 아직 잰 적이 없다.
+// Record로 두면 없는 구간에 가짜 숫자를 채워 넣어야 한다.
+export const TIER_EVIDENCE: Partial<Record<TierId, Record<CatKey | 'base', CatEvidence>>> = {
   large: {
     base:      { up: { avg: 0.35, md: -0.62, hit: 47, n: 50435 }, down: { avg: 0.90, md: 0.64, hit: 53, n: 25623 } },
     momentum:  { up: { avg: 1.65, md: 0.05, hit: 50, n: 3968 },   down: { avg: 1.08, md: 0.81, hit: 54, n: 2127 } },
@@ -302,6 +305,8 @@ export const CATS: { key: CatKey; label: string; rule: string }[] = [
  */
 export function buildCategories<T extends ScreenerRow>(
   rows: T[],
+  /** 구간 경계가 시장마다 다르다 */
+  market: Market = 'us',
   /**
    * 카테고리당 상위 몇 개까지 담을지. 화면은 25개를 보여준다.
    * 성과 추적은 표본을 늘리려고 50개까지 볼 수 있는데, 그 값은
@@ -311,7 +316,7 @@ export function buildCategories<T extends ScreenerRow>(
 ): Record<TierId, Record<CatKey, T[]>> {
   const out = {} as Record<TierId, Record<CatKey, T[]>>
 
-  for (const tier of TIERS) {
+  for (const tier of tiersFor(market)) {
     const inTier = rows.filter(r => r.tier === tier.id)
     const byFlow = [...inTier].sort((a, b) => (b.f20 ?? -999) - (a.f20 ?? -999))
     // 구간별 상위 15% (최소 30) — 구간 크기가 달라 고정 개수는 불공평하다
@@ -635,6 +640,24 @@ export function roomToVwma60(
 export const isWeeklyKey = (k: BreakoutKey) => k.endsWith('W')
 
 /**
+ * 이 시장에서 화면에 띄우지 않을 신호.
+ *
+ * brokeD — 숏 전용. /short 메뉴에서만 쓴다 (전 시장 공통)
+ * touchW — 기댓값 -0.86%, 격자 20개 전부 마이너스라 기각했다
+ *
+ * 크립토는 **주봉 신호를 전부 뺀다.** 7일 캘린더 주는 주식의 5거래일 주와
+ * 다른 개념이고, 그 차이가 실제로 신호를 망가뜨리는 걸 봤다 — touchW가
+ * 진행 중인 주 때문에 무너졌고 주 안 며칠째인지로 쪼개니 -1.81% → +0.30%로
+ * 단조 관계였다. 주말이 없는 시장에 같은 구조를 쓰면 검증 없이 같은 함정에 빠진다.
+ * 일봉 신호부터 붙이고 주봉은 크립토용으로 따로 설계한다.
+ */
+export function hiddenBreakouts(market: Market): Set<BreakoutKey> {
+  const base: BreakoutKey[] = ['brokeD', 'touchW']
+  if (market !== 'crypto') return new Set(base)
+  return new Set([...base, ...BREAKOUTS.map(b => b.key).filter(isWeeklyKey)])
+}
+
+/**
  * 두 정렬 기준의 상위를 합집합으로 담는다.
  *
  * 수급순으로 자른 뒤 화면에서 여력순으로 재정렬하면 "수급 상위 50개 중
@@ -644,10 +667,10 @@ export const isWeeklyKey = (k: BreakoutKey) => k.endsWith('W')
  * 손절 -3%가 고정이면 여력이 곧 손익비다 — 여력 9%가 3:1이다.
  */
 export function buildBreakouts<T extends ScreenerRow>(
-  rows: T[], limit = 50,
+  rows: T[], market: Market = 'us', limit = 50,
 ): Record<TierId, Record<BreakoutKey, T[]>> {
   const out = {} as Record<TierId, Record<BreakoutKey, T[]>>
-  for (const tier of TIERS) {
+  for (const tier of tiersFor(market)) {
     const inTier = rows.filter(r => r.tier === tier.id)
     const m = {} as Record<BreakoutKey, T[]>
     for (const b of BREAKOUTS) {
