@@ -247,6 +247,14 @@ export const RR_BASELINE: RrPerf = RR_BASELINE_BY_MARKET.us!
  * 없는 키는 rrVerdict가 '미측정'으로 돌려준다.
  */
 const KR_EVIDENCE: Record<string, RrPerf> = {
+  // 수급 카테고리 — 2026-09-09 측정. **셋 다 기준선(+0.13%) 대비 우위가 없다.**
+  // 정체 구간이 +0.14%로 가장 높은데 차이가 0.01%p라 사실상 없는 것이다.
+  // 미국에서 통하던 게 한국으로 이전되지 않았다.
+  // 반면 VWMA의 nearW는 +0.31%로 기준선을 +0.18%p 넘겼다 — 아래 참고.
+  quiet:    { win: 27, rr: 2.82, exp:  0.14, lo: -0.12, hi: 0.32, days: 8.7, ann:  4.05 },
+  pullback: { win: 27, rr: 2.81, exp:  0.09, lo: -0.80, hi: 0.58, days: 6.4, ann:  3.73 },
+  momentum: { win: 25, rr: 2.98, exp: -0.05, lo: -0.24, hi: 0.12, days: 2.9, ann: -4.42 },
+  // VWMA 신호
   nearW:  { win: 29, rr: 2.76, exp:  0.31, lo: -0.09, hi: 0.77, days: 8.2, ann:  9.45 },
   today:  { win: 27, rr: 2.94, exp:  0.24, lo: -0.02, hi: 0.57, days: 6.2, ann:  9.65 },
   revD:   { win: 28, rr: 2.93, exp:  0.23, lo:  0.01, hi: 0.86, days: 7.3, ann:  7.94 },
