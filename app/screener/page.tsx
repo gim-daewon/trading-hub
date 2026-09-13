@@ -7,7 +7,7 @@ import MetricGuide from '../components/MetricGuide'
 import { TvLayoutSetting } from '../components/TvLink'
 import { SymbolLabel } from '../components/SymbolLabel'
 import { useLiveQuotes } from '../components/useLiveQuotes'
-import { LivePct } from '../components/LivePct'
+import { LivePct, LiveCaveat } from '../components/LivePct'
 import { ExitPrices } from '../components/ExitPrices'
 import {
   CATS, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
@@ -374,6 +374,8 @@ export default function ScreenerPage() {
           </button>
         ))}
       </div>
+      <LiveCaveat />
+
       <MetricGuide show={['flow', 'pctB', 'rvol']} />
 
       {data && <EvidenceBox market={market} tier={tier} cat={tab} regime={data.regime} />}

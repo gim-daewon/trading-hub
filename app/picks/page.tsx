@@ -6,7 +6,7 @@ import { MARKETS, tiersFor as tf, fmtCap, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { SymbolLabel } from '../components/SymbolLabel'
 import { useLiveQuotes, type LiveQuote } from '../components/useLiveQuotes'
-import { LivePct } from '../components/LivePct'
+import { LivePct, LiveCaveat } from '../components/LivePct'
 import { ExitPrices } from '../components/ExitPrices'
 import {
   tiersFor, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
@@ -243,6 +243,8 @@ export default function PicksPage() {
           })()}
         </p>
       </div>
+
+      <LiveCaveat />
 
       <MetricGuide show={['flow', 'pctB']} />
 

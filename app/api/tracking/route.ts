@@ -195,8 +195,17 @@ function judgeRule(
   const e = exitPrices(entry, atr14, market, dollarVol)
   if (!e) return null      // ATR 미저장이거나 유동성 하한 아래 — 판정하지 않는다
   const risk = entry - e.stop
-  const at = (px: number, k: number, hit: RuleOutcome['hit']): RuleOutcome =>
-    ({ ret: ((px - entry) / entry) * 100, R: (px - entry) / risk, days: k, hit })
+  // 왕복 거래비용을 뺀다. 안 빼면 실제보다 좋게 나온다 —
+  // 특히 손절이 좁을수록 같은 수수료가 위험의 더 큰 몫을 먹는다.
+  // 백테스트(bt-sweep)와 같은 방식으로 계산해야 12월에 비교가 성립한다
+  const cost = MARKETS[market].roundTripCost
+  const costR = (cost / 100) * entry / risk
+  const at = (px: number, k: number, hit: RuleOutcome['hit']): RuleOutcome => ({
+    ret: ((px - entry) / entry) * 100 - cost,
+    R: (px - entry) / risk - costR,
+    days: k,
+    hit,
+  })
   for (let k = 0; k < path.length; k++) {
     const b = path[k]
     // 같은 날 둘 다 닿으면 손절 (보수적)
@@ -212,9 +221,11 @@ interface RuleResult {
   stopped: number; hitTarget: number; open: number; days: number
   /** 경로에 고가가 있었나. false면 익절 판정이 보수적으로 치우친다 */
   hasHigh: boolean
+  /** 반영한 왕복 거래비용(%) */
+  cost: number
 }
 
-function summarizeRule(outs: RuleOutcome[], hasHigh: boolean): RuleResult | null {
+function summarizeRule(outs: RuleOutcome[], hasHigh: boolean, cost: number): RuleResult | null {
   if (!outs.length) return null
   const rets = outs.map(o => o.ret)
   const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length
@@ -231,6 +242,7 @@ function summarizeRule(outs: RuleOutcome[], hasHigh: boolean): RuleResult | null
     open: outs.filter(o => o.hit === 'open').length,
     days: mean(outs.map(o => o.days)),
     hasHigh,
+    cost,
   }
 }
 
@@ -347,7 +359,7 @@ const buildHorizons = unstable_cache(
         }
         byCat[c.key].all = summarize(toPairs(tiersFor(market).flatMap(t => cats[t.id][c.key])))
         byCatExt[c.key] = summarize(toPairs(tiersFor(market).flatMap(t => catsExt[t.id][c.key])))
-        byCatRule[c.key] = summarizeRule(toRule(tiersFor(market).flatMap(t => cats[t.id][c.key])), hasHigh)
+        byCatRule[c.key] = summarizeRule(toRule(tiersFor(market).flatMap(t => cats[t.id][c.key])), hasHigh, MARKETS[market].roundTripCost)
       }
 
       // VWMA 신호도 같이 추적한다. 화면에 띄우면서 성적을 안 재고 있었다
@@ -356,7 +368,7 @@ const buildHorizons = unstable_cache(
       for (const b of BREAKOUTS) {
         const list = tiersFor(market).flatMap(t => bo[t.id][b.key])
         byBreakout[b.key] = summarize(toPairs(list))
-        byBreakoutRule[b.key] = summarizeRule(toRule(list), hasHigh)
+        byBreakoutRule[b.key] = summarizeRule(toRule(list), hasHigh, MARKETS[market].roundTripCost)
       }
 
       out.push({
@@ -379,6 +391,7 @@ const buildHorizons = unstable_cache(
         byBreakoutRule,
         ruleHasHigh: hasHigh,
         ruleLabel: MARKETS[market].rule.label,
+        ruleCost: MARKETS[market].roundTripCost,
       })
     }
 

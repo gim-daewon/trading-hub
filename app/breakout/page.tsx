@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle'
 import { useLiveQuotes, type LiveQuote } from '../components/useLiveQuotes'
-import { LivePct } from '../components/LivePct'
+import { LivePct, LiveCaveat } from '../components/LivePct'
 import { MARKETS, tiersFor, fmtCap, fmtPrice, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { SymbolLabel } from '../components/SymbolLabel'
@@ -333,6 +333,8 @@ export default function BreakoutPage() {
             : '오늘 많이 오른 순 · 값이 없는 종목은 뒤로'}
         </span>
       </div>
+
+      <LiveCaveat />
 
       <MetricGuide show={['flow', 'pctB']} />
 
