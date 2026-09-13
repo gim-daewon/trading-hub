@@ -27,3 +27,19 @@ jobs:
       # 소스 점검은 배포된 API를 부르기만 한다. npm ci가 필요 없다
       - name: Source integrity
         run: node scripts/source-check.mjs
+
+      # 캐시 예열.
+      #
+      # /api/tracking 콜드 경로가 실측 31초다. 주말처럼 며칠 비워두면
+      # 월요일 첫 사용자가 타임아웃된 빈 응답을 본다 — 실제로 그렇게 오진했다.
+      # 스캔 워크플로는 평일에만 도니 여기서 4시간마다 같이 데운다.
+      - name: Warm cache
+        continue-on-error: true
+        run: |
+          BASE=https://trading-hub-nu-orcin.vercel.app
+          for m in us kr crypto; do
+            for path in "/api/screener?market=$m" "/api/tracking?market=$m"; do
+              t=$(curl -s -o /dev/null -w "%{time_total}" --max-time 90 "$BASE$path" || echo "실패")
+              echo "예열 $path -> ${t}s"
+            done
+          done
