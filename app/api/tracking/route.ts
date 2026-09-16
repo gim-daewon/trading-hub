@@ -445,7 +445,9 @@ export async function GET(req: Request) {
       if (seen.has(d)) return false
       // en-CA는 YYYY-MM-DD를 준다. UTC 정오로 파싱해 시간대 밀림을 막는다
       const dow = new Date(`${d}T12:00:00Z`).getUTCDay()
-      if (dow === 0 || dow === 6) return false     // 거래일 데이터가 아니다
+      // 크립토는 24/7이라 주말도 거래일이다. 이 필터를 그대로 두면
+      // 토·일 스냅샷이 버려져 '5거래일'이 실제로는 7일이 된다
+      if (market !== 'crypto' && (dow === 0 || dow === 6)) return false
       seen.add(d)
       return true
     })
