@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import { MarketToggle, useMarket } from '../components/MarketToggle'
 import { MARKETS } from '@/lib/markets'
+import DailyTable, { type Daily } from './DailyTable'
 import {
   tiersFor, CATS, BREAKOUTS, STOPPING_RULE,
   type TierId, type CatKey, type Regime,
@@ -32,6 +33,8 @@ interface Horizon {
 }
 interface Data {
   horizons: Horizon[]
+  /** VWMA 신호별 다음날 등락 누적 */
+  daily?: Daily
   snapshotCount: number
   latestAt?: string
   note?: string | null
@@ -160,6 +163,8 @@ export default function TrackingPage() {
           {data.note}
         </div>
       )}
+
+      {data?.daily && data.daily.pairs > 0 && <DailyTable daily={data.daily} market={market} />}
 
       {data?.horizons.map(h => (
         <section key={h.days} style={{ marginBottom: 20 }}>

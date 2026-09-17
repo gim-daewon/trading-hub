@@ -402,6 +402,155 @@ const buildHorizons = unstable_cache(
   { revalidate: 86400 },
 )
 
+/**
+ * 1일 누적 — VWMA 신호별 **다음 거래일 등락**을 날마다 쌓는다.
+ *
+ * 구간(HORIZONS)은 '최신 스냅샷 대비 h일 전' 한 쌍만 본다. 그래서 1거래일
+ * 결과가 매일 새로 덮이고 누적이 안 됐다. 여기서는 인접한 두 거래일을
+ * 전부 짝지어(어제→오늘, 그제→어제, ...) 표본을 합친다.
+ *
+ * 비교 기준은 **같은 날 유니버스 평균**이다. 1일 등락은 시장 전체 흐름이
+ * 거의 전부를 결정한다 — 하락장 하루에 모든 신호가 마이너스가 된다.
+ * 신호의 실력은 '같은 날 아무거나 산 것보다 나았나'로만 보인다.
+ *
+ * 한계: 백테스트 규칙의 평균 보유는 약 21거래일이다. 다음날이 나빠도
+ * 20일 뒤에는 좋은 신호가 있을 수 있다(눌림목류). 이 표는 규칙 판정을
+ * 대신하지 않는다.
+ */
+const DAILY_ALL = 100_000          // 화면 상한(25)이 아니라 신호에 걸린 종목 전부
+const DAILY_MIN_STOP_PCT = 0.5     // bt-sweep과 같은 하한. ATR이 너무 작으면 비용R이 폭주한다
+const DAILY_MAX_MOVE = [0.4, 2.5]  // 하루 -60% / +150% 밖은 분할·데이터 오류로 본다
+
+interface DailyStat {
+  n: number
+  /** 표본이 있었던 날 수 */
+  days: number
+  /** 다음날 평균 등락(%, 왕복 비용 차감) */
+  avg: number
+  /** 같은 날 유니버스 평균 대비(%p) */
+  exAvg: number
+  /** 오른 비율 */
+  up: number
+  /** 같은 날 유니버스 평균을 이긴 비율 */
+  beat: number
+  /** R 단위 (손절 거리 = 규칙의 손절). ATR 미저장 구간은 빠진다 */
+  nR: number
+  avgR: number | null
+  exR: number | null
+  /** 초과R이 플러스였던 날 / R이 있던 날 */
+  posDays: number
+  daysR: number
+  /** 날짜 단위 t값(초과R). 같은 날 종목끼리는 독립이 아니라서 날짜로 묶는다 */
+  t: number | null
+  perDay: { date: string; n: number; ex: number; exR: number | null }[]
+}
+
+// bar_date가 없는 옛 스냅샷은 스캔 시각의 뉴욕 날짜로 본다 (GET의 etDate와 같다)
+const dayOf = (s: Snap) =>
+  s.bar_date ?? new Date(s.scanned_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length
+
+const buildDaily = unstable_cache(
+  async (url: string, key: string, market: Market, snaps: Snap[]) => {
+    const cost = MARKETS[market].roundTripCost
+    const tiers = new Set<string>(tiersFor(market).map(t => t.id))
+    const keys = ['base', ...BREAKOUTS.map(b => b.key)]
+    type One = { ret: number; R: number | null }
+    type Day = { date: string; list: One[]; ex: number; exR: number | null; ret: number[]; beat: number }
+    const acc: Record<string, Day[]> = Object.fromEntries(keys.map(k => [k, []]))
+    let dropped = 0
+
+    for (let i = 1; i < snaps.length; i++) {
+      const [entryRows, nextRows] = await Promise.all([
+        readRows(url, key, snaps[i].id, market),
+        readRows(url, key, snaps[i - 1].id, market),
+      ])
+      const next = new Map(nextRows.filter(r => r.price).map(r => [r.symbol, r.price!]))
+      const one = (r: ScreenerRow): One | null => {
+        const nx = next.get(r.symbol)
+        if (!r.price || !nx) return null
+        const ratio = nx / r.price
+        if (ratio < DAILY_MAX_MOVE[0] || ratio > DAILY_MAX_MOVE[1]) { dropped++; return null }
+        const e = exitPrices(r.price, r.atr14, market, r.dollarVol)
+        const risk = e ? r.price - e.stop : 0
+        const R = e && risk / r.price * 100 >= DAILY_MIN_STOP_PCT
+          ? (nx - r.price) / risk - (cost / 100) * r.price / risk
+          : null
+        return { ret: (ratio - 1) * 100 - cost, R }
+      }
+      const pick = (list: ScreenerRow[]) => list.map(one).filter((o): o is One => !!o)
+
+      const universe = pick(entryRows.filter(r => r.tier != null && tiers.has(r.tier)))
+      if (!universe.length) continue
+      const bRet = mean(universe.map(o => o.ret))
+      const uR = universe.flatMap(o => o.R == null ? [] : [o.R])
+      const bR = uR.length ? mean(uR) : null
+
+      const bo = buildBreakouts(entryRows, market, DAILY_ALL)
+      const lists: Record<string, One[]> = { base: universe }
+      for (const b of BREAKOUTS) lists[b.key] = pick(tiersFor(market).flatMap(t => bo[t.id][b.key]))
+
+      const date = dayOf(snaps[i])
+      for (const k of keys) {
+        const list = lists[k]
+        if (!list.length) continue
+        const rs = list.flatMap(o => o.R == null ? [] : [o.R])
+        acc[k].push({
+          date, list,
+          ret: list.map(o => o.ret),
+          ex: mean(list.map(o => o.ret)) - bRet,
+          exR: rs.length && bR != null ? mean(rs) - bR : null,
+          beat: list.filter(o => o.ret > bRet).length,
+        })
+      }
+    }
+
+    const stat = (days: Day[]): DailyStat | null => {
+      if (!days.length) return null
+      const all = days.flatMap(d => d.list)
+      const rets = all.map(o => o.ret)
+      const Rs = all.flatMap(o => o.R == null ? [] : [o.R])
+      // 초과는 **날짜별 평균의 평균**이다. 종목 수로 가중하면 신호가 많이 뜬
+      // 하루(대개 급등·급락일)가 전체를 끌고 가고, t값과 부호가 어긋난다
+      const exAvg = mean(days.map(d => d.ex))
+      const withR = days.filter(d => d.exR != null)
+      const xs = withR.map(d => d.exR!)
+      const exR = xs.length ? mean(xs) : null
+      let t: number | null = null
+      if (xs.length >= 5) {
+        const sd = Math.sqrt(xs.reduce((s, x) => s + (x - exR!) ** 2, 0) / (xs.length - 1))
+        t = sd > 0 ? exR! / (sd / Math.sqrt(xs.length)) : null
+      }
+      return {
+        n: all.length,
+        days: days.length,
+        avg: mean(rets),
+        exAvg,
+        up: rets.filter(v => v > 0).length / rets.length * 100,
+        beat: days.reduce((s, d) => s + d.beat, 0) / all.length * 100,
+        nR: Rs.length,
+        avgR: Rs.length ? mean(Rs) : null,
+        exR,
+        posDays: withR.filter(d => d.exR! > 0).length,
+        daysR: withR.length,
+        t,
+        perDay: days.map(d => ({ date: d.date, n: d.list.length, ex: d.ex, exR: d.exR })),
+      }
+    }
+
+    return {
+      from: snaps.length ? dayOf(snaps[snaps.length - 1]) : null,
+      to: snaps.length ? dayOf(snaps[0]) : null,
+      pairs: snaps.length - 1,
+      dropped,
+      cost,
+      stats: Object.fromEntries(keys.map(k => [k, stat(acc[k])])) as Record<string, DailyStat | null>,
+    }
+  },
+  ['tracking-daily'],
+  { revalidate: 86400 },
+)
+
 export async function GET(req: Request) {
   const rawMarket = new URL(req.url).searchParams.get('market') ?? 'us'
   const market: Market = isMarket(rawMarket) ? rawMarket : 'us'
@@ -482,11 +631,15 @@ export async function GET(req: Request) {
     //
     // 입력이 전부 스냅샷 id라 결과가 변할 일이 없다. 새 스캔이 돌면
     // latest.id가 바뀌어 키가 바뀐다.
-    const out = await buildHorizons(url, key, market, snaps)
+    const [out, daily] = await Promise.all([
+      buildHorizons(url, key, market, snaps),
+      buildDaily(url, key, market, snaps),
+    ])
 
     return NextResponse.json({
       market,
       horizons: out,
+      daily,
       snapshotCount: snaps.length,
       rawCount: allSnaps.length,
       // 어느 horizon이 언제부터 보이는지 화면에서 알 수 있게 한다
