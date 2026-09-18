@@ -1,5 +1,5 @@
 'use client'
-import { BREAKOUTS, hiddenBreakouts } from '@/lib/screener-shared'
+import { BREAKOUTS, hiddenBreakouts, DAILY_EVIDENCE } from '@/lib/screener-shared'
 import type { Market } from '@/lib/markets'
 
 /**
@@ -62,6 +62,7 @@ function Bars({ days }: { days: DailyStat['perDay'] }) {
 export default function DailyTable({ daily, market }: { daily: Daily; market: Market }) {
   const hidden = hiddenBreakouts(market)
   const base = daily.stats.base
+  const ev = DAILY_EVIDENCE[market]
   const rows = BREAKOUTS
     .filter(b => !hidden.has(b.key))
     .map(b => ({ b, s: daily.stats[b.key] }))
@@ -83,12 +84,13 @@ export default function DailyTable({ daily, market }: { daily: Daily; market: Ma
 
       <div className="card" style={{ overflow: 'hidden' }}>
         <div className="overflow-x-table">
-          <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 560, width: '100%' }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 680, width: '100%' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10 }}>
                 <th style={{ ...th, textAlign: 'left' }}>신호</th>
                 <th style={th}>초과R</th>
                 <th style={th}>t</th>
+                <th style={th}>백테스트 10년</th>
                 <th style={th}>날짜별</th>
                 <th style={th}>다음날</th>
                 <th style={th}>평균 이김</th>
@@ -109,6 +111,18 @@ export default function DailyTable({ daily, market }: { daily: Daily; market: Ma
                   </td>
                   <td className="num" style={{ ...td, color: 'var(--text-muted)' }}>
                     {s?.t != null ? sgn(s.t, 1) : '—'}
+                  </td>
+                  <td style={td}>
+                    {ev[b.key] ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                        <span className={`num ${cls(ev[b.key].d1)}`} style={{ fontSize: 11 }}>
+                          1일 {sgn(ev[b.key].d1, 3)} <span style={{ opacity: 0.6 }}>(t {sgn(ev[b.key].t1, 1)})</span>
+                        </span>
+                        <span className={`num ${cls(ev[b.key].d20)}`} style={{ fontSize: 9, opacity: 0.85 }}>
+                          20일 {sgn(ev[b.key].d20, 3)} (t {sgn(ev[b.key].t20, 1)})
+                        </span>
+                      </div>
+                    ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                   </td>
                   <td style={td}>
                     {s && (
@@ -145,6 +159,7 @@ export default function DailyTable({ daily, market }: { daily: Daily; market: Ma
                   <td className="num" style={td}>0</td>
                   <td style={td}>—</td>
                   <td style={td}>—</td>
+                  <td style={td}>—</td>
                   <td className="num" style={td}>
                     <span className={cls(base.avg)}>{sgn(base.avg)}%</span>
                   </td>
@@ -163,6 +178,9 @@ export default function DailyTable({ daily, market }: { daily: Daily; market: Ma
         <div>· <b>t</b> = 날짜 단위 t값. ±2를 넘어야 우연과 구분된다.
           같은 날 종목들은 함께 움직여 독립이 아니라서 날짜로 묶었다</div>
         <div>· 화면 상한(25개)이 아니라 <b>신호에 걸린 종목 전부</b>를 잰다</div>
+        <div>· <b>백테스트 10년</b> = 같은 방식(규칙 없이 h일 보유, 유니버스 평균 대비)으로 잰 10년치다.
+          <b>1일 보유로 평균을 이기는 신호는 세 시장 모두 없다.</b>
+          한국 nearW·nearD만 20일에서 플러스가 된다 — 짧게 끊으면 사라지는 우위다</div>
         <div>· <b>이 표는 규칙 판정을 대신하지 않는다.</b> 백테스트 규칙의 평균 보유는 약 21거래일이다 —
           다음날이 나빠도 20일 뒤에는 좋은 신호가 있을 수 있다</div>
       </div>
