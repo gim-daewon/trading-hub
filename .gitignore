@@ -84,3 +84,8 @@ cost-*.txt
 oos-*.txt
 s29-*.txt
 cats-*-r*.txt
+
+# 보유 기간별 백테스트
+bt-core.mjs
+bt-daily.mjs
+daily-*.txt

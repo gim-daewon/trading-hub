@@ -68,6 +68,21 @@ interface DbRow {
   w_above_run: number | null; prev_run: number | null; w_prev_run: number | null
   low: number | null; w_low: number | null
 }
+/**
+ * 필요한 컬럼만 받는다 — `select=*`는 스냅샷 하나가 2.03MB였다.
+ *
+ * Vercel 데이터 캐시는 항목당 2MB가 한도다. 넘으면 **조용히 캐시가 안 되고**
+ * 매 요청이 다시 받는다. 미국 추적 응답이 첫 호출 49.8초, 두 번째도 18초였던 원인이다.
+ * name·sector·f5·f60·rvol 등 추적이 안 쓰는 11개 컬럼을 빼면 절반 아래로 줄어든다.
+ * order=id.asc는 select에 없어도 동작한다.
+ */
+const ROW_COLS = [
+  'symbol', 'market_cap', 'cap_known', 'f20', 'chg20', 'pct_b', 'price',
+  'vwma20', 'vwma60', 'above_run', 'prev_run',
+  'w_close', 'w_vwma20', 'w_vwma60', 'w_above_run', 'w_prev_run',
+  'low', 'w_low', 'high', 'atr14', 'dollar_vol',
+].join(',')
+
 interface Snap {
   id: number; scanned_at: string; regime: Regime
   spy_chg20: number | null; spy_price: number | null; bar_date: string | null
@@ -101,7 +116,7 @@ const readRows = unstable_cache(
   const raw: DbRow[] = []
   for (let from = 0; from < 10000; from += PAGE) {
     const res = await fetch(
-      `${url}/rest/v1/screener_rows?select=*&snapshot_id=eq.${snapshotId}` +
+      `${url}/rest/v1/screener_rows?select=${ROW_COLS}&snapshot_id=eq.${snapshotId}` +
       `&order=id.asc&offset=${from}&limit=${PAGE}`,
       // 바깥의 unstable_cache가 이미 결과를 잡는다. 이중 캐시는 무효화만 헷갈린다
       { headers, cache: 'no-store' }
@@ -114,14 +129,15 @@ const readRows = unstable_cache(
   }
   return raw.map(r => ({
     symbol: r.symbol,
-    name: r.name ?? '',
-    sector: r.sector ?? '',
+    name: '',        // 이름·업종도 안 받는다. 추적은 심볼로만 조인한다
+    sector: '',
     marketCap: r.market_cap ?? 0,
         // cap_known이 false면 시총 미상이다. 초소형으로 단정하면 통계가 오염된다.
     // 컬럼 추가 전 스냅샷은 undefined라 시총으로 판정한다
     tier: r.cap_known === false ? 'unknown' : tierOf(r.market_cap ?? 0, market),
-    f5: r.f5, f20: r.f20, f60: r.f60,
-    rvol: r.rvol, chg20: r.chg20, pctB: r.pct_b,
+    // f5·f60·rvol은 ROW_COLS에서 뺐다 (추적 판정이 안 쓴다). null로 명시한다
+    f5: null, f20: r.f20, f60: null,
+    rvol: null, chg20: r.chg20, pctB: r.pct_b,
     // VWMA 필드를 빠뜨려서 buildBreakouts가 전부 undefined를 보고
     // 신호를 하나도 못 잡고 있었다. 화면엔 표가 있는데 값이 비었다
     vwma20: r.vwma20, vwma60: r.vwma60, aboveRun: r.above_run,
@@ -419,7 +435,7 @@ const buildHorizons = unstable_cache(
  */
 const DAILY_ALL = 100_000          // 화면 상한(25)이 아니라 신호에 걸린 종목 전부
 const DAILY_MIN_STOP_PCT = 0.5     // bt-sweep과 같은 하한. ATR이 너무 작으면 비용R이 폭주한다
-const DAILY_MAX_MOVE = [0.4, 2.5]  // 하루 -60% / +150% 밖은 분할·데이터 오류로 본다
+const DAILY_SANE = [0.4, 2.5]      // 하루 -60% / +150% 밖은 분할·데이터 오류로 본다
 
 interface DailyStat {
   n: number
@@ -435,7 +451,6 @@ interface DailyStat {
   beat: number
   /** R 단위 (손절 거리 = 규칙의 손절). ATR 미저장 구간은 빠진다 */
   nR: number
-  avgR: number | null
   exR: number | null
   /** 초과R이 플러스였던 날 / R이 있던 날 */
   posDays: number
@@ -450,106 +465,143 @@ const dayOf = (s: Snap) =>
   s.bar_date ?? new Date(s.scanned_at).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length
 
-const buildDaily = unstable_cache(
-  async (url: string, key: string, market: Market, snaps: Snap[]) => {
+/**
+ * 하루 한 쌍(진입일 -> 다음 거래일)의 집계 — **쌍 단위로 캐시한다.**
+ *
+ * 처음에는 전 구간을 한 덩어리로 캐시했다. 그러면 스캔이 한 번 돌 때마다
+ * 키가 바뀌어 **모든 쌍을 다시 계산**한다 — 스냅샷이 쌓일수록 첫 응답이 느려지고
+ * 60일이 차면 제한(60초)을 넘는다. 쌍은 한 번 지나가면 값이 변하지 않으므로
+ * 새 스캔이 돌아도 새로 계산할 쌍은 하나뿐이다.
+ */
+interface PairKeyStat {
+  n: number; up: number; beat: number
+  /** 그날 이 신호의 평균 등락(%) */
+  ret: number
+  /** 그날 이 신호의 평균 R. ATR 미저장 구간은 null */
+  R: number | null
+  nR: number
+}
+interface PairDay {
+  date: string
+  dropped: number
+  keys: Record<string, PairKeyStat>
+}
+
+const dailyPair = unstable_cache(
+  async (
+    url: string, key: string, market: Market,
+    entryId: number, nextId: number, date: string,
+  ): Promise<PairDay> => {
     const cost = MARKETS[market].roundTripCost
     const tiers = new Set<string>(tiersFor(market).map(t => t.id))
-    const keys = ['base', ...BREAKOUTS.map(b => b.key)]
-    type One = { ret: number; R: number | null }
-    type Day = { date: string; list: One[]; ex: number; exR: number | null; ret: number[]; beat: number }
-    const acc: Record<string, Day[]> = Object.fromEntries(keys.map(k => [k, []]))
+    const [entryRows, nextRows] = await Promise.all([
+      readRows(url, key, entryId, market),
+      readRows(url, key, nextId, market),
+    ])
+    const next = new Map(nextRows.filter(r => r.price).map(r => [r.symbol, r.price!]))
     let dropped = 0
+    const one = (r: ScreenerRow): { ret: number; R: number | null } | null => {
+      const nx = next.get(r.symbol)
+      if (!r.price || !nx) return null
+      const ratio = nx / r.price
+      if (ratio < DAILY_SANE[0] || ratio > DAILY_SANE[1]) { dropped++; return null }
+      const e = exitPrices(r.price, r.atr14, market, r.dollarVol)
+      const risk = e ? r.price - e.stop : 0
+      const R = e && (risk / r.price) * 100 >= DAILY_MIN_STOP_PCT
+        ? (nx - r.price) / risk - (cost / 100) * r.price / risk
+        : null
+      return { ret: (ratio - 1) * 100 - cost, R }
+    }
+    const pick = (list: ScreenerRow[]) =>
+      list.map(one).filter((o): o is { ret: number; R: number | null } => !!o)
 
-    for (let i = 1; i < snaps.length; i++) {
-      const [entryRows, nextRows] = await Promise.all([
-        readRows(url, key, snaps[i].id, market),
-        readRows(url, key, snaps[i - 1].id, market),
-      ])
-      const next = new Map(nextRows.filter(r => r.price).map(r => [r.symbol, r.price!]))
-      const one = (r: ScreenerRow): One | null => {
-        const nx = next.get(r.symbol)
-        if (!r.price || !nx) return null
-        const ratio = nx / r.price
-        if (ratio < DAILY_MAX_MOVE[0] || ratio > DAILY_MAX_MOVE[1]) { dropped++; return null }
-        const e = exitPrices(r.price, r.atr14, market, r.dollarVol)
-        const risk = e ? r.price - e.stop : 0
-        const R = e && risk / r.price * 100 >= DAILY_MIN_STOP_PCT
-          ? (nx - r.price) / risk - (cost / 100) * r.price / risk
-          : null
-        return { ret: (ratio - 1) * 100 - cost, R }
-      }
-      const pick = (list: ScreenerRow[]) => list.map(one).filter((o): o is One => !!o)
-
-      const universe = pick(entryRows.filter(r => r.tier != null && tiers.has(r.tier)))
-      if (!universe.length) continue
+    const universe = pick(entryRows.filter(r => r.tier != null && tiers.has(r.tier)))
+    const bo = universe.length ? buildBreakouts(entryRows, market, DAILY_ALL) : null
+    const keys: Record<string, PairKeyStat> = {}
+    if (universe.length) {
       const bRet = mean(universe.map(o => o.ret))
-      const uR = universe.flatMap(o => o.R == null ? [] : [o.R])
-      const bR = uR.length ? mean(uR) : null
-
-      const bo = buildBreakouts(entryRows, market, DAILY_ALL)
-      const lists: Record<string, One[]> = { base: universe }
-      for (const b of BREAKOUTS) lists[b.key] = pick(tiersFor(market).flatMap(t => bo[t.id][b.key]))
-
-      const date = dayOf(snaps[i])
-      for (const k of keys) {
-        const list = lists[k]
+      const lists: Record<string, { ret: number; R: number | null }[]> = { base: universe }
+      for (const b of BREAKOUTS) {
+        lists[b.key] = pick(tiersFor(market).flatMap(t => bo![t.id][b.key]))
+      }
+      for (const [k, list] of Object.entries(lists)) {
         if (!list.length) continue
-        const rs = list.flatMap(o => o.R == null ? [] : [o.R])
-        acc[k].push({
-          date, list,
-          ret: list.map(o => o.ret),
-          ex: mean(list.map(o => o.ret)) - bRet,
-          exR: rs.length && bR != null ? mean(rs) - bR : null,
+        const Rs = list.flatMap(o => o.R == null ? [] : [o.R])
+        keys[k] = {
+          n: list.length,
+          up: list.filter(o => o.ret > 0).length,
           beat: list.filter(o => o.ret > bRet).length,
-        })
+          ret: mean(list.map(o => o.ret)),
+          R: Rs.length ? mean(Rs) : null,
+          nR: Rs.length,
+        }
       }
     }
-
-    const stat = (days: Day[]): DailyStat | null => {
-      if (!days.length) return null
-      const all = days.flatMap(d => d.list)
-      const rets = all.map(o => o.ret)
-      const Rs = all.flatMap(o => o.R == null ? [] : [o.R])
-      // 초과는 **날짜별 평균의 평균**이다. 종목 수로 가중하면 신호가 많이 뜬
-      // 하루(대개 급등·급락일)가 전체를 끌고 가고, t값과 부호가 어긋난다
-      const exAvg = mean(days.map(d => d.ex))
-      const withR = days.filter(d => d.exR != null)
-      const xs = withR.map(d => d.exR!)
-      const exR = xs.length ? mean(xs) : null
-      let t: number | null = null
-      if (xs.length >= 5) {
-        const sd = Math.sqrt(xs.reduce((s, x) => s + (x - exR!) ** 2, 0) / (xs.length - 1))
-        t = sd > 0 ? exR! / (sd / Math.sqrt(xs.length)) : null
-      }
-      return {
-        n: all.length,
-        days: days.length,
-        avg: mean(rets),
-        exAvg,
-        up: rets.filter(v => v > 0).length / rets.length * 100,
-        beat: days.reduce((s, d) => s + d.beat, 0) / all.length * 100,
-        nR: Rs.length,
-        avgR: Rs.length ? mean(Rs) : null,
-        exR,
-        posDays: withR.filter(d => d.exR! > 0).length,
-        daysR: withR.length,
-        t,
-        perDay: days.map(d => ({ date: d.date, n: d.list.length, ex: d.ex, exR: d.exR })),
-      }
-    }
-
-    return {
-      from: snaps.length ? dayOf(snaps[snaps.length - 1]) : null,
-      to: snaps.length ? dayOf(snaps[0]) : null,
-      pairs: snaps.length - 1,
-      dropped,
-      cost,
-      stats: Object.fromEntries(keys.map(k => [k, stat(acc[k])])) as Record<string, DailyStat | null>,
-    }
+    return { date, dropped, keys }
   },
-  ['tracking-daily'],
+  ['tracking-daily-pair'],
   { revalidate: 86400 },
 )
+
+/** 쌍 결과를 합친다. 쌍은 전부 캐시에서 오므로 여기는 계산만 한다 */
+async function buildDaily(url: string, key: string, market: Market, snaps: Snap[]) {
+  const pairs: PairDay[] = []
+  // 3개씩만 동시에 — 캐시가 빈 날은 쌍마다 스냅샷 2개를 읽으므로 한꺼번에 던지면 무겁다
+  for (let i = 1; i < snaps.length; i += 3) {
+    pairs.push(...await Promise.all(
+      snaps.slice(i, i + 3).map((s, k) =>
+        dailyPair(url, key, market, s.id, snaps[i + k - 1].id, dayOf(s)))
+    ))
+  }
+  // 오래된 쪽이 앞이어야 막대그래프가 시간순으로 나온다
+  pairs.reverse()
+
+  const stat = (k: string): DailyStat | null => {
+    const days = pairs.filter(p => p.keys[k] && p.keys.base)
+    if (!days.length) return null
+    const n = days.reduce((s, p) => s + p.keys[k].n, 0)
+    const withR = days.filter(p => p.keys[k].R != null && p.keys.base.R != null)
+    const xs = withR.map(p => p.keys[k].R! - p.keys.base.R!)
+    const exR = xs.length ? mean(xs) : null
+    let t: number | null = null
+    if (xs.length >= 5) {
+      const sd = Math.sqrt(xs.reduce((s, x) => s + (x - exR!) ** 2, 0) / (xs.length - 1))
+      t = sd > 0 ? exR! / (sd / Math.sqrt(xs.length)) : null
+    }
+    return {
+      n,
+      days: days.length,
+      // 절대 평균은 종목 수로 가중한다 (전체 표본의 평균)
+      avg: days.reduce((s, p) => s + p.keys[k].ret * p.keys[k].n, 0) / n,
+      // 초과는 **날짜별 평균의 평균**이다. 종목 수로 가중하면 신호가 많이 뜬
+      // 하루(대개 급등·급락일)가 전체를 끌고 가고, t값과 부호가 어긋난다
+      exAvg: mean(days.map(p => p.keys[k].ret - p.keys.base.ret)),
+      up: days.reduce((s, p) => s + p.keys[k].up, 0) / n * 100,
+      beat: days.reduce((s, p) => s + p.keys[k].beat, 0) / n * 100,
+      nR: days.reduce((s, p) => s + p.keys[k].nR, 0),
+      exR,
+      posDays: xs.filter(x => x > 0).length,
+      daysR: xs.length,
+      t,
+      perDay: days.map(p => ({
+        date: p.date,
+        n: p.keys[k].n,
+        ex: p.keys[k].ret - p.keys.base.ret,
+        exR: p.keys[k].R != null && p.keys.base.R != null ? p.keys[k].R! - p.keys.base.R! : null,
+      })),
+    }
+  }
+
+  const keys = ['base', ...BREAKOUTS.map(b => b.key)]
+  return {
+    from: pairs[0]?.date ?? null,
+    to: snaps.length ? dayOf(snaps[0]) : null,
+    pairs: pairs.length,
+    dropped: pairs.reduce((s, p) => s + p.dropped, 0),
+    cost: MARKETS[market].roundTripCost,
+    stats: Object.fromEntries(keys.map(k => [k, stat(k)])) as Record<string, DailyStat | null>,
+  }
+}
 
 export async function GET(req: Request) {
   const rawMarket = new URL(req.url).searchParams.get('market') ?? 'us'

@@ -12,7 +12,7 @@ import type { Market } from '@/lib/markets'
 export interface DailyStat {
   n: number; days: number
   avg: number; exAvg: number; up: number; beat: number
-  nR: number; avgR: number | null; exR: number | null
+  nR: number; exR: number | null
   posDays: number; daysR: number
   t: number | null
   perDay: { date: string; n: number; ex: number; exR: number | null }[]
