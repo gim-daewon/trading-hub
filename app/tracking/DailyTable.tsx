@@ -26,8 +26,10 @@ export interface Daily {
 /** 날짜 20개 미만이면 t값이 크게 흔들린다. 그 전에는 결론을 적지 않는다 */
 const MIN_DAYS = 20
 
-const sgn = (v: number, d = 2) => `${v >= 0 ? '+' : ''}${v.toFixed(d)}`
-const cls = (v: number) => v > 0 ? 'up' : v < 0 ? 'down' : 'flat'
+// NaN/null이 섞여도 화면이 죽지 않게 한다 (API가 NaN을 내보내면 JSON에서 null이 된다)
+const sgn = (v: number | null | undefined, d = 2) =>
+  typeof v === 'number' && Number.isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(d)}` : '—'
+const cls = (v: number | null | undefined) => (v ?? 0) > 0 ? 'up' : (v ?? 0) < 0 ? 'down' : 'flat'
 
 function Verdict({ s }: { s: DailyStat }) {
   const [text, color] =
@@ -143,7 +145,7 @@ export default function DailyTable({ daily, market }: { daily: Daily; market: Ma
                     ) : '—'}
                   </td>
                   <td className="num" style={{ ...td, color: 'var(--text-muted)' }}>
-                    {s ? `${s.beat.toFixed(0)}%` : '—'}
+                    {s && Number.isFinite(s.beat) ? `${s.beat.toFixed(0)}%` : '—'}
                   </td>
                   <td className="num" style={{ ...td, color: 'var(--text-muted)' }}>
                     {s ? s.n.toLocaleString() : '—'}

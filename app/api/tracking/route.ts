@@ -277,7 +277,10 @@ function summarize(pairs: { ret: number; ex: number }[]): Result | null {
     exAvg: mean(exs), exMed: med(exs),
     hit: (exs.filter(v => v > 0).length / exs.length) * 100,
     up: (wins.length / rets.length) * 100,
-    rr: losses.length ? mean(wins) / Math.abs(mean(losses)) : 0,
+    // 오른 종목이 하나도 없으면 mean([])가 NaN이고, JSON은 NaN을 null로 내보낸다.
+    // 화면은 숫자를 기대하므로 null.toFixed()로 페이지 전체가 죽는다 — 실제로 죽었다.
+    // 조건을 summarizeRule과 같게 맞춘다
+    rr: wins.length && losses.length ? Math.abs(mean(wins) / mean(losses)) : 0,
     exp: mean(rets),
   }
 }

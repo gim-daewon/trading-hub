@@ -42,6 +42,15 @@ interface Data {
 }
 
 const sgn = (v: number, d = 2) => `${v >= 0 ? '+' : ''}${v.toFixed(d)}`
+/**
+ * 숫자가 아니면 '—'로 떨어뜨린다.
+ *
+ * API가 NaN을 내보내면 JSON에서 null이 된다. 타입은 number라 컴파일은 통과하고
+ * 화면에서 null.toFixed()로 터진다. 서버 쪽도 고쳤지만, 화면이 데이터 하나에
+ * 통째로 죽는 구조를 그대로 두지 않는다
+ */
+const fx = (v: number | null | undefined, d = 2) =>
+  typeof v === 'number' && Number.isFinite(v) ? v.toFixed(d) : '—'
 const cls = (v: number) => v > 0 ? 'up' : v < 0 ? 'down' : 'flat'
 const dt = (s: string) => new Date(s).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })
 
@@ -63,7 +72,7 @@ function Cell({ r }: { r: Result | null }) {
         SPY {sgn(r.exAvg)}%p
       </span>
       <span className="num" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
-        승률 {r.up.toFixed(0)}% · 손익비 {r.rr.toFixed(2)} · {r.n}
+        승률 {fx(r.up, 0)}% · 손익비 {fx(r.rr)} · {r.n}
       </span>
     </div>
   )
@@ -240,7 +249,7 @@ export default function TrackingPage() {
                   const e = h.byCatExt?.[c.key]
                   return (
                     <span key={c.key} className="num">
-                      {c.label} {e ? `상회 ${e.hit.toFixed(0)}% · ${e.n}종목` : '—'}
+                      {c.label} {e ? `상회 ${fx(e.hit, 0)}% · ${e.n}종목` : '—'}
                     </span>
                   )
                 })}
@@ -280,10 +289,10 @@ export default function TrackingPage() {
                           </span>
                         </td>
                         <td className="num" style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>
-                          {r ? `${r.up.toFixed(0)}%` : '—'}
+                          {r ? `${fx(r.up, 0)}%` : '—'}
                         </td>
                         <td className="num" style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>
-                          {r ? r.rr.toFixed(2) : '—'}
+                          {r ? fx(r.rr) : '—'}
                         </td>
                         <td className="num" style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>
                           {r ? r.n : '—'}
