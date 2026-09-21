@@ -417,7 +417,10 @@ const buildHorizons = unstable_cache(
 
     return out
   },
-  ['tracking-horizons'],
+  // 키에 버전을 붙인다. 데이터 캐시는 배포를 넘어 살아남아서,
+  // 계산을 고쳐도 옛 결과가 그대로 나온다 — NaN이 null로 굳은 응답이 실제로 남아 있었다.
+  // 계산을 바꾸면 이 번호를 올린다
+  ['tracking-horizons-v2'],
   { revalidate: 86400 },
 )
 
