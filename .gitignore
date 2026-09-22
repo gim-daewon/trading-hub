@@ -89,3 +89,5 @@ cats-*-r*.txt
 bt-core.mjs
 bt-daily.mjs
 daily-*.txt
+bt-sector.mjs
+sector-*.txt

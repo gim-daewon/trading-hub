@@ -255,6 +255,63 @@ interface CgResult { caps: Map<string, number>; names: Map<string, string> }
  * 있으므로 **시총이 큰 쪽**을 택한다. 완벽하지 않다 — 소형 코인에서
  * 엉뚱한 시총이 붙을 수 있고, 그래서 구간이 틀릴 수 있다.
  */
+/**
+ * 크립토 카테고리 — **거친 분류다.** 주식 업종과 같은 수준으로 믿으면 안 된다.
+ *
+ * 코인게코 카테고리는 1,037개고 한 코인이 여러 개에 속한다
+ * (솔라나 = Layer 1 + Smart Contract + Proof of Stake + ...).
+ * "정확한 하나"가 원래 없어서, 아래 순서대로 먼저 걸리는 것을 쓴다.
+ * 순서는 내가 정한 것이다 — 구체적인 쪽(밈·AI·게임)을 위에, 넓은 쪽(레이어1)을 아래.
+ *
+ * 무료 한도를 시총 수집과 나눠 쓴다. 그래서 시총을 다 받은 뒤에 천천히 부르고,
+ * 실패하면 카테고리 없이 넘어간다 — 구간 분류에 쓰이는 시총이 더 중요하다.
+ */
+const CRYPTO_CATEGORIES: [string, string][] = [
+  ['stablecoins', '스테이블'],
+  ['meme-token', '밈'],
+  ['artificial-intelligence', 'AI'],
+  ['gaming', '게임'],
+  ['real-world-assets-rwa', 'RWA'],
+  ['depin', 'DePIN'],
+  ['non-fungible-tokens-nft', 'NFT'],
+  ['metaverse', '메타버스'],
+  ['privacy-coins', '프라이버시'],
+  ['oracle', '오라클'],
+  ['storage', '스토리지'],
+  ['decentralized-exchange', 'DEX'],
+  ['decentralized-finance-defi', 'DeFi'],
+  ['exchange-based-tokens', '거래소'],
+  ['layer-2', '레이어2'],
+]
+
+// 'layer-1'과 'smart-contract-platform'은 뺐다.
+//
+// 두 목록이 거의 같고(둘 다 BTC·LTC·XRP를 포함) smart-contract-platform에는
+// DOGE까지 들어 있다. 시총 상위를 그대로 돌려주는 것에 가깝다.
+// 그걸 쓰면 BTC가 '스마트컨트랙트'로 표시된다 — 실제로 그렇게 나왔다.
+// 라벨이 없는 것보다 **틀린 라벨이 나쁘다.** 안 붙는 코인은 비워둔다.
+
+async function cryptoCategoryMap(): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  let failed = 0
+  for (const [id, label] of CRYPTO_CATEGORIES) {
+    const j = await fetchJson<{ symbol: string }[]>(
+      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&category=${id}` +
+      `&order=market_cap_desc&per_page=250&page=1`,
+      { headers: JSON_H }, { tries: 2, baseDelayMs: 3000 })
+    if (!Array.isArray(j)) { failed++; continue }
+    // 먼저 걸린 카테고리를 남긴다 (위에 둔 것이 더 구체적이다)
+    for (const c of j) {
+      const k = (c.symbol ?? '').toUpperCase()
+      if (k && !map.has(k)) map.set(k, label)
+    }
+    // 무료 한도가 빡빡하다. 실측으로 연속 호출 시 'Throttled'가 온다
+    await new Promise(r => setTimeout(r, 2500))
+  }
+  if (failed) console.error(`[coingecko] 카테고리 ${failed}/${CRYPTO_CATEGORIES.length}개 실패`)
+  return map
+}
+
 async function cryptoUniverse(capSource?: CapSource): Promise<UniverseRow[]> {
   const [ei, t24, upMarkets, cg] = await Promise.all([
     binanceJson<{ symbols?: BinanceSymbol[] }>('/api/v3/exchangeInfo'),
@@ -298,6 +355,16 @@ async function cryptoUniverse(capSource?: CapSource): Promise<UniverseRow[]> {
     await resolveMissingCaps(missing, cgCaps, cgNames)
   }
 
+  // 시총을 다 받은 뒤에 부른다 — 같은 무료 한도를 쓰므로 순서가 중요하다
+  const cats = await cryptoCategoryMap()
+  const catOf = (base: string) => {
+    const direct = cats.get(base.toUpperCase())
+    if (direct) return direct
+    // 1000PEPE 같은 접두 표기는 원 심볼로 다시 본다 (capOf와 같은 규칙)
+    const m = /^(?:1000000|1000K|1000|1MB|1M|10)([A-Z0-9]{2,})$/.exec(base.toUpperCase())
+    return (m && cats.get(m[1])) ?? null
+  }
+
   const out: UniverseRow[] = []
   const done = new Set<string>()
 
@@ -312,7 +379,7 @@ async function cryptoUniverse(capSource?: CapSource): Promise<UniverseRow[]> {
     done.add(base)
     out.push({
       symbol: s.symbol, display: base, name: cgNames.get(base) ?? base,
-      sector: null, marketCap: cap, dollarVol: vol.get(s.symbol) ?? 0,
+      sector: catOf(base), marketCap: cap, dollarVol: vol.get(s.symbol) ?? 0,
       tier, capKnown: cap > 0, source: 'binance', premium,
     })
   }
@@ -325,7 +392,7 @@ async function cryptoUniverse(capSource?: CapSource): Promise<UniverseRow[]> {
     const tier = tierOf(cap, 'crypto') ?? 'unknown'
     out.push({
       symbol: m.market, display: base, name: m.english_name || base,
-      sector: null, marketCap: cap,
+      sector: catOf(base), marketCap: cap,
       dollarVol: usdkrw > 0 ? (upVol.get(m.market) ?? 0) / usdkrw : 0,
       tier, capKnown: cap > 0, source: 'upbit', premium: null,
     })

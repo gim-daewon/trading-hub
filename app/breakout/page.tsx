@@ -9,6 +9,7 @@ import MetricGuide from '../components/MetricGuide'
 import { SymbolLabel } from '../components/SymbolLabel'
 import { ExitPrices } from '../components/ExitPrices'
 import { fmtSector } from '@/lib/format'
+import SectorMix from '../components/SectorMix'
 import {
   BREAKOUTS, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict, roomToVwma60, isWeeklyKey,
   alignStrength, hiddenBreakouts,
@@ -365,6 +366,11 @@ export default function BreakoutPage() {
         <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
           이 조건을 만족하는 종목이 없다
         </div>
+      )}
+
+      {/* 업종 쏠림은 구간을 합쳐서 본다 — 대형·중형으로 나눠 보면 쏠림이 안 보인다 */}
+      {!awaitingScan && data?.hasVwma && total > 0 && (
+        <SectorMix rows={visibleTiers.flatMap(t => data.breakouts![t.id]?.[tab] ?? [])} />
       )}
 
       {!awaitingScan && data?.hasVwma && visibleTiers.map(t => {

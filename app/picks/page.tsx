@@ -9,6 +9,7 @@ import { useLiveQuotes, type LiveQuote } from '../components/useLiveQuotes'
 import { LivePct, LiveCaveat } from '../components/LivePct'
 import { ExitPrices } from '../components/ExitPrices'
 import { fmtSector } from '@/lib/format'
+import SectorMix from '../components/SectorMix'
 import {
   tiersFor, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
   type TierId, type CatKey, type Regime, type Perf,
@@ -269,6 +270,11 @@ export default function PicksPage() {
           <br /><br />
           스캔 직후라면 최대 10분간 이전 결과가 보일 수 있다. 새로고침을 눌러보라.
         </div>
+      )}
+
+      {/* 업종 쏠림은 구간을 합쳐서 본다 — 대형·중형으로 나눠 보면 쏠림이 안 보인다 */}
+      {!awaitingScan && data && (
+        <SectorMix rows={visibleTiers.flatMap(t => data.categories?.[t.id]?.pullback ?? [])} />
       )}
 
       {!awaitingScan && data && visibleTiers.map(t => {

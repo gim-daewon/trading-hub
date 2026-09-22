@@ -10,6 +10,7 @@ import { useLiveQuotes } from '../components/useLiveQuotes'
 import { LivePct, LiveCaveat } from '../components/LivePct'
 import { ExitPrices } from '../components/ExitPrices'
 import { fmtSector } from '@/lib/format'
+import SectorMix from '../components/SectorMix'
 import {
   CATS, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
   type TierId, type CatKey, type Regime,
@@ -380,6 +381,8 @@ export default function ScreenerPage() {
       <MetricGuide show={['flow', 'pctB', 'rvol']} />
 
       {data && <EvidenceBox market={market} tier={tier} cat={tab} regime={data.regime} />}
+
+      {rows.length > 0 && <SectorMix rows={rows} />}
 
       {err && <div className="card" style={{ padding: 16, color: 'var(--down)', fontSize: 13 }}>{err}</div>}
 
