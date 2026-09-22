@@ -91,3 +91,5 @@ bt-daily.mjs
 daily-*.txt
 bt-sector.mjs
 sector-*.txt
+bt-revert.mjs
+revert-*.txt

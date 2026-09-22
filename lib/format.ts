@@ -1,3 +1,4 @@
+import { sectorKo } from './sector-ko'
 // 자산 유형별 가격 포맷 — 여기에 symbol 추가하면 전체 적용
 const FIXED2 = new Set([
   'CL=F', 'SI=F', '^VIX', 'DX=F', 'DX-Y.NYB',
@@ -29,6 +30,9 @@ export function fmtAssetPrice(symbol: string, price: number | null | undefined):
  */
 export function fmtSector(s: string | null | undefined, max = 26): string {
   if (!s) return ''
+  // 한글 대응이 있으면 그걸 쓴다. 한국 종목은 원래 한글이라 그대로 지나간다
+  const ko = sectorKo(s)
+  if (ko) return ko
   const tail = s.includes(': ') ? s.slice(s.indexOf(': ') + 2) : s
   return tail.length > max ? tail.slice(0, max - 1) + '…' : tail
 }
