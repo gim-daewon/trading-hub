@@ -128,6 +128,33 @@ if (!list.length) {
   process.exit(1)
 }
 
+/**
+ * 유니버스가 갑자기 줄었으면 저장하지 않는다.
+ *
+ * 나스닥이 주는 거래량은 **장중 누적**이다. 그래서 장 마감 전에 스캔이 돌면
+ * 거래대금 하한($5M)에서 절반이 탈락한다 — 실측 장중 1,575~1,798 vs 마감 후 2,751.
+ * 에러가 안 나고 개수만 줄어서, 반쪽짜리 유니버스로 만든 스냅샷이 그대로 기록에 남는다.
+ *
+ * 11월에 미국 서머타임이 끝나면 마감이 UTC 기준 한 시간 늦어진다.
+ * 크론은 UTC 고정이라 **그날부터 자동으로 이 상황이 된다.** 12월 8일 판정 직전이다.
+ *
+ * 기준은 직전 스냅샷의 유니버스 크기다. 시장 자체가 변해 줄어드는 건 완만하므로,
+ * 60% 아래로 떨어지면 데이터 문제로 본다. FORCE=1이면 무시하고 진행한다.
+ */
+const [prevSnap] = await sb(
+  `screener_snapshots?select=universe_size,scanned_count,bar_date` +
+  `&market=eq.${MARKET}&order=scanned_at.desc&limit=1`, 'GET') ?? []
+if (prevSnap?.universe_size > 0) {
+  const ratio = list.length / prevSnap.universe_size
+  console.log(`직전 유니버스 ${prevSnap.universe_size}종목 (${prevSnap.bar_date ?? '?'}) 대비 ${(ratio * 100).toFixed(0)}%`)
+  if (ratio < 0.6 && process.env.FORCE !== '1') {
+    console.error(`유니버스가 직전의 ${(ratio * 100).toFixed(0)}%로 줄었다. 저장하지 않고 중단한다`)
+    console.error('미국이면 장 마감 전에 돌았을 가능성이 높다 (거래량이 장중 누적이라 필터에서 탈락한다)')
+    console.error('의도한 것이면 FORCE=1 로 다시 실행할 것')
+    process.exit(1)
+  }
+}
+
 // 시장 국면 — 카테고리별 성과가 국면에 따라 갈리므로 같이 저장한다.
 // 기준 지수는 시장마다 다르다 (미국 SPY / 한국 코스피 / 크립토 BTC)
 const benchBars = await barsWithRetry(DEF.benchmark)

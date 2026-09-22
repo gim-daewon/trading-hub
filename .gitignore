@@ -95,3 +95,5 @@ bt-revert.mjs
 revert-*.txt
 bt-overlap.mjs
 overlap-*.txt
+bt-trend.mjs
+trend-*.txt
