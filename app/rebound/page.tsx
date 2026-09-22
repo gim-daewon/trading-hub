@@ -9,7 +9,7 @@ import { SymbolLabel } from '../components/SymbolLabel'
 import { ExitPrices } from '../components/ExitPrices'
 import { fmtSector } from '@/lib/format'
 import SectorMix from '../components/SectorMix'
-import { REBOUND_MARKETS, type TierId, type Regime } from '@/lib/screener-shared'
+import { REBOUND_MARKETS, REBOUNDS, type ReboundKey, type TierId, type Regime } from '@/lib/screener-shared'
 
 /**
  * 낙폭 반등 — 저가는 크게 뚫렸는데 종가는 올라온 종목.
@@ -21,7 +21,7 @@ import { REBOUND_MARKETS, type TierId, type Regime } from '@/lib/screener-shared
 interface Row {
   display?: string | null
   symbol: string; name: string; sector: string; marketCap: number
-  price: number | null; low?: number | null
+  price: number | null; low?: number | null; chg1?: number | null
   atr14?: number | null; dollarVol?: number | null
   f20: number | null; chg20: number | null
 }
@@ -29,7 +29,7 @@ interface Data {
   regime: Regime
   scanned: number
   source: 'snapshot' | 'live'
-  rebound?: Record<TierId, Row[]>
+  rebound?: Record<ReboundKey, Record<TierId, Row[]>>
   scannedAt?: number
   barDate?: string | null
   fetchedAt: number
@@ -37,10 +37,13 @@ interface Data {
 }
 
 /** 측정치 — buildRebound 주석과 같은 값이다 */
-const EVIDENCE = {
-  exp: 0.257, base: 0.167, excess: 0.092, t: 6.8,
-  train: 0.073, tTrain: 3.7, test: 0.109, tTest: 5.9,
+const EVIDENCE: Record<ReboundKey, {
+  exp: number; excess: number; t: number; train: number; tTrain: number; test: number; tTest: number
+}> = {
+  wick:  { exp: 0.257, excess: 0.092, t: 6.8, train: 0.073, tTrain: 3.7, test: 0.109, tTest: 5.9 },
+  drop1: { exp: 0.229, excess: 0.064, t: 4.4, train: 0.061, tTrain: 2.6, test: 0.066, tTest: 3.8 },
 }
+const BASE = 0.167
 
 function Card({ r, market, live }: { r: Row; market: Market; live?: LiveQuote }) {
   // 밑꼬리 깊이 = 저가가 종가보다 몇 % 아래였나. 이 신호의 순위 기준이다
@@ -62,9 +65,11 @@ function Card({ r, market, live }: { r: Row; market: Market; live?: LiveQuote })
         </>}
       />
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, margin: '6px 0 4px',
+        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, margin: '6px 0 4px',
       }}>
         <Cell label="밑꼬리" value={wick == null ? '—' : `${wick.toFixed(1)}%`} cls="down" />
+        <Cell label="전일 대비" value={r.chg1 == null ? '—' : `${r.chg1 >= 0 ? '+' : ''}${r.chg1.toFixed(1)}%`}
+          cls={(r.chg1 ?? 0) >= 0 ? 'up' : 'down'} />
         <Cell label="20일 등락" value={r.chg20 == null ? '—' : `${r.chg20 >= 0 ? '+' : ''}${r.chg20.toFixed(0)}%`}
           cls={(r.chg20 ?? 0) >= 0 ? 'up' : 'down'} />
         <Cell label="수급" value={r.f20 == null ? '—' : `${r.f20 >= 0 ? '+' : ''}${r.f20.toFixed(0)}%`}
@@ -77,6 +82,7 @@ function Card({ r, market, live }: { r: Row; market: Market; live?: LiveQuote })
 
 export default function ReboundPage() {
   const [market, setMarket, marketReady] = useMarket()
+  const [tab, setTab] = useState<ReboundKey>('wick')
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
@@ -92,7 +98,8 @@ export default function ReboundPage() {
   useEffect(() => { if (marketReady) load() }, [load, marketReady])
 
   const tiers = tiersFor(market)
-  const all = tiers.flatMap(t => data?.rebound?.[t.id] ?? [])
+  const all = tiers.flatMap(t => data?.rebound?.[tab]?.[t.id] ?? [])
+  const ev = EVIDENCE[tab]
   const live = useLiveQuotes(market, all.map(r => r.symbol))
   const supported = REBOUND_MARKETS.includes(market)
 
@@ -108,20 +115,33 @@ export default function ReboundPage() {
 
       <MarketToggle value={market} onChange={setMarket} />
 
+      {supported && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+          {REBOUNDS.map(r => (
+            <button key={r.key} onClick={() => setTab(r.key)} style={{
+              flex: 1, minHeight: 38, borderRadius: 10, fontSize: 12, cursor: 'pointer',
+              border: `1px solid ${tab === r.key ? 'var(--info)' : 'var(--border)'}`,
+              background: tab === r.key ? 'rgba(59,130,246,0.15)' : 'var(--bg-card)',
+              color: tab === r.key ? 'var(--text-primary)' : 'var(--text-muted)',
+              fontWeight: tab === r.key ? 700 : 400,
+            }}>{r.label}</button>
+          ))}
+        </div>
+      )}
+
       {supported ? (
         <div className="card" style={{
           padding: '11px 13px', marginBottom: 12, fontSize: 11, lineHeight: 1.7,
           borderLeft: '3px solid var(--up)',
         }}>
-          <b>조건: 저가는 크게 뚫렸는데 종가는 올라온 종목 상위 25개</b>
+          <b>조건: {REBOUNDS.find(r => r.key === tab)!.rule}</b>
           <div style={{ marginTop: 6, color: 'var(--text-secondary)' }}>
-            거래당 기댓값 <b className="num up">+{EVIDENCE.exp}R</b> (기준선 +{EVIDENCE.base}R의{' '}
-            {(EVIDENCE.exp / EVIDENCE.base).toFixed(2)}배) ·
-            같은 날 평균 대비 +{EVIDENCE.excess}R (t +{EVIDENCE.t})
+            거래당 기댓값 <b className="num up">+{ev.exp}R</b> (기준선 +{BASE}R의{' '}
+            {(ev.exp / BASE).toFixed(2)}배) · 같은 날 평균 대비 +{ev.excess}R (t +{ev.t})
           </div>
           <div style={{ marginTop: 4, color: 'var(--text-muted)' }}>
-            10년을 앞뒤로 갈라도 양쪽 다 플러스다 — 앞 +{EVIDENCE.train}R(t +{EVIDENCE.tTrain}) ·
-            뒤 +{EVIDENCE.test}R(t +{EVIDENCE.tTest}). <b>이 프로젝트에서 미국 신호가
+            10년을 앞뒤로 갈라도 양쪽 다 플러스다 — 앞 +{ev.train}R(t +{ev.tTrain}) ·
+            뒤 +{ev.test}R(t +{ev.tTest}). <b>이 프로젝트에서 미국 신호가
             아웃오브샘플을 통과한 첫 사례다.</b>
           </div>
           <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border)', color: 'var(--text-muted)' }}>
@@ -163,7 +183,9 @@ export default function ReboundPage() {
 
       {supported && data && !loading && all.length === 0 && (
         <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
-          아직 스냅샷에 저가(low)가 없다. 다음 스캔에 채워진다.
+          {tab === 'drop1'
+            ? '전일 대비(chg1) 컬럼이 아직 없다. SQL 실행 + 다음 스캔이면 채워진다.'
+            : '아직 스냅샷에 저가(low)가 없다. 다음 스캔에 채워진다.'}
         </div>
       )}
 
@@ -171,7 +193,7 @@ export default function ReboundPage() {
         <>
           <SectorMix rows={all} />
           {tiers.map(t => {
-            const rows = data?.rebound?.[t.id] ?? []
+            const rows = data?.rebound?.[tab]?.[t.id] ?? []
             if (!rows.length) return null
             return (
               <section key={t.id} style={{ marginBottom: 16 }}>

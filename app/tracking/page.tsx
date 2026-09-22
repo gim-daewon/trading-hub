@@ -30,6 +30,8 @@ interface Horizon {
   byCatExt: Record<CatKey, Result | null>
   /** VWMA 신호별 성적 */
   byBreakout: Record<string, Result | null>
+  /** 낙폭 반등 — VWMA 계열이 아니라 따로 잰다 */
+  byRebound?: Result | null
 }
 interface Data {
   horizons: Horizon[]
@@ -278,6 +280,29 @@ export default function TrackingPage() {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* 낙폭 반등은 VWMA 계열이 아니지만 같은 표에 둔다 — 나란히 비교해야 의미가 있다 */}
+                  {h.byRebound !== undefined && (
+                    <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-base)' }}>
+                      <td style={{ padding: '8px 10px', fontWeight: 700 }}>
+                        낙폭 반등
+                        <span style={{ fontSize: 9, color: 'var(--text-muted)', marginLeft: 4 }}>VWMA 아님</span>
+                      </td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                        <span className={`num ${h.byRebound ? cls(h.byRebound.exp) : ''}`} style={{ fontWeight: 700 }}>
+                          {h.byRebound ? `${sgn(h.byRebound.exp)}%` : '—'}
+                        </span>
+                      </td>
+                      <td className="num" style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>
+                        {h.byRebound ? `${fx(h.byRebound.up, 0)}%` : '—'}
+                      </td>
+                      <td className="num" style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>
+                        {h.byRebound ? fx(h.byRebound.rr) : '—'}
+                      </td>
+                      <td className="num" style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>
+                        {h.byRebound ? h.byRebound.n : '—'}
+                      </td>
+                    </tr>
+                  )}
                   {BREAKOUTS.map(b => {
                     const r = h.byBreakout[b.key]
                     return (

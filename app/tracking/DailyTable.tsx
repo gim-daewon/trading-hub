@@ -65,10 +65,14 @@ export default function DailyTable({ daily, market }: { daily: Daily; market: Ma
   const hidden = hiddenBreakouts(market)
   const base = daily.stats.base
   const ev = DAILY_EVIDENCE[market]
-  const rows = BREAKOUTS
-    .filter(b => !hidden.has(b.key))
-    .map(b => ({ b, s: daily.stats[b.key] }))
-    .sort((x, y) => (y.s?.exR ?? -99) - (x.s?.exR ?? -99))
+  // 낙폭 반등은 VWMA 계열이 아니지만 같은 표에서 비교해야 의미가 있다
+  const rows = [
+    ...BREAKOUTS.filter(b => !hidden.has(b.key)).map(b => ({ b, s: daily.stats[b.key] })),
+    ...(daily.stats.rebound ? [{
+      b: { key: 'rebound', label: '낙폭 반등', rule: '', pos: 0 },
+      s: daily.stats.rebound,
+    }] : []),
+  ].sort((x, y) => (y.s?.exR ?? -99) - (x.s?.exR ?? -99))
 
   const th = { padding: '8px 8px', textAlign: 'right' as const, fontWeight: 600 }
   const td = { padding: '8px 8px', textAlign: 'right' as const }

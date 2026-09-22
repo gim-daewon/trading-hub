@@ -230,7 +230,7 @@ type WireRow = Pick<ScreenerRow,
   'symbol' | 'display' | 'name' | 'sector' | 'marketCap' | 'tier' | 'price'
   | 'f20' | 'f5' | 'f60' | 'chg20' | 'pctB'
   | 'vwma20' | 'vwma60' | 'wClose' | 'wVwma20' | 'wVwma60'
-  | 'aboveRun' | 'dollarVol' | 'capKnown' | 'premium' | 'atr14' | 'low'>
+  | 'aboveRun' | 'dollarVol' | 'capKnown' | 'premium' | 'atr14' | 'low' | 'chg1'>
 
 const toWire = (r: ScreenerRow): WireRow => ({
   symbol: r.symbol, display: r.display, name: r.name, sector: r.sector,
@@ -242,8 +242,9 @@ const toWire = (r: ScreenerRow): WireRow => ({
   capKnown: r.capKnown, premium: r.premium,
   // 손절가·익절가 계산에 필요하다
   atr14: r.atr14,
-  // 낙폭 반등 화면이 밑꼬리 깊이를 보여준다
+  // 낙폭 반등 화면이 밑꼬리 깊이와 전일 대비를 보여준다
   low: r.low,
+  chg1: r.chg1,
 })
 
 /** 구간 -> 행 목록 구조(키 없음)를 얇게 만든다 */
@@ -284,7 +285,10 @@ function payload(market: Market, rows: ScreenerRow[], regime: Regime, spyChg20: 
     categories: thin(buildCategories(rows, market)),
     breakouts: thin(buildBreakouts(rows, market)),
     // 낙폭 반등 — 구간별 구조가 아니라 시장 전체 순위다 (측정과 같게)
-    rebound: thinFlat(buildRebound(rows, market)),
+    rebound: {
+      wick: thinFlat(buildRebound(rows, market, 25, 'wick')),
+      drop1: thinFlat(buildRebound(rows, market, 25, 'drop1')),
+    },
     breakoutEvidence: BREAKOUT_EVIDENCE,
     // "조건에 맞는 종목이 없다"와 "아직 지표가 안 채워졌다"를 구분한다.
     // 둘 다 목록이 비어 보이지만 사용자가 할 일이 완전히 다르다.

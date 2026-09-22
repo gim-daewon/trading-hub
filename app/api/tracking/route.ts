@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import {
-  tiersFor, CATS, BREAKOUTS, tierOf, buildCategories, buildBreakouts,
-  TIER_EVIDENCE, STOPPING_RULE, changesSince,
-  type TierId, type CatKey, type Regime, type ScreenerRow,
+  tiersFor, CATS, BREAKOUTS, tierOf, buildCategories, buildBreakouts, buildRebound, TIER_EVIDENCE, STOPPING_RULE, changesSince, type TierId, type CatKey, type Regime, type ScreenerRow,
 } from '@/lib/screener-shared'
 import { isMarket, exitPrices, MARKETS, type Market } from '@/lib/markets'
 
@@ -390,8 +388,16 @@ const buildHorizons = unstable_cache(
         byBreakoutRule[b.key] = summarizeRule(toRule(list), hasHigh, MARKETS[market].roundTripCost)
       }
 
+      // 낙폭 반등 — VWMA 계열이 아니라 따로 담는다.
+      // 순위가 시장 전체 기준이라 구간(tier)별로 나누면 다른 신호가 된다
+      const rebRows = tiersFor(market).flatMap(t => buildRebound(rows, market, SHOWN_LIMIT, 'wick')[t.id])
+      const byRebound = summarize(toPairs(rebRows))
+      const byReboundRule = summarizeRule(toRule(rebRows), hasHigh, MARKETS[market].roundTripCost)
+
       out.push({
         days: h,
+        byRebound,
+        byReboundRule,
         // 스캔 시각이 아니라 데이터 기준일을 쓴다. 야후가 당일 봉을 늦게 주면
         // 둘이 하루씩 어긋나 "언제부터 언제까지"가 틀리게 표시된다
         from: past.bar_date ?? past.scanned_at,
@@ -420,7 +426,7 @@ const buildHorizons = unstable_cache(
   // 키에 버전을 붙인다. 데이터 캐시는 배포를 넘어 살아남아서,
   // 계산을 고쳐도 옛 결과가 그대로 나온다 — NaN이 null로 굳은 응답이 실제로 남아 있었다.
   // 계산을 바꾸면 이 번호를 올린다
-  ['tracking-horizons-v2'],
+  ['tracking-horizons-v3'],   // v3: 낙폭 반등 추가
   { revalidate: 86400 },
 )
 
@@ -530,6 +536,9 @@ const dailyPair = unstable_cache(
       for (const b of BREAKOUTS) {
         lists[b.key] = pick(tiersFor(market).flatMap(t => bo![t.id][b.key]))
       }
+      // 낙폭 반등은 '상위 25개'가 곧 신호다. 전부 담으면 다른 신호가 된다
+      const reb = buildRebound(entryRows, market, 25, 'wick')
+      lists.rebound = pick(tiersFor(market).flatMap(t => reb[t.id]))
       for (const [k, list] of Object.entries(lists)) {
         if (!list.length) continue
         const Rs = list.flatMap(o => o.R == null ? [] : [o.R])
@@ -545,7 +554,7 @@ const dailyPair = unstable_cache(
     }
     return { date, dropped, keys }
   },
-  ['tracking-daily-pair'],
+  ['tracking-daily-pair-v2'],  // v2: 낙폭 반등 추가
   { revalidate: 86400 },
 )
 
@@ -598,7 +607,7 @@ async function buildDaily(url: string, key: string, market: Market, snaps: Snap[
     }
   }
 
-  const keys = ['base', ...BREAKOUTS.map(b => b.key)]
+  const keys = ['base', 'rebound', ...BREAKOUTS.map(b => b.key)]
   return {
     from: pairs[0]?.date ?? null,
     to: snaps.length ? dayOf(snaps[0]) : null,

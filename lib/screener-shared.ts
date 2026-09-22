@@ -42,6 +42,8 @@ export interface ScreenerRow {
   wPrevRun?: number | null
   /** 저가 — 밑꼬리가 VWMA20을 뚫었는지 판정 */
   low?: number | null
+  /** 전일 대비 등락률. 스캔에 chg1 컬럼이 생긴 뒤부터 채워진다 */
+  chg1?: number | null
   /** 고가 — 성과 추적에서 익절 도달을 판정한다 */
   high?: number | null
   /** ATR(14) — 손절·익절가 계산 */
@@ -869,19 +871,34 @@ export function reboundScore<T extends ScreenerRow>(r: T): number | null {
  * 순위는 **시장 전체에서** 매긴다 — 측정도 그렇게 했다.
  * 구간별로 상위 25개를 뽑으면 다른 신호가 된다.
  */
+export type ReboundKey = 'wick' | 'drop1'
+
+/**
+ * 두 가지를 같이 둔다. **같은 생각의 다른 표현**이고 둘 다 검증을 통과했다.
+ *   wick  밑꼬리  절대 +0.257R · 초과 +0.092R (t +6.8) · 앞 +0.073 / 뒤 +0.109
+ *   drop1 1일 낙폭 절대 +0.229R · 초과 +0.064R (t +4.4) · 앞 +0.061 / 뒤 +0.066
+ * 밑꼬리가 더 강하지만, 1일 낙폭은 앞뒤 차이가 거의 없어 더 안정적이다.
+ */
+export const REBOUNDS: { key: ReboundKey; label: string; rule: string }[] = [
+  { key: 'wick',  label: '밑꼬리',   rule: '저가는 크게 뚫렸는데 종가는 올라온 종목 상위 25개' },
+  { key: 'drop1', label: '1일 낙폭', rule: '전일 대비 가장 많이 빠진 종목 상위 25개' },
+]
+
 export function buildRebound<T extends ScreenerRow>(
-  rows: T[], market: Market = 'us', limit = 25,
+  rows: T[], market: Market = 'us', limit = 25, kind: ReboundKey = 'wick',
 ): Record<TierId, T[]> {
   const out = {} as Record<TierId, T[]>
   for (const t of tiersFor(market)) out[t.id] = []
   if (!REBOUND_MARKETS.includes(market)) return out
 
   const minVol = MARKETS[market].rule.minVol
+  const score = (r: T) => kind === 'wick' ? reboundScore(r) : (r.chg1 ?? null)
   const scored = rows
-    .filter(r => r.tier && r.price != null && r.low != null
-      && (r.dollarVol ?? 0) >= minVol       // 측정과 같은 유동성 하한
-      && r.low < r.price!)                  // 밑꼬리가 있어야 한다
-    .map(r => ({ r, s: reboundScore(r)! }))
+    .filter(r => r.tier && r.price != null && (r.dollarVol ?? 0) >= minVol
+      // 밑꼬리는 저가가 종가보다 아래여야 하고, 1일 낙폭은 내린 날이어야 한다
+      && (kind === 'wick' ? (r.low != null && r.low < r.price!) : ((r.chg1 ?? 0) < 0)))
+    .map(r => ({ r, s: score(r) }))
+    .filter((x): x is { r: T; s: number } => x.s != null)
     .sort((a, b) => a.s - b.s)
     .slice(0, limit)
   for (const { r } of scored) out[r.tier as TierId]?.push(r)

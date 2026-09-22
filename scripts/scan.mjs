@@ -185,6 +185,7 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
       w_above_run: m.wAboveRun,
       prev_run: m.prevRun,              // 돌파 전 며칠 아래에 있었나
       w_prev_run: m.wPrevRun,
+      chg1: m.chg1,                     // 전일 대비. 낙폭 반등 계열이 쓴다
       low: m.low,                       // 밑꼬리 판정용
       high: m.high,                     // 성과 추적의 익절 도달 판정용
       atr14: m.atr14,                   // 손절·익절폭 계산용

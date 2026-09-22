@@ -28,6 +28,8 @@ export interface FlowMetrics {
   rvol: number | null
   /** 최근 20일 가격 등락률 */
   chg20: number | null
+  /** 전일 대비 등락률. '낙폭 반등' 계열이 쓴다 */
+  chg1: number | null
   /** 20일 평균 일 거래대금 (USD) */
   avgDollarVol: number | null
   /** 볼린저 %B (20,2) — 0=하단밴드, 0.5=중심선, 1=상단밴드 */
@@ -231,6 +233,7 @@ export function computeFlow(bars: Bar[] | DatedBar[]): FlowMetrics {
   const last = dollarVols[dollarVols.length - 1]
   const c0 = bars.length > 20 ? bars[bars.length - 21].c : null
   const cN = bars[bars.length - 1]?.c ?? null
+  const cP = bars.length > 1 ? bars[bars.length - 2].c : null
 
   return {
     f5:  netFlow(bars, 5),
@@ -238,6 +241,7 @@ export function computeFlow(bars: Bar[] | DatedBar[]): FlowMetrics {
     f60: netFlow(bars, 60),
     rvol: avg20 && last ? last / avg20 : null,
     chg20: c0 && cN ? ((cN - c0) / c0) * 100 : null,
+    chg1: cP && cN ? ((cN - cP) / cP) * 100 : null,
     avgDollarVol: avg20,
     pctB: pctB(bars),
     vwma20: vwma(bars, 20),
