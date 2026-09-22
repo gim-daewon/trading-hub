@@ -18,3 +18,17 @@ export function fmtAssetPrice(symbol: string, price: number | null | undefined):
   if (INT.has(symbol)) return price.toLocaleString('en-US', { maximumFractionDigits: 0 })
   return price.toLocaleString('en-US', { maximumFractionDigits: 2 })
 }
+
+/**
+ * 업종 표기 다듬기.
+ *
+ * 나스닥 업종은 'Biotechnology: Laboratory Analytical Instruments'처럼
+ * '큰분류: 세부'로 온다(최대 62자). 화면에서는 세부 쪽이 정보가 많고,
+ * 큰분류는 이미 종목 이름에서 짐작되는 경우가 많다. 그래서 콜론 뒤만 쓴다.
+ * 한국 업종명('반도체와반도체장비')은 짧아 그대로 나간다.
+ */
+export function fmtSector(s: string | null | undefined, max = 26): string {
+  if (!s) return ''
+  const tail = s.includes(': ') ? s.slice(s.indexOf(': ') + 2) : s
+  return tail.length > max ? tail.slice(0, max - 1) + '…' : tail
+}

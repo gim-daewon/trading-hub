@@ -8,6 +8,7 @@ import { SymbolLabel } from '../components/SymbolLabel'
 import { useLiveQuotes, type LiveQuote } from '../components/useLiveQuotes'
 import { LivePct, LiveCaveat } from '../components/LivePct'
 import { ExitPrices } from '../components/ExitPrices'
+import { fmtSector } from '@/lib/format'
 import {
   tiersFor, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
   type TierId, type CatKey, type Regime, type Perf,
@@ -73,7 +74,7 @@ function StockRow({ r, market, live }: { r: Row; market: Market; live?: LiveQuot
         symbol={r.symbol} display={r.display} name={r.name} market={market}
         trailing={live ? <LivePct live={live} market={market} /> : fmtCap(r.marketCap, market)}
         sub={<>
-          {r.sector ? `${r.sector.slice(0, 20)} · ` : ''}{fmtCap(r.marketCap, market)}
+          {r.sector ? `${fmtSector(r.sector)} · ` : ''}{fmtCap(r.marketCap, market)}
         </>}
       />
 

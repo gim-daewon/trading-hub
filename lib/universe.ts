@@ -63,6 +63,8 @@ const US_MIN_MARKET_CAP = 5e8
 
 interface NasdaqRow {
   symbol: string; name: string; sector?: string
+  /** 세부 업종. sector(11개)보다 훨씬 구체적이다 — 'Biotechnology: Laboratory Analytical Instruments' */
+  industry?: string
   marketCap: string; lastsale: string; volume: string
 }
 
@@ -83,7 +85,10 @@ async function usUniverse(): Promise<UniverseRow[]> {
     if (!tier) continue
     out.push({
       symbol: r.symbol, display: r.symbol, name: r.name,
-      sector: r.sector || null, marketCap, dollarVol, tier, capKnown: true, source: 'yahoo',
+      // 섹터(11개)는 너무 넓어 "반도체인지 제약인지"가 안 보인다.
+      // 나스닥이 세부 업종을 같이 주므로 그걸 쓰고, 없으면 섹터로 내려간다
+      sector: r.industry || r.sector || null,
+      marketCap, dollarVol, tier, capKnown: true, source: 'yahoo',
     })
   }
   return out
@@ -128,8 +133,43 @@ async function krList(category: 'KOSPI' | 'KOSDAQ'): Promise<NaverStock[]> {
   return [...first.stocks, ...rest.flat()]
 }
 
+/**
+ * 한국 업종(섹터) 맵 — 종목코드 -> 업종명.
+ *
+ * 시총순 목록에는 업종이 없다. 종목마다 따로 부르면 2,600번이라 못 쓴다.
+ * 대신 **업종 그룹 목록**(79개)을 받고 그룹별 종목을 받는다 — 90번쯤이면 끝난다.
+ *
+ * 실패해도 스캔을 막지 않는다. 업종이 비면 화면이 시총만 보여줄 뿐이다.
+ */
+async function krIndustryMap(): Promise<Map<string, string>> {
+  const H = { ...JSON_H, Referer: 'https://m.stock.naver.com/' }
+  const map = new Map<string, string>()
+  // pageSize=100이면 79개가 한 번에 온다. 2페이지는 응답이 비어 있다(실측)
+  const groups = (await fetchJson<{ groups?: { no: number; name: string; totalCount: number }[] }>(
+    'https://m.stock.naver.com/api/stocks/industry?page=1&pageSize=100', { headers: H }))?.groups ?? []
+  if (!groups.length) {
+    console.warn('[universe] 한국 업종 목록을 못 받았다. 업종 없이 진행한다')
+    return map
+  }
+  await pool(groups, async g => {
+    const pages = Math.min(Math.ceil((g.totalCount || 1) / 100), 5)
+    for (let page = 1; page <= pages; page++) {
+      const j = await fetchJson<{ stocks?: { itemCode: string }[] }>(
+        `https://m.stock.naver.com/api/stocks/industry/${g.no}?page=${page}&pageSize=100`, { headers: H })
+      for (const st of j?.stocks ?? []) {
+        // 한 종목이 여러 그룹에 들어가면 먼저 본 것을 남긴다 (그룹은 등락률 순이라 순서가 매일 바뀐다 —
+        // 그래서 덮어쓰면 같은 종목의 업종이 날마다 달라진다)
+        if (st.itemCode && !map.has(st.itemCode)) map.set(st.itemCode, g.name)
+      }
+    }
+  }, 4)   // 비공식 API다. 얌전하게 부른다
+  return map
+}
+
 async function krUniverse(): Promise<UniverseRow[]> {
-  const [kospi, kosdaq] = await Promise.all([krList('KOSPI'), krList('KOSDAQ')])
+  const [kospi, kosdaq, industry] = await Promise.all([
+    krList('KOSPI'), krList('KOSDAQ'), krIndustryMap(),
+  ])
   const seen = new Set<string>()
   const out: UniverseRow[] = []
   for (const s of [...kospi, ...kosdaq]) {
@@ -150,8 +190,8 @@ async function krUniverse(): Promise<UniverseRow[]> {
     seen.add(s.itemCode)
     out.push({
       symbol: `${s.itemCode}.${sfx}`, display: s.itemCode, name: s.stockName,
-      // 네이버 시총순 목록에는 업종이 없다. 별도 호출이 필요해 일단 비운다
-      sector: null, marketCap, dollarVol, tier, capKnown: true, source: 'yahoo',
+      sector: industry.get(s.itemCode) ?? null,
+      marketCap, dollarVol, tier, capKnown: true, source: 'yahoo',
     })
   }
   return out

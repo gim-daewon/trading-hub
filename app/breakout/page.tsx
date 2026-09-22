@@ -8,6 +8,7 @@ import { MARKETS, tiersFor, fmtCap, fmtPrice, type Market } from '@/lib/markets'
 import MetricGuide from '../components/MetricGuide'
 import { SymbolLabel } from '../components/SymbolLabel'
 import { ExitPrices } from '../components/ExitPrices'
+import { fmtSector } from '@/lib/format'
 import {
   BREAKOUTS, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict, roomToVwma60, isWeeklyKey,
   alignStrength, hiddenBreakouts,
@@ -89,7 +90,7 @@ function StockRow({ r, weekly, market, live }: {
         symbol={r.symbol} display={r.display} name={r.name} market={market}
         trailing={live ? <LivePct live={live} market={market} /> : fmtCap(r.marketCap, market)}
         sub={<>
-          {r.sector ? `${r.sector.slice(0, 20)} · ` : ''}{fmtCap(r.marketCap, market)}
+          {r.sector ? `${fmtSector(r.sector)} · ` : ''}{fmtCap(r.marketCap, market)}
           {live && <> · 현재 <span className="num">{fmtPrice(live.price, market)}</span></>}
         </>}
       />

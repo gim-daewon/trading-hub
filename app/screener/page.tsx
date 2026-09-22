@@ -9,6 +9,7 @@ import { SymbolLabel } from '../components/SymbolLabel'
 import { useLiveQuotes } from '../components/useLiveQuotes'
 import { LivePct, LiveCaveat } from '../components/LivePct'
 import { ExitPrices } from '../components/ExitPrices'
+import { fmtSector } from '@/lib/format'
 import {
   CATS, TIER_EVIDENCE, RR_EVIDENCE_BY_MARKET, RR_BASELINE_BY_MARKET, rrVerdict,
   type TierId, type CatKey, type Regime,
@@ -418,7 +419,7 @@ export default function ScreenerPage() {
                       <SymbolLabel
                         symbol={r.symbol} display={r.display} name={r.name} market={market}
                         trailing={<LivePct live={live.quotes[r.symbol]} market={market} />}
-                        sub={r.sector ? r.sector.slice(0, 22) : fmtCap(r.marketCap, market)}
+                        sub={r.sector ? `${fmtSector(r.sector)} · ${fmtCap(r.marketCap, market)}` : fmtCap(r.marketCap, market)}
                       />
                       <ExitPrices
                         price={r.price} atr14={r.atr14} dollarVol={r.dollarVol}
