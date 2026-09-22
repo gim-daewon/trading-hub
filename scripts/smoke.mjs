@@ -78,7 +78,13 @@ for (const p of PAGES) {
 }
 await browser.close()
 
-const line = s => { console.log(s); if (process.env.GITHUB_STEP_SUMMARY) require('node:fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, s + '\n') }
+const line = s => {
+  console.log(s)
+  // 요약에만 쓰면 실행 로그가 비어 무엇을 확인했는지 못 본다.
+  // 반대로 require를 쓰면 ESM에서 터진다 — 로컬에선 이 분기를 안 타서 CI에서만 죽었다
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, s + '\n')
+}
+
 const fails = rows.filter(r => !r.ok)
 
 line('## 화면 렌더 점검')
