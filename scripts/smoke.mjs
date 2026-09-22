@@ -58,12 +58,14 @@ for (const p of PAGES) {
     //
     // getByText로 기다리면 하단 네비의 '더보기' 시트에 있는 같은 낱말(숨은 링크)까지
     // 잡혀서, 화면이 멀쩡한데도 타임아웃이 났다. 화면 전체 글을 읽고 찾는 게 확실하다
-    const deadline = Date.now() + 45_000
+    // 여유를 크게 둔다. 추적 화면은 배포 직후 캐시가 비면 첫 응답이 40초 넘게 걸린다 —
+    // 45초로 잡았더니 '안 그려짐'으로 잡혔는데 실제로는 느린 것뿐이었다
+    const deadline = Date.now() + 90_000
     for (;;) {
       const text = await page.locator('body').innerText().catch(() => '')
       if (text.includes(BOUNDARY)) { boundary = true; break }
       if (text.includes(p.expect)) { found = true; break }
-      if (Date.now() > deadline) { note = '기대 문구도 에러 화면도 안 떴다 (45초)'; break }
+      if (Date.now() > deadline) { note = '기대 문구도 에러 화면도 안 떴다 (90초)'; break }
       await page.waitForTimeout(1000)
     }
     if (boundary) {
