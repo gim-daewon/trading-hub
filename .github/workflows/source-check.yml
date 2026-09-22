@@ -43,3 +43,29 @@ jobs:
               echo "예열 $path -> ${t}s"
             done
           done
+
+  # 화면이 **실제로 그려지는지** 진짜 브라우저로 확인한다.
+  #
+  # 지금까지 점검은 HTTP 200만 봤다. 그런데 이 앱이 죽는 방식은 서버가 200을 주고
+  # 브라우저에서 죽는 것이다 — 손익비 NaN이 JSON에서 null이 되어 추적 화면이
+  # 통째로 에러 바운더리로 넘어갔는데 /tracking은 계속 200이었다.
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      # 앱 빌드는 필요 없다 — 배포된 화면을 브라우저로 열기만 한다.
+      # playwright 버전은 package.json에 고정돼 있어 로컬과 CI가 같은 브라우저를 쓴다
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Render check
+        run: node scripts/smoke.mjs
+
+      # 화면을 죽인 원인(숫자 자리에 null)이 응답에 들어 있는지도 같이 본다.
+      # 브라우저가 필요 없어 여기 붙여도 비용이 없다
+      - name: JSON null check
+        if: always()
+        run: node scripts/json-nulls.mjs

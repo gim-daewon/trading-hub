@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import Sidebar from './components/Sidebar'
+import FetchLog from './components/FetchLog'
 import BottomNav from './components/BottomNav'
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body>
+        <FetchLog />
         <Sidebar />
         {/* 데스크톱: 사이드바 너비만큼 밀기 / 모바일: 하단 네비 높이만큼 여백 */}
         <main style={{

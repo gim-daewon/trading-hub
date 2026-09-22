@@ -1,5 +1,6 @@
 'use client'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { recentFetches, type FetchRec } from '@/lib/fetch-log'
 
 export default function Error({
   error,
@@ -8,7 +9,15 @@ export default function Error({
   error: Error & { digest?: string }
   retry: () => void
 }) {
-  useEffect(() => { console.error(error) }, [error])
+  // 어느 화면에서, 직전에 무엇을 받아왔는지까지 같이 보여준다.
+  // 메시지만 있으면 화면을 특정하는 데만 한참 걸린다 — 실제로 그랬다
+  const [where, setWhere] = useState('')
+  const [recent, setRecent] = useState<FetchRec[]>([])
+  useEffect(() => {
+    console.error(error)
+    setWhere(location.pathname + location.search)
+    setRecent(recentFetches())
+  }, [error])
 
   return (
     <div style={{ padding: 16, maxWidth: 700, margin: '0 auto' }}>
@@ -37,6 +46,37 @@ export default function Error({
           </>
         )}
       </div>
+
+      {(where || recent.length > 0) && (
+        <div className="card" style={{ padding: 14, marginBottom: 14, fontSize: 11 }}>
+          <p style={{ margin: '0 0 6px', color: 'var(--text-muted)' }}>화면</p>
+          <pre style={{
+            margin: '0 0 12px', fontSize: 12, fontFamily: 'var(--font-mono)',
+            color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+          }}>{where || '(주소 불명)'}</pre>
+
+          {recent.length > 0 && (
+            <>
+              <p style={{ margin: '0 0 6px', color: 'var(--text-muted)' }}>직전 요청 (최근 순)</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {recent.map((r, i) => (
+                  <div key={i} style={{
+                    display: 'flex', gap: 8, fontFamily: 'var(--font-mono)', fontSize: 11,
+                    color: 'var(--text-secondary)',
+                  }}>
+                    <span style={{
+                      color: r.status >= 200 && r.status < 300 ? 'var(--up)' : 'var(--down)',
+                      width: 28, flexShrink: 0,
+                    }}>{r.status || 'ERR'}</span>
+                    <span style={{ flex: 1, wordBreak: 'break-all' }}>{r.path}{r.note ? ` — ${r.note}` : ''}</span>
+                    <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{r.ms}ms</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={() => retry()} style={{
