@@ -1,5 +1,5 @@
 import { hasInverse } from './inverse-etf'
-import { type Market, type TierId, tiersFor } from './markets'
+import { type Market, type TierId, tiersFor, MARKETS } from './markets'
 // 스크리너 공용 정의 — API·스캔 스크립트·UI가 같은 기준을 쓴다.
 
 export type Regime = 'up' | 'down'
@@ -8,7 +8,8 @@ export type CatKey = 'pullback' | 'momentum' | 'quiet'
 // 구간 정의는 lib/markets.ts 한 곳에만 둔다.
 // 여기에도 두면 시장을 넓힐 때 두 정의가 갈라진다 — 신호를 두 번 구현했다가
 // 정의 불일치 버그를 네 번 낸 것과 같은 실수다.
-export { tiersFor, tierOf, MARKETS, MARKET_IDS, isMarket, fmtCap } from './markets'
+export { tierOf, MARKET_IDS, isMarket, fmtCap } from './markets'
+export { tiersFor, MARKETS }
 export type { Market, TierId, Tier } from './markets'
 
 /** 스크리너 한 종목. 진입가(price)는 사후 성과 추적에 쓴다 */
@@ -829,6 +830,64 @@ export function hiddenBreakouts(market: Market): Set<BreakoutKey> {
  *
  * 손절 -3%가 고정이면 여력이 곧 손익비다 — 여력 9%가 3:1이다.
  */
+/**
+ * 낙폭 반등 — **저가는 크게 뚫렸는데 종가는 올라온 종목.**
+ *
+ * 아이디어의 출처가 특이해서 적어둔다. 2026-09-22에 워뇨띠(비트멕스) 체결 기록
+ * 148만 건을 받아 분석했다. 그의 방향 전환 2,073회를 BTC 15분봉과 맞춰보니
+ * **직전 1시간이 평균 -0.30%일 때 매수로 돌아섰다** — 떨어지면 사고 오르면 판다.
+ * 그의 방향 자체의 우위는 4시간 +0.10%로 우리 왕복비용 아래였다(수익은 호가에
+ * 걸어 먹은 스프레드·메이커 수수료에서 나왔다. 체결의 85%가 그쪽이다).
+ * 그래서 **신호를 복제하지 않고 아이디어만 가져와 우리 시간축에서 새로 쟀다.**
+ *
+ * 측정(bt-revert / bt-overlap, 10년, 상위 25개, 손절 2xATR·익절 9xATR):
+ *   전체   +0.092R 초과 (t +6.8) · 절대 +0.257R (기준선 +0.167R의 1.54배)
+ *   앞절반 +0.073R (t +3.7) · 뒤절반 +0.109R (t +5.9)  <- 뒤에서 더 강해졌다
+ *
+ * **이 프로젝트에서 미국 신호가 아웃오브샘플을 통과한 첫 사례다.**
+ * 같은 생각의 다른 표현(1일 낙폭·5일 낙폭·VWMA 이탈)도 전부 같은 방향이라
+ * 25조합 중 운 좋은 하나일 가능성이 낮다.
+ *
+ * 다만 ATR로 나눈 변형만 0이었다(-0.009R). **"변동성 대비 많이 빠진 것"이 아니라
+ * "절대적으로 많이 빠진 것"이 통한다.** 그래서 점수도 ATR로 나누지 않는다.
+ *
+ * 미국 전용이다. 한국은 정반대로 해롭고(뒤절반 -0.167R, t -7.8),
+ * 크립토는 히스토리가 짧아 앞절반 거래일이 0개라 검증 자체가 불가능하다.
+ *
+ * 기존 신호와 겹치지 않는다(밑꼬리 일봉과 평균 3.7%, 수급 눌림목과 0%).
+ * 겹친 것을 빼도 성적이 그대로다(+0.093R).
+ */
+export const REBOUND_MARKETS: Market[] = ['us']
+
+/** 저가가 종가보다 얼마나 아래였나(%). 음수가 클수록 긴 밑꼬리 */
+export function reboundScore<T extends ScreenerRow>(r: T): number | null {
+  if (r.low == null || !(r.price! > 0)) return null
+  return ((r.low - r.price!) / r.price!) * 100
+}
+
+/**
+ * 순위는 **시장 전체에서** 매긴다 — 측정도 그렇게 했다.
+ * 구간별로 상위 25개를 뽑으면 다른 신호가 된다.
+ */
+export function buildRebound<T extends ScreenerRow>(
+  rows: T[], market: Market = 'us', limit = 25,
+): Record<TierId, T[]> {
+  const out = {} as Record<TierId, T[]>
+  for (const t of tiersFor(market)) out[t.id] = []
+  if (!REBOUND_MARKETS.includes(market)) return out
+
+  const minVol = MARKETS[market].rule.minVol
+  const scored = rows
+    .filter(r => r.tier && r.price != null && r.low != null
+      && (r.dollarVol ?? 0) >= minVol       // 측정과 같은 유동성 하한
+      && r.low < r.price!)                  // 밑꼬리가 있어야 한다
+    .map(r => ({ r, s: reboundScore(r)! }))
+    .sort((a, b) => a.s - b.s)
+    .slice(0, limit)
+  for (const { r } of scored) out[r.tier as TierId]?.push(r)
+  return out
+}
+
 export function buildBreakouts<T extends ScreenerRow>(
   rows: T[], market: Market = 'us', limit = 50,
 ): Record<TierId, Record<BreakoutKey, T[]>> {

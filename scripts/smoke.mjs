@@ -21,6 +21,7 @@ const PAGES = [
   { path: '/picks',     expect: '눌림목' },
   { path: '/screener',  expect: '수급' },
   { path: '/breakout',  expect: 'VWMA' },
+  { path: '/rebound',   expect: '낙폭' },
   { path: '/short',     expect: '숏' },
   { path: '/tracking',  expect: '스냅샷' },
   { path: '/sectors',   expect: '섹터' },
