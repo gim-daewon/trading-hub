@@ -60,7 +60,7 @@ interface MacroData {
   employment: { unrate: MStat; nfp: MStat; icsa: MStat; jolts: MStat }
   liquidity:  { walcl: MStat; rrpo: MStat; tga: MStat; ffr: MStat; sofr: MStat }
   cycle:      { gdp: MStat; sahm: MStat; retail: MStat; housing: MStat }
-  credit:     { hyOas: MStat; igOas: MStat; bbOas: MStat; bOas: MStat }
+  credit:     { hyOas: MStat; igOas: MStat; bbOas: MStat; bOas: MStat; cccOas: MStat }
   risk:       { stlfsi: MStat }
 }
 type MQ = Record<string, { price: number | null; changePct: number | null }>
@@ -309,9 +309,13 @@ const RP_G: Guide = [
   ['bad',     'IWM 크게 언더퍼폼: 유동성 부족 또는 성장 둔화 경고'],
 ]
 const CV_G: Guide = [
-  ['good', 'HY OAS < 300bp: 신용 우호. 리스크온'],
-  ['warn', 'HY OAS 300~500bp: 주의 구간. 선별적 접근'],
-  ['bad',  'HY OAS > 500bp: 시스템 스트레스. 방어 포지션'],
+  // 분위는 Baa 스프레드 40년(1986~, 10,180일)에서 계산하고 하이일드로 환산했다.
+  // HY 자체는 이 환경에서 3년치만 받혀서 장기 분포를 못 만든다
+  ['good', 'HY OAS < 330bp: 하위 25%. 신용 우호'],
+  ['warn', 'HY OAS 400~485bp: 40년 중앙값~75분위. 평상시'],
+  ['bad',  'HY OAS > 560bp: 상위 10%. 과거 위기 국면 수준'],
+  // 지수는 멀쩡한데 바닥 등급만 벌어지는 경우가 있다. 지수만 보면 못 본다
+  ['warn', 'CCC − BB 격차: 최하위 등급만 따로 벌어지는지 본다 (지수가 가린다)'],
   ['good', 'VIX < 15: 시장 안정 (역설적으로 리스크 축적 구간)'],
   ['warn', 'VIX 15~25: 일반 변동성. VIX 30↑: 공포 — 역발상 매수 탐색'],
 ]
@@ -591,7 +595,8 @@ export default function MarketPage() {
             <StatCard label="하이일드 OAS" value={m?.credit.hyOas.value ?? null} change={d(m?.credit.hyOas)} unit="bp" invertColor />
             <StatCard label="BB OAS"       value={m?.credit.bbOas.value ?? null} change={d(m?.credit.bbOas)} unit="bp" invertColor />
             <StatCard label="B OAS"        value={m?.credit.bOas.value  ?? null} change={d(m?.credit.bOas)}  unit="bp" invertColor />
-            <StatCard label="IG OAS"       value={m?.credit.igOas.value ?? null} change={d(m?.credit.igOas)} unit="bp" invertColor />
+            <StatCard label="CCC 이하 OAS" value={m?.credit.cccOas.value ?? null} change={d(m?.credit.cccOas)} unit="bp" invertColor />
+            <StatCard label="BBB OAS"      value={m?.credit.igOas.value ?? null} change={d(m?.credit.igOas)} unit="bp" invertColor />
             <StatCard label="VIX 공포지수" value={q?.['^VIX']?.price    ?? null} change={q?.['^VIX']?.changePct ?? null} unit="" invertColor />
           </div>
         )}

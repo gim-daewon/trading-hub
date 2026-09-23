@@ -34,7 +34,7 @@ export async function GET() {
     unrate, nfp, icsa, jolts,
     walcl, rrpo, tga, ffr, sofr,
     gdp, sahm, retail, housing,
-    stlfsi, hyOas, igOas, bbOas, bOas,
+    stlfsi, hyOas, igOas, bbOas, bOas, cccOas,
   ] = await Promise.all([
     fred('CPIAUCSL',        { limit: 3, units: 'pc1' }),
     fred('CPILFESL',        { limit: 3, units: 'pc1' }),
@@ -55,10 +55,15 @@ export async function GET() {
     fred('RSAFS',           { limit: 3 }),                  // millions USD
     fred('HOUST',           { limit: 3 }),                  // thousands of units
     fred('STLFSI4',         { limit: 5 }),
-    fred('BAMLH0A0HYM2',    { limit: 3 }),                  // percent → ×100 for bp
-    fred('BAMLC0A4CBBB',    { limit: 3 }),
-    fred('BAMLH0A2HYB',     { limit: 3 }),
-    fred('BAMLH0A3HYC',     { limit: 3 }),
+    // 등급별 OAS. **순서와 라벨이 어긋나 있었다** — BB 계열을 안 받고 나머지를
+    // 한 칸씩 당겨 써서 화면에 'BB 271bp'(실제 B), 'B 1,075bp'(실제 CCC)가 떴다.
+    // BB는 HY 안에서 가장 우량한 등급이라 **항상 HY 전체보다 좁아야 한다** —
+    // 그 관계가 깨져 보이면 매핑이 틀린 것이다.
+    fred('BAMLH0A0HYM2',    { limit: 3 }),                  // HY 전체 (percent → ×100 for bp)
+    fred('BAMLC0A4CBBB',    { limit: 3 }),                  // BBB (투자등급 최하위)
+    fred('BAMLH0A1HYBB',    { limit: 3 }),                  // BB
+    fred('BAMLH0A2HYB',     { limit: 3 }),                  // B
+    fred('BAMLH0A3HYC',     { limit: 3 }),                  // CCC 이하
   ])
 
   // OAS: FRED stores in percent, convert to basis points
@@ -103,6 +108,7 @@ export async function GET() {
       igOas: oasStat(igOas),
       bbOas: oasStat(bbOas),
       bOas:  oasStat(bOas),
+      cccOas: oasStat(cccOas),
     },
     risk: {
       stlfsi: stat(stlfsi),
