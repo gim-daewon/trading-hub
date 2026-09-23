@@ -239,6 +239,20 @@ interface RuleResult {
   cost: number
 }
 
+/**
+ * 손익비 = 오른 것 평균 / |내린 것 평균|.
+ *
+ * 분모가 0이 되는 경로를 전부 막고 **숫자가 아니면 0을 돌려준다.**
+ * 여기서 새는 값이 JSON에서 null이 되고 화면을 통째로 죽인다.
+ */
+function rrOf(wins: number[], losses: number[]): number {
+  if (!wins.length || !losses.length) return 0
+  const lossMean = Math.abs(losses.reduce((a, b) => a + b, 0) / losses.length)
+  if (!(lossMean > 0)) return 0
+  const v = (wins.reduce((a, b) => a + b, 0) / wins.length) / lossMean
+  return Number.isFinite(v) ? v : 0
+}
+
 function summarizeRule(outs: RuleOutcome[], hasHigh: boolean, cost: number): RuleResult | null {
   if (!outs.length) return null
   const rets = outs.map(o => o.ret)
@@ -250,7 +264,7 @@ function summarizeRule(outs: RuleOutcome[], hasHigh: boolean, cost: number): Rul
     // 판정은 R로 한다. %는 변동성 큰 종목의 폭이 커 보여 신호를 왜곡한다
     expR: mean(outs.map(o => o.R)),
     win: (wins.length / rets.length) * 100,
-    rr: losses.length && wins.length ? Math.abs(mean(wins) / mean(losses)) : 0,
+    rr: rrOf(wins, losses),
     stopped: outs.filter(o => o.hit === 'stop').length,
     hitTarget: outs.filter(o => o.hit === 'target').length,
     open: outs.filter(o => o.hit === 'open').length,
@@ -275,10 +289,13 @@ function summarize(pairs: { ret: number; ex: number }[]): Result | null {
     exAvg: mean(exs), exMed: med(exs),
     hit: (exs.filter(v => v > 0).length / exs.length) * 100,
     up: (wins.length / rets.length) * 100,
-    // 오른 종목이 하나도 없으면 mean([])가 NaN이고, JSON은 NaN을 null로 내보낸다.
-    // 화면은 숫자를 기대하므로 null.toFixed()로 페이지 전체가 죽는다 — 실제로 죽었다.
-    // 조건을 summarizeRule과 같게 맞춘다
-    rr: wins.length && losses.length ? Math.abs(mean(wins) / mean(losses)) : 0,
+    // 손익비는 **분모가 0이 되는 경로가 둘**이다. 둘 다 막아야 한다.
+    //   1) 오른 종목이 0개 -> mean([])가 NaN
+    //   2) 손실 평균이 정확히 0 -> 나누면 Infinity
+    // JSON은 NaN도 Infinity도 null로 내보낸다. 타입은 number라 빌드는 통과하고
+    // 화면에서 null.toFixed()로 죽는다. 1)만 막았다가 2)로 다시 당했다 —
+    // 크립토 revD가 11건 중 10승, 나머지 1건의 수익률이 정확히 0이었다.
+    rr: rrOf(wins, losses),
     exp: mean(rets),
   }
 }
@@ -426,7 +443,7 @@ const buildHorizons = unstable_cache(
   // 키에 버전을 붙인다. 데이터 캐시는 배포를 넘어 살아남아서,
   // 계산을 고쳐도 옛 결과가 그대로 나온다 — NaN이 null로 굳은 응답이 실제로 남아 있었다.
   // 계산을 바꾸면 이 번호를 올린다
-  ['tracking-horizons-v3'],   // v3: 낙폭 반등 추가
+  ['tracking-horizons-v4'],   // v4: 손익비 Infinity 수정
   { revalidate: 86400 },
 )
 
