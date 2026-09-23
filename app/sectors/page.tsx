@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import PageHeader from '../components/PageHeader'
+import { useLiveQuotes } from '../components/useLiveQuotes'
 import { TvLink, TvLayoutSetting } from '../components/TvLink'
 import { upShare } from '../components/MetricGuide'
 
@@ -166,14 +167,36 @@ export default function SectorsPage() {
       .finally(() => setFlowLoad(false))
   }, [selected])
 
-  // 선택한 기간의 등락률. 1일은 changePct, 나머지는 periods에서 꺼낸다
+  /**
+   * 1일 등락은 **실시간 시세로 덮어쓴다.**
+   *
+   * /api/sectors는 화면을 열 때 한 번만 부르고 서버가 5분 캐시를 건다.
+   * 그래서 장중에 값이 멈춰 있었다 — 다른 화면(눌림목·수급·VWMA)은 30초마다
+   * 갱신되는데 여기만 아니었다. 사용자가 그걸 발견했다.
+   *
+   * 기간 등락(5·20·60·120일)은 종가 기준이라 그대로 둔다. 1일만 실시간이 의미가 있다.
+   */
+  // SPY도 같이 받는다 — 상대강도(vs SPY)가 1일 기준일 때 둘 다 실시간이어야 맞다
+  const live = useLiveQuotes('us', sectors.length ? ['SPY', ...sectors.map(s => s.etf)] : [])
+  const chg1 = useCallback(
+    (s: SectorData) => live.quotes[s.etf]?.pct ?? s.changePct,
+    [live.quotes]
+  )
+  const spyChg1 = spy ? (live.quotes.SPY?.pct ?? spy.changePct) : null
+
+  // 선택한 기간의 등락률. 1일은 실시간, 나머지는 periods에서 꺼낸다
   const pctOf = useCallback(
-    (s: SectorData) => period === '1' ? s.changePct : (s.periods?.[period] ?? null),
-    [period]
+    (s: SectorData) => period === '1' ? chg1(s) : (s.periods?.[period] ?? null),
+    [period, chg1]
   )
   const rsOf = useCallback(
-    (s: SectorData) => period === '1' ? s.rs1d : (s.rs?.[period] ?? null),
-    [period]
+    (s: SectorData) => {
+      if (period !== '1') return s.rs?.[period] ?? null
+      // 실시간 값이 있으면 둘 다 실시간으로 뺀다. 한쪽만 실시간이면 상대강도가 거짓말이 된다
+      const a = live.quotes[s.etf]?.pct, b = live.quotes.SPY?.pct
+      return a != null && b != null ? a - b : s.rs1d
+    },
+    [period, live.quotes]
   )
   // 정렬도 vs SPY 기준이다. 막대가 vs SPY인데 절대 등락순으로 세우면
   // 순서와 막대 길이가 어긋난다(XLK +1.0%/+0.1pp 가 XLRE +1.0%/+0.0pp 위인데 막대는 같아 보임).
@@ -337,11 +360,12 @@ export default function SectorsPage() {
         fetchedAt={fetchedAt}
         onRefresh={load}
         loading={loading}
-        sub={spy && (
+        sub={spy && spyChg1 != null && (
           <span style={{ color: 'var(--text-secondary)' }}>
-            SPY <span className="num" style={{ color: spy.changePct >= 0 ? 'var(--up)' : 'var(--down)' }}>
-              {pctLabel(spy.changePct)}
+            SPY <span className="num" style={{ color: spyChg1 >= 0 ? 'var(--up)' : 'var(--down)' }}>
+              {pctLabel(spyChg1)}
             </span>
+            {live.open && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>실시간</span>}
           </span>
         )}
       />
@@ -680,7 +704,7 @@ export default function SectorsPage() {
                           // 선택한 기간을 강조해 정렬 기준이 어디인지 보이게 한다
                           background: period === p.key ? 'var(--bg-hover)' : undefined,
                         }}>
-                          <PctBadge v={p.key === '1' ? s.changePct : (s.periods?.[p.key] ?? null)} />
+                          <PctBadge v={p.key === '1' ? chg1(s) : (s.periods?.[p.key] ?? null)} />
                         </td>
                       ))}
                     </tr>
@@ -743,7 +767,7 @@ export default function SectorsPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
               {[
                 { label: '현재가',   v: selected.price ? `$${selected.price.toFixed(2)}` : '—' },
-                { label: '1D 등락', v: <PctBadge v={selected.changePct} /> },
+                { label: '1D 등락', v: <PctBadge v={chg1(selected)} /> },
                 { label: 'vs SPY',  v: <RsBadge v={selected.rs1d} /> },
               ].map(item => (
                 <div key={item.label} style={{ background: 'var(--bg-surface)', borderRadius: 10, padding: '10px 12px' }}>
