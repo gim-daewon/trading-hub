@@ -10,7 +10,9 @@ name: Source Integrity
 # 1분 안에 끝나고 비용이 거의 없다.
 on:
   schedule:
-    - cron: '5 */4 * * *'   # 4시간마다 (00:05, 04:05, ... UTC)
+    # 2026-10-14: 4시간마다(하루 6번) → 하루 1번(한국 07:05, 미국장 마감 뒤·한국장 전). Actions 무료 한도(2주 272분)와
+    # Supabase 전송량 초과(이번 달 6.25/5GB) 때문 — 아래 캐시 예열이 매번 /api/tracking을 깨워 스냅샷 기록을 읽는다
+    - cron: '5 22 * * *'
   workflow_dispatch:
 
 jobs:
