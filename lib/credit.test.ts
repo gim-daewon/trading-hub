@@ -1,7 +1,7 @@
 // AI 신용 모니터 계산 시험 — node --test lib/credit.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { 수익률, 고점대비, 맞추기, 평균상관, 백분위, 단계판정, 기준 } from './credit.ts'
+import { 수익률, 고점대비, 맞추기, 평균상관, 백분위, 단계판정, 기준, 단계제목, 단계행동, 신용한줄 } from './credit.ts'
 
 const 일 = 86400000
 const 줄 = (값들: number[], 시작 = 0) => 값들.map((c, i) => ({ t: (시작 + i) * 일, c }))
@@ -68,4 +68,30 @@ test('단계: 값이 없으면(데이터 실패) 그 단계는 꺼짐으로, 이
   const r = 단계판정({ crwv20: null, orclRel20: null, nvdaRel20: null, avgoRel20: null, 신용백분위: null })
   assert.equal(r.단계, 0)
   assert.ok(r.조건.every(x => !x.켜짐 && /데이터 없음/.test(x.근거)))
+})
+
+const 경계예 = { crwv20: -0.245, orclRel20: -0.115, nvdaRel20: -0.02, avgoRel20: -0.065, 신용백분위: 0.119 }
+
+test('단계 제목: 0단계라도 켜짐·근접이 있으면 평온이라 쓰지 않는다', () => {
+  assert.equal(단계제목(단계판정({ crwv20: 0.05, orclRel20: 0.01, nvdaRel20: 0, avgoRel20: 0, 신용백분위: 0.5 })), '평온 — 번진 곳 없음')
+  assert.equal(단계제목(단계판정(경계예)), '0단계 · 경계 신호 3개')
+})
+
+test('단계 행동: 단계마다 하나, 확정 전 기본값이라는 표시가 붙어 있다', () => {
+  assert.equal(단계행동.단계.length, 5)
+  assert.ok(단계행동.경계.length > 0)
+  assert.match(단계행동.표시, /확정 전 기본값/)
+})
+
+test('아침 알림 한 줄: 켜짐·근접만 적고, 단계가 바뀐 날에만 표시', () => {
+  const 경계 = 단계판정(경계예)
+  const 같음 = 신용한줄(경계, 경계)
+  assert.match(같음, /^AI 신용: 0단계 · 경계 신호 3개 \(◐코어위브 ●오라클 ◐신용\)/)
+  assert.doesNotMatch(같음, /바뀜/)
+  const 이단계 = 단계판정({ ...경계예, crwv20: -0.3 })
+  const 바뀜 = 신용한줄(이단계, 경계)
+  assert.match(바뀜, /단계 바뀜: 0 → 2/)
+  assert.ok(바뀜.includes(단계행동.단계[2]))
+  // 어제를 못 구했으면 바뀜 표시를 하지 않는다(모르는 걸 바뀌었다고 하지 않음)
+  assert.doesNotMatch(신용한줄(이단계, null), /바뀜/)
 })

@@ -66,5 +66,24 @@ export async function GET() {
     crwv20: 값('CRWV', '일20'), orclRel20: 값('ORCL', 'qqq대비20'),
     nvdaRel20: 값('NVDA', 'qqq대비20'), avgoRel20: 값('AVGO', 'qqq대비20'), 신용백분위: 신용.백분위,
   })
-  return NextResponse.json({ 기준시각: new Date().toISOString(), 종목, qqq20: q20, 상관, 신용, 판정, 사실: 확인된사실 })
+
+  // 하루 전 판정 — 아침 알림의 '단계 바뀜' 표시용. 저장 없이 마지막 봉 하나를 빼고 같은 계산을 다시 한다
+  const 하루전 = (b: DatedBar[] | null) => 종가(점(b)).slice(0, -1)
+  const q20어제 = 수익률(하루전(qqq), 20)
+  const 상대어제 = (s: string) => {
+    const r = 수익률(하루전(묶음[바스켓.indexOf(s as typeof 바스켓[number])]), 20)
+    return r != null && q20어제 != null ? r - q20어제 : null
+  }
+  let 신용어제: number | null = null
+  if (hp.length > 300 && ip.length > 300) {
+    const m = 맞추기([hp, ip])
+    const 비율 = m.종가[0].slice(0, -1).map((h, i) => h / m.종가[1][i])
+    const 변화들 = 비율.slice(20).map((x, i) => x / 비율[i] - 1)
+    신용어제 = 백분위(변화들.at(-1)!, 변화들)
+  }
+  const 어제판정 = 단계판정({
+    crwv20: 수익률(하루전(묶음[0]), 20), orclRel20: 상대어제('ORCL'),
+    nvdaRel20: 상대어제('NVDA'), avgoRel20: 상대어제('AVGO'), 신용백분위: 신용어제,
+  })
+  return NextResponse.json({ 기준시각: new Date().toISOString(), 종목, qqq20: q20, 상관, 신용, 판정, 어제판정, 사실: 확인된사실 })
 }

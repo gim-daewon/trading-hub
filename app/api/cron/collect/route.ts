@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { sendMessage } from '@/lib/notify/telegram'
+import { 신용한줄 } from '@/lib/credit'
 
 const NASDAQ_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -123,6 +124,19 @@ function buildAfternoonMessage(date: string, events: EconRow[]): string {
   )
 }
 
+async function creditLine(origin: string): Promise<string> {
+  try {
+    const r = await fetch(`${origin}/api/credit`, { cache: 'no-store' })
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    const d = await r.json()
+    if (!d?.판정?.조건) throw new Error('응답에 판정 없음')
+    return `${신용한줄(d.판정, d.어제판정?.조건 ? d.어제판정 : null)}\n<a href="${origin}/credit">AI 신용 보기</a>`
+  } catch (e) {
+    // 오류 문구에 비밀이 실릴 수 있어 종류만 적는다
+    return `AI 신용: 불러오기 실패 (${e instanceof Error ? e.name : 'unknown'})`
+  }
+}
+
 function isAuthorized(req: Request): boolean {
   const secret = process.env.CRON_SECRET
   if (!secret) return false
@@ -152,9 +166,12 @@ export async function GET(req: Request) {
   const date   = todayKST()
   const events = await fetchHighEvents(date)
 
-  const text = type === 'afternoon'
+  let text = type === 'afternoon'
     ? buildAfternoonMessage(date, events)
     : buildMorningMessage(date, events)
+
+  // 아침 알림에 AI 신용 한 줄 — 실패해도 경제지표 알림은 나가고, 실패했다고 적는다
+  if (type !== 'afternoon') text += `\n\n${await creditLine(url.origin)}`
 
   const sent = await sendMessage(text)
 

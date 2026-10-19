@@ -2,24 +2,23 @@
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import { TvLink } from '../components/TvLink'
+import { 단계제목, 단계행동, 지금행동, type 판정 } from '@/lib/credit'
 
 // AI 신용 모니터 — 코어위브 → 오라클 → 칩 회사 → 시장 신용으로 번지는지. 예측이 아니라 '지금 어디까지'.
 // 계산·기준은 lib/credit.ts, 확인된 사실은 lib/credit-facts.ts
 
 interface 종목 { 심볼: string; 현재: number | null; 일1: number | null; 일5: number | null; 일20: number | null; qqq대비20: number | null; 고점대비: number | null }
-interface 조건 { 단계: number; 이름: string; 켜짐: boolean; 근접: boolean; 근거: string }
 interface 응답 {
   기준시각: string; 종목: 종목[]; qqq20: number | null
   상관: { 지금: number | null; 백분위: number | null }
   신용: { 변화20: number | null; 백분위: number | null }
-  판정: { 단계: number; 조건: 조건[] }
+  판정: 판정
   사실: { 날짜: string; 무엇: string; 출처: { 이름: string; 주소: string }[] }[]
 }
 
 const 퍼 = (x: number | null, d = 1) => (x == null ? '—' : `${x >= 0 ? '+' : ''}${(x * 100).toFixed(d)}%`)
 const 색 = (x: number | null) => (x == null ? 'var(--text-muted)' : x < 0 ? 'var(--down)' : 'var(--up)')
 const 카드 = { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 14 } as const
-const 단계이름 = ['평온 — 번진 곳 없음', '1단계 · 코어위브 악화', '2단계 · 오라클 동반', '3단계 · 칩 회사 동반', '4단계 · 시장 신용 전이']
 const 단계색 = ['var(--up)', 'var(--warn)', 'var(--warn)', 'var(--down)', 'var(--down)']
 
 export default function CreditPage() {
@@ -44,14 +43,16 @@ export default function CreditPage() {
       {data && (<>
         {/* 단계 게이지 */}
         {(() => {
-          // 단계는 규칙대로 두되, 0단계인데 켜진 조건·근접이 있으면 '평온'이라 쓰지 않는다(2026-10-19 첫 실측: 오라클 켜짐·둘 근접인데 '평온'으로 보였다)
-          const 경계 = data.판정.조건.filter(c => c.켜짐 || c.근접).length
-          const 제목 = data.판정.단계 === 0 && 경계 ? `0단계 · 경계 신호 ${경계}개` : 단계이름[data.판정.단계]
+          const 경계 = data.판정.조건.some(c => c.켜짐 || c.근접)
+          const 제목 = 단계제목(data.판정)
           const 빛 = data.판정.단계 === 0 && 경계 ? 'var(--warn)' : 단계색[data.판정.단계]
           return (<>
         <section style={{ ...카드, marginBottom: 14, borderLeft: `4px solid ${빛}` }}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>지금 단계</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: 빛, marginTop: 2 }}>{제목}</div>
+          <div style={{ fontSize: 14, marginTop: 6 }}>
+            할 일: <b>{지금행동(data.판정)}</b> <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({단계행동.표시})</span>
+          </div>
           <ul style={{ listStyle: 'none', padding: 0, margin: '10px 0 0', display: 'grid', gap: 6 }}>
             {data.판정.조건.map(c => (
               <li key={c.단계} style={{ fontSize: 13, color: c.켜짐 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
