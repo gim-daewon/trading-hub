@@ -235,7 +235,7 @@ export default function HomePage() {
             { href: '/earnings', icon: '📅', label: '실적' },
             { href: '/journal',  icon: '📒', label: '매매일지' },
             { href: '/credit',   icon: '⚠',  label: 'AI크레딧' },
-            { href: '/desk',     icon: '💼', label: '데스크' },
+            { href: '/size',     icon: '⚖',  label: '포지션 크기' },
           ].map(item => (
             <Link key={item.href} href={item.href} style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,

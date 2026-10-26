@@ -233,6 +233,7 @@ export const NAV_SECTIONS: NavSection[] = [
   { id: 'calendar', label: '캘린더',       href: '/calendar', icon: '📆' },
   { id: 'journal',  label: '매매일지',     href: '/journal',  icon: '📒', soon: true },
   { id: 'credit',   label: 'AI크레딧',     href: '/credit',   icon: '⚠' },
+  { id: 'size',     label: '포지션 크기',  href: '/size',     icon: '⚖' },
   { id: 'desk',     label: '데스크',       href: '/desk',     icon: '💼', soon: true },
 ]
 
