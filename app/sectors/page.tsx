@@ -55,6 +55,18 @@ const PERIODS = [
 type PeriodKey = typeof PERIODS[number]['key']
 
 /**
+ * 기간별 하위 섹터 실측 — 하위 3개가 다음 20일에 오른 구간 비율(10년·47섹터·113구간, app/api/sectors/route.ts 표).
+ * 50%보다 낮을수록 계속 뒤처졌다는 뜻. 120일만 유의했다. 1일은 실측하지 않았다.
+ */
+const LAGGARD_TEST: Record<PeriodKey, { up: number; z?: number } | null> = {
+  '1': null,
+  '5': { up: 44 },
+  '20': { up: 43 },
+  '60': { up: 47 },
+  '120': { up: 37, z: -2.77 },
+}
+
+/**
  * 이동 뷰의 단기·장기 짝. 선택한 기간이 단기, 그보다 긴 게 장기다.
  * 120일은 비교할 더 긴 기간이 없어 20일 대 120일로 되돌린다.
  */
@@ -216,12 +228,14 @@ export default function SectorsPage() {
     return acc
   }, []).map(g => ({ ...g, items: byPct(g.items) }))
 
-  // 120일 하위 5개. 실측에서 유의했던 유일한 신호라 기간 탭과 무관하게 항상 계산한다.
+  // 선택한 기간의 하위 5개(2026-10-29 사용자 "탭에 맞게 변하도록"). 예전엔 120일만 유의해서 고정했다 —
+  // 대신 상자 설명이 그 기간의 실측 숫자(LAGGARD_TEST)로 바뀌어, 유의하지 않은 기간은 그렇다고 말한다.
   // 백테스트가 "하위 3~5개"를 봤으므로 5개로 맞춘다.
   const laggards = [...sectors]
-    .filter(s => s.periods?.['120'] != null)
-    .sort((a, b) => (a.periods['120'] as number) - (b.periods['120'] as number))
+    .filter(s => pctOf(s) != null)
+    .sort((a, b) => (pctOf(a) as number) - (pctOf(b) as number))
     .slice(0, 5)
+  const laggardTest = LAGGARD_TEST[period]
 
   // 순위 이동 — 단기 순위 vs 장기 순위.
   //
@@ -421,14 +435,22 @@ export default function SectorsPage() {
         </div>
       )}
 
-      {/* 120일 부진 섹터 — 유일하게 유의했던 신호라 항상 보여준다 */}
+      {/* 선택한 기간의 부진 섹터 — 설명은 그 기간의 실측(120일만 유의) */}
       {laggards.length > 0 && (
         <div className="card" style={{
           padding: '10px 12px', marginBottom: 14, fontSize: 11, lineHeight: 1.6,
-          borderLeft: '3px solid var(--warn)',
+          borderLeft: `3px solid ${laggardTest?.z ? 'var(--warn)' : 'var(--border)'}`,
         }}>
-          <b style={{ color: 'var(--warn)' }}>120일 부진 섹터 {laggards.length}</b>
-          <span style={{ color: 'var(--text-muted)' }}> — 10년 113구간에서 63%가 다음 20일에도 뒤처졌다 (z=-2.77)</span>
+          <b style={{ color: laggardTest?.z ? 'var(--warn)' : 'var(--text-secondary)' }}>
+            {PERIODS.find(p => p.key === period)?.label} 부진 섹터 {laggards.length}
+          </b>
+          <span style={{ color: 'var(--text-muted)' }}>
+            {laggardTest == null
+              ? ' — 하루 등락은 실측하지 않았다. 오늘 많이 빠진 곳일 뿐이다'
+              : laggardTest.z
+                ? ` — 10년 113구간에서 ${100 - laggardTest.up}%가 다음 20일에도 뒤처졌다 (z=${laggardTest.z})`
+                : ` — 10년 실측에서 다음 20일 양수 ${laggardTest.up}%. 유의하지 않아 회피 근거는 못 된다`}
+          </span>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0 6px' }}>
             {laggards.map(s => (
               <button key={s.id} onClick={() => setSelected(s)} style={{
@@ -438,11 +460,12 @@ export default function SectorsPage() {
               }}>
                 <span className="num" style={{ fontWeight: 700 }}>{s.etf}</span>
                 <span style={{ color: 'var(--text-muted)' }}> {s.label} </span>
-                <span className="num down">{pctLabel(s.periods?.['120'] ?? null, 1)}</span>
+                <span className={`num ${(pctOf(s) ?? 0) < 0 ? 'down' : 'up'}`}>{pctLabel(pctOf(s), 1)}</span>
               </button>
             ))}
           </div>
-          <div style={{ color: 'var(--text-muted)' }}>
+          {/* 보유기간 실측은 120일 하위 섹터로 잰 것 — 다른 기간에 붙이면 틀린 근거가 된다 */}
+          {period === '120' && <div style={{ color: 'var(--text-muted)' }}>
             <b>기다리면 돌아오지 않는다.</b> 보유기간을 늘려도 회복이 없다 (10년 실측):
             <div className="num" style={{
               margin: '4px 0 6px', padding: '6px 8px', borderRadius: 6,
@@ -453,7 +476,7 @@ export default function SectorsPage() {
             검증된 범위는 <b>섹터 ETF를 사는 경우</b>다. 이 섹터에 속한 개별 종목까지
             피하라는 뜻은 아니다 — 눌림목 후보에 이 필터를 걸어본 결과 효과가 없었다
             (양수비율 52%로 동일, 중앙값은 오히려 하락).
-          </div>
+          </div>}
         </div>
       )}
 
