@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { SECTORS } from '@/lib/registry'
+import { 신선캐시 } from '@/lib/fresh-cache'
 
 interface YahooQuote {
   price: number
@@ -42,8 +43,9 @@ async function fetchYahoo(symbol: string): Promise<YahooQuote | null> {
           `https://${host}/v8/finance/chart/${encodeURIComponent(symbol)}?range=1y&interval=1d&includePrePost=false`,
           {
             headers: { 'User-Agent': UA },
-            // 성공만 캐시된다. 실패는 no-store로 두어 다음 요청이 재시도하게 한다.
-            next: { revalidate: 300 },
+            // Next 데이터 캐시를 쓰지 않는다 — 만료 뒤 첫 요청에 옛 값(9월 숫자)을 줬다(2026-10-29).
+            // 5분 기억은 아래 섹터캐시가 맡고, 기한이 지나면 옛 값을 주지 않는다.
+            cache: 'no-store',
           }
         )
         if (!res.ok) continue
@@ -94,6 +96,9 @@ async function fetchYahoo(symbol: string): Promise<YahooQuote | null> {
   return null
 }
 
+/** 섹터 시세 5분 기억 — 화면 자동 새로고침(5분)과 같은 기한 */
+const 섹터캐시 = 신선캐시<YahooQuote>(5 * 60_000)
+
 function calcRS(etfChg: number, spyChg: number): number {
   return etfChg - spyChg
 }
@@ -102,7 +107,7 @@ export async function GET() {
   const tickers = ['SPY', ...SECTORS.map(s => s.etf)]
   const unique  = [...new Set(tickers)]
 
-  const results = await Promise.all(unique.map(t => fetchYahoo(t)))
+  const results = await Promise.all(unique.map(t => 섹터캐시.가져오기(t, () => fetchYahoo(t))))
   const quoteMap: Record<string, YahooQuote> = {}
   unique.forEach((t, i) => { if (results[i]) quoteMap[t] = results[i]! })
 
