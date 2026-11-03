@@ -220,12 +220,14 @@ export interface NavSection {
 
 export const NAV_SECTIONS: NavSection[] = [
   { id: 'home',     label: '홈',           href: '/',         icon: '⌂' },
-  { id: 'picks',    label: '눌림목',       href: '/picks',    icon: '⭐' },
+  { id: 'today',    label: '오늘 후보',    href: '/today',    icon: '✓' },
+  { id: 'picks',   label: '눌림목',       href: '/picks',    icon: '⭐' },
   { id: 'sectors',  label: '섹터',         href: '/sectors',  icon: '🔥' },
   { id: 'screener', label: '수급',         href: '/screener', icon: '💧' },
   { id: 'breakout', label: 'VWMA돌파',    href: '/breakout', icon: '📈' },
   { id: 'rebound',  label: '낙폭 반등',    href: '/rebound',  icon: '↩' },
   { id: 'short',    label: '숏 후보',      href: '/short',    icon: '🔻' },
+  { id: 'pattern',  label: '컵 패턴',      href: '/pattern',  icon: '☕' },
   { id: 'tracking', label: '성과추적',     href: '/tracking', icon: '📊' },
   { id: 'rejected', label: '기각기록',     href: '/rejected', icon: '🗂️' },
   { id: 'market',   label: '시장',         href: '/market',   icon: '📈' },

@@ -294,6 +294,8 @@ export const DAILY_EVIDENCE: Record<Market, Record<string, DailyPerf>> = {
     touchW: { d1: -0.057, t1: -24.6, d20: -0.100, t20: -10.7 },
   },
   // 크립토는 표본이 짧다(803일). nearD·touchD의 20일 플러스는 표본 163·565건이다
+  // 2026-11-03 재측정(scripts/crypto-signal-recheck.mjs, 84코인 · 같은 달 묶음): 20일 우위가
+  // 유의한 신호 없음. nearD 월묶음 z 1.19 · touchD 0.95 · 눌림목은 마이너스(-0.061R). 아래 t는 믿지 말 것
   crypto: {
     touchD: { d1:  0.018, t1:   0.8, d20:  0.292, t20:   2.8 },
     nearD:  { d1:  0.015, t1:   0.4, d20:  0.410, t20:   2.7 },

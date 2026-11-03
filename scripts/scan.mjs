@@ -15,6 +15,7 @@ import { computeFlow, persistence } from '../lib/flow.ts'
 import { fetchUniverse, CAP_CACHE_DAYS } from '../lib/universe.ts'
 import { fetchBarsFor, looksPegged } from '../lib/bars.ts'
 import { MARKETS, isMarket } from '../lib/markets.ts'
+import { cupFibNow, CUP_FIB } from '../lib/cup-fib.ts'
 
 const MARKET = (process.env.MARKET || 'us').trim()
 if (!isMarket(MARKET)) {
@@ -104,6 +105,20 @@ const capSource = MARKET !== 'crypto' ? undefined : {
     }
     console.log(`시총 캐시 저장 ${rows.length}개 (${CAP_CACHE_DAYS}일간 재사용)`)
   },
+}
+
+/**
+ * 컵 패턴 지금 상태(lib/cup-fib.ts). 고가·저가 없는 봉은 꼭짓점을 틀리게 하므로 빼고 본다.
+ * 계산이 터져도 스캔 전체를 막지 않는다 — 이 종목의 cup만 비운다.
+ */
+function cupState(bars) {
+  try {
+    const ok = bars.filter(b => b.h != null && b.l != null)
+    return ok.length >= 100 ? cupFibNow(ok, CUP_FIB) : null
+  } catch (e) {
+    console.error('컵 패턴 계산 실패:', e.message?.slice(0, 120))
+    return null
+  }
 }
 
 async function barsWithRetry(row) {
@@ -219,6 +234,7 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
       w_low: m.wLow,
       price: bars[bars.length - 1].c,   // 진입가 — 사후 성과 추적용
       persistence: persistence(m),
+      cup: cupState(bars),              // 컵 패턴 메뉴용. 대부분 null
     })
   }
 }))
@@ -266,6 +282,16 @@ console.log(`스냅샷 생성 id=${snap.id} market=${MARKET}`)
 // 안 지우면 행이 0개인 스냅샷이 '최신'으로 남는다. 앱은 그걸 읽어 빈 화면을
 // 보여주고, 성과 추적은 그날을 통째로 비운다. 실제로 이 경로로 id=19가 남았다.
 // 반쪽 저장은 저장 안 한 것보다 나쁘다.
+// cup 칸(supabase/add_cup.sql)이 아직 없으면 그 칸만 빼고 저장한다.
+// 없는 칸을 보내면 PostgREST가 행 저장 전체를 거부해 스캔이 통째로 실패한다
+try {
+  await sb('screener_rows?select=cup&limit=1', 'GET')
+  console.log(`컵 패턴: ${out.filter(r => r.cup?.stage === 'entry').length}개 진입 · ${out.filter(r => r.cup?.stage === 'watch').length}개 준비`)
+} catch (e) {
+  console.error('cup 칸이 없다 — 컵 패턴 없이 저장한다. Supabase SQL 편집기에서 supabase/add_cup.sql을 실행할 것:', e.message.slice(0, 120))
+  for (const r of out) delete r.cup
+}
+
 const CHUNK = 500
 try {
   for (let i = 0; i < out.length; i += CHUNK) {

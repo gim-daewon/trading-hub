@@ -97,3 +97,5 @@ bt-overlap.mjs
 overlap-*.txt
 bt-trend.mjs
 trend-*.txt
+bt-4h.mjs
+h4-*.txt
