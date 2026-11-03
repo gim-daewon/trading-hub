@@ -97,6 +97,17 @@ export function earningsSoon(symbol: string, calendar: Record<string, string>, t
 
 const passed = (i: TodayItem) => i.checks.filter(c => c.ok === true).length
 
+/**
+ * 기본으로 보여 줄 최소 겹친 신호 수.
+ * 11-03 미국 735종목 중 610개가 신호 하나뿐이었고, 대부분이 '2~5일 유지'(218)·'오늘 돌파'(131) —
+ * 구간마다 최대 100개씩 담는 넓은 신호다. 2개 이상이면 125개(사용자 "후보가 왜 이렇게 많아")
+ */
+export const MIN_SIGNALS = 2
+
+export function withSignals(items: TodayItem[], min: number): TodayItem[] {
+  return items.filter(i => i.tags.length >= min)
+}
+
 /** 실적 임박은 뒤로(빼지는 않는다), 그다음 겹친 신호 수, 그다음 체크 통과 수 */
 export function rank(items: TodayItem[]): TodayItem[] {
   return [...items].sort((a, b) =>

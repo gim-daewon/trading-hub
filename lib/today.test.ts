@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { gather as gatherWith, checksFor, earningsSoon, rank, preselect, pickTop, PICK, type TodayRow, type TodayItem, type SignalLabels } from './today.ts'
+import { gather as gatherWith, checksFor, earningsSoon, rank, withSignals, preselect, pickTop, PICK, type TodayRow, type TodayItem, type SignalLabels } from './today.ts'
 
 // 실제 화면은 lib/screener-shared.ts의 CATS·BREAKOUTS·REBOUNDS를 넘긴다
 const LABELS: SignalLabels = {
@@ -71,6 +71,15 @@ test('정렬: 실적 임박은 맨 뒤, 그다음 신호 수, 그다음 체크 �
     { row: row('W'), tags: ['눌림목', '오늘 돌파'], checks: checksFor(row('W', { f20: -1 })), earnings: null },
   ]
   assert.deepEqual(rank(items).map(i => i.row.symbol), ['W', 'Z', 'X', 'Y'])
+})
+
+test('겹친 신호가 min개 이상인 것만 남긴다', () => {
+  const items = [
+    { row: row('ONE'), tags: ['오늘 돌파'], checks: [], earnings: null },
+    { row: row('TWO'), tags: ['오늘 돌파', '눌림목'], checks: [], earnings: null },
+  ]
+  assert.deepEqual(withSignals(items, 2).map(i => i.row.symbol), ['TWO'])
+  assert.equal(withSignals(items, 1).length, 2)
 })
 
 // ── 추천 10 ─────────────────────────────────────────────

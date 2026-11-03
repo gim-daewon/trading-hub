@@ -10,7 +10,7 @@ import { tiersFor, fmtCap, type Market } from '@/lib/markets'
 import { fmtSector } from '@/lib/format'
 import { CATS, BREAKOUTS, REBOUNDS } from '@/lib/screener-shared'
 import {
-  gather, checksFor, earningsSoon, rank, preselect, pickTop, EARNINGS_WARN_DAYS, PICK,
+  gather, checksFor, earningsSoon, rank, withSignals, preselect, pickTop, EARNINGS_WARN_DAYS, PICK, MIN_SIGNALS,
   type ScreenerPayload, type TodayItem, type Check, type Pick,
 } from '@/lib/today'
 import { fmtLevel } from '../components/LevelsLine'
@@ -18,8 +18,8 @@ import { fmtLevel } from '../components/LevelsLine'
 // 오늘 후보 — 신호마다 흩어진 화면(눌림목·수급·돌파·낙폭 반등)을 종목 카드 하나로 모은다.
 // 계산·정렬 규칙은 lib/today.ts. 이 화면은 그리기만 한다.
 
-/** 한 화면에 그리는 카드 수. 지지·저항 API 한 번 한도(80) 안 */
-const MAX_CARDS = 40
+/** 한 화면에 그리는 카드 수. 지지·저항 API 한 번 한도(80) 안. 11-03 "후보가 왜 이렇게 많아"로 40 → 30 */
+const MAX_CARDS = 30
 
 interface Data extends ScreenerPayload {
   regime?: 'up' | 'down'; spyChg20?: number | null
@@ -138,6 +138,8 @@ function PickCard({ p, n, market }: { p: Pick; n: number; market: Market }) {
 export default function TodayPage() {
   const [market, setMarket, marketReady] = useMarket()
   const [includeMicro, setIncludeMicro] = useState(false)
+  // 기본은 신호가 MIN_SIGNALS개 이상 겹친 종목만. 켜면 신호 하나짜리까지
+  const [singles, setSingles] = useState(false)
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
@@ -157,13 +159,14 @@ export default function TodayPage() {
   const tierKey = tiersFor(market).map(t => t.id)
     .filter(id => includeMicro || (id !== 'micro' && id !== 'unknown')).join(',')
 
-  const { items, total, pre } = useMemo(() => {
-    if (!data) return { items: [] as TodayItem[], total: 0, pre: [] as TodayItem[] }
+  const { items, total, all: allCount, pre } = useMemo(() => {
+    if (!data) return { items: [] as TodayItem[], total: 0, all: 0, pre: [] as TodayItem[] }
     const today = localToday()
     const all = gather(data, tierKey.split(','), { cats: CATS, breakouts: BREAKOUTS, rebounds: REBOUNDS })
       .map(g => ({ ...g, checks: checksFor(g.row), earnings: earningsSoon(g.row.symbol, cal, today) }))
-    return { items: rank(all).slice(0, MAX_CARDS), total: all.length, pre: preselect(all).slice(0, PICK.prefetch) }
-  }, [data, cal, tierKey])
+    const shown = withSignals(all, singles ? 1 : MIN_SIGNALS)
+    return { items: rank(shown).slice(0, MAX_CARDS), total: shown.length, all: all.length, pre: preselect(all).slice(0, PICK.prefetch) }
+  }, [data, cal, tierKey, singles])
 
   // 추천 예선과 아래 목록을 따로 받는다 — 합치면 /api/levels 한도(80)를 넘어 뒤쪽이 잘린다
   const preLevels = useLevels(market, pre.map(i => i.row.symbol))
@@ -209,7 +212,7 @@ export default function TodayPage() {
         <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>불러오는 중…</div>
       )}
 
-      {data && !loading && items.length === 0 && (
+      {data && !loading && allCount === 0 && (
         <div className="card" style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
           오늘 신호에 걸린 종목이 없다
         </div>
@@ -251,12 +254,28 @@ export default function TodayPage() {
         </section>
       )}
 
+      {data && (
+        <h2 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 800 }}>
+          {singles ? '신호 걸린 전체' : `신호 ${MIN_SIGNALS}개 이상 겹친 종목`}
+        </h2>
+      )}
+      {data && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+          <span className="num" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            {total > items.length ? `${total}종목 중 위 ${items.length}개` : `${items.length}종목`}
+            {!singles && ` (전체 ${allCount})`}
+          </span>
+          <button
+            onClick={() => setSingles(v => !v)}
+            className={singles ? 'pill pill-up' : 'pill'}
+            style={{ cursor: 'pointer', border: 'none', fontSize: 10 }}
+          >
+            신호 1개짜리도 보기 {singles ? '켜짐' : '꺼짐'}
+          </button>
+        </div>
+      )}
       {items.length > 0 && (
         <>
-          <h2 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 800 }}>신호 걸린 전체</h2>
-          <div className="num" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
-            {total > items.length ? `${total}종목 중 위 ${items.length}개` : `${items.length}종목`}
-          </div>
           <div className="card" style={{ overflow: 'hidden' }}>
             {items.map(it => (
               <Card key={it.row.symbol} it={it} market={market} lv={levels[it.row.symbol]} barDate={data?.barDate} />
