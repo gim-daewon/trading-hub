@@ -1,0 +1,6 @@
+{
+  "검사": "npm test && npm run lint",
+  "반영": "커밋만",
+  "하루최대": 2,
+  "금지": ["sql", "supabase", "bt-", ".txt", "AGENTS.md", "CLAUDE.md"]
+}
