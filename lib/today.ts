@@ -147,7 +147,8 @@ export const PICK = {
 }
 
 /** 일반 주식이 아닌 묶음 증권. 첫 결과에 BTSGU(Tangible Equity Unit)가 섞였다. LP의 'Common Units'는 주식처럼 거래돼 남긴다 */
-const NOT_STOCK = /tangible equity unit|warrant|\brights?\b/i
+// 11-03 모의투자 규칙 B에 MCHPP(전환 우선주)가 섞여 preferred·corporate/equity units도 넣었다
+export const NOT_STOCK = /tangible equity unit|corporate units?|equity units?|preferred|warrant|\brights?\b/i
 
 interface Lv { price: number; pct: number }
 export interface LevelPair { support: Lv | null; resistance: Lv | null }

@@ -221,6 +221,7 @@ export interface NavSection {
 export const NAV_SECTIONS: NavSection[] = [
   { id: 'home',     label: '홈',           href: '/',         icon: '⌂' },
   { id: 'today',    label: '오늘 후보',    href: '/today',    icon: '✓' },
+  { id: 'paper',    label: '모의투자',     href: '/paper',    icon: '◷' },
   { id: 'picks',   label: '눌림목',       href: '/picks',    icon: '⭐' },
   { id: 'sectors',  label: '섹터',         href: '/sectors',  icon: '🔥' },
   { id: 'screener', label: '수급',         href: '/screener', icon: '💧' },

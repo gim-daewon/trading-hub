@@ -16,6 +16,9 @@ import { fetchUniverse, CAP_CACHE_DAYS } from '../lib/universe.ts'
 import { fetchBarsFor, looksPegged } from '../lib/bars.ts'
 import { MARKETS, isMarket } from '../lib/markets.ts'
 import { cupFibNow, CUP_FIB } from '../lib/cup-fib.ts'
+import { buildCategories, buildBreakouts, buildRebound, CATS, BREAKOUTS, REBOUNDS, tierOf, tiersFor } from '../lib/screener-shared.ts'
+import { nearestLevels } from '../lib/levels.ts'
+import { dailyOrders } from '../lib/paper.ts'
 
 const MARKET = (process.env.MARKET || 'us').trim()
 if (!isMarket(MARKET)) {
@@ -190,6 +193,8 @@ const regime = benchChg20 >= 0 ? 'up' : 'down'
 console.log(`국면 ${regime} (${DEF.benchmark.label} 20일 ${benchChg20.toFixed(2)}%)`)
 
 const out = []
+// 모의투자 규칙 A가 그날 지지·저항을 봉으로 계산한다(아래 '모의투자 주문')
+const barsBy = new Map()
 let done = 0, failed = 0, pegged = 0
 const queue = [...list]
 await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
@@ -204,6 +209,7 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
     if (MARKET === 'crypto' && looksPegged(bars)) { pegged++; continue }
     const m = computeFlow(bars)
     if (m.f20 === null) { failed++; continue }
+    barsBy.set(u.symbol, bars)
     out.push({
       // market은 스냅샷에만 있다. 행은 snapshot_id로 따라가므로 중복이다
       symbol: u.symbol,
@@ -308,6 +314,43 @@ try {
     console.error(`스냅샷 삭제도 실패했다. 수동으로 지워야 한다: id=${snap.id}`, e2.message.slice(0, 120))
   }
   throw e
+}
+
+// 모의투자 주문(2026-11-03, supabase/add_paper.sql · 화면 /paper).
+// 규칙 A(추세 눌림 기법 통과)·B(20일선 눌림)마다 그날 종가에 산 것으로 칠 종목을 넣는다. 계산은 lib/paper.ts dailyOrders.
+// 표가 아직 없거나 계산이 터져도 스캔은 성공이다 — 이 단계만 건너뛰고 남긴다
+try {
+  if (!lastBarDate) throw new Error('데이터 기준일을 몰라 주문 날짜를 정할 수 없다')
+  await sb('paper_orders?select=id&limit=1', 'GET')
+  const rows = out.map(r => ({
+    symbol: r.symbol, name: r.name ?? '', sector: r.sector ?? '', display: r.display,
+    marketCap: r.market_cap ?? 0,
+    tier: r.cap_known === false ? 'unknown' : tierOf(r.market_cap ?? 0, MARKET),
+    price: r.price, f5: r.f5, f20: r.f20, f60: r.f60, rvol: r.rvol, chg20: r.chg20, pctB: r.pct_b,
+    vwma20: r.vwma20, vwma60: r.vwma60, aboveRun: r.above_run,
+    wClose: r.w_close, wVwma20: r.w_vwma20, wVwma60: r.w_vwma60, wAboveRun: r.w_above_run,
+    prevRun: r.prev_run, wPrevRun: r.w_prev_run, low: r.low, wLow: r.w_low, chg1: r.chg1, high: r.high,
+    atr14: r.atr14, dollarVol: r.dollar_vol,
+  }))
+  const built = {
+    categories: buildCategories(rows, MARKET),
+    breakouts: buildBreakouts(rows, MARKET),
+    rebound: { wick: buildRebound(rows, MARKET, 25, 'wick'), drop1: buildRebound(rows, MARKET, 25, 'drop1') },
+  }
+  const tiers = tiersFor(MARKET).map(t => t.id).filter(id => id !== 'micro' && id !== 'unknown')
+  const levelsOf = sym => {
+    const ok = (barsBy.get(sym) ?? []).filter(b => b.h != null && b.l != null).slice(-270)
+    return ok.length >= 30 ? nearestLevels(ok) : null
+  }
+  const o = dailyOrders(built, tiers, { cats: CATS, breakouts: BREAKOUTS, rebounds: REBOUNDS }, levelsOf, lastBarDate)
+  const payload = [...o.A.map(x => ({ ...x, rule: 'A' })), ...o.B.map(x => ({ ...x, rule: 'B' }))]
+    .map(x => ({ market: MARKET, rule: x.rule, date: x.date, symbol: x.symbol, name: x.name ?? null, entry: x.entry, stop: x.stop, target: x.target }))
+  if (payload.length) {
+    await sb('paper_orders?on_conflict=market,rule,date,symbol', 'POST', payload, { Prefer: 'resolution=ignore-duplicates,return=minimal' })
+  }
+  console.log(`모의투자 주문: A ${o.A.length}개 · B ${o.B.length}개 (${lastBarDate})`)
+} catch (e) {
+  console.error('모의투자 주문 건너뜀(supabase/add_paper.sql 실행 전이면 정상):', String(e.message ?? e).slice(0, 160))
 }
 
 // 보관 정리.
