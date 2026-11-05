@@ -94,6 +94,15 @@ export function dailyOrders(
   return { A, B }
 }
 
+/**
+ * 시세를 못 받은 종목(/api/paper의 failed) 안내. 그 종목은 봉이 없어 손절·목표 판정 없이 산 값 그대로 '보유'로 남고,
+ * 보유 칸(maxOpen)을 차지해 뒤 주문까지 막을 수 있다 — 계좌 숫자를 믿기 전에 알아야 한다.
+ */
+export function failedNote(failed: number | undefined): string | null {
+  if (!failed) return null
+  return `${failed}종목 시세를 못 받았다. 그 종목은 손절·목표 판정 없이 보유로 남아 계좌 숫자가 틀릴 수 있다 — 새로고침해 다시 받아 보라.`
+}
+
 export function runAccount(orders: PaperOrder[], bars: Record<string, DayBar[]>, cfg: PaperConfig): PaperResult {
   const fee = cfg.feePct / 100
   const byDay = new Map<string, Map<string, DayBar>>()

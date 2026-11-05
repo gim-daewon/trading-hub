@@ -5,7 +5,7 @@ import { MarketToggle, useMarket } from '../components/MarketToggle'
 import { SymbolLabel } from '../components/SymbolLabel'
 import { fmtLevel } from '../components/LevelsLine'
 import type { Market } from '@/lib/markets'
-import type { PaperResult, OpenPos, ClosedTrade } from '@/lib/paper'
+import { failedNote, type PaperResult, type OpenPos, type ClosedTrade } from '@/lib/paper'
 
 // 모의투자(2026-11-03) — 계산은 /api/paper(lib/paper.ts). 이 화면은 그리기만 한다.
 // 모양 참고: ric-v/drawdown(자산 곡선 → 보유 → 끝난 매매)
@@ -145,6 +145,9 @@ export default function PaperPage() {
         <div className="card" style={{ padding: 20, fontSize: 12, color: 'var(--text-muted)' }}>
           아직 모의 매수가 없다. 다음 스캔이 끝나면 첫 매수가 들어온다.
         </div>
+      )}
+      {data?.accounts && failedNote(data.failed) && (
+        <div className="card" style={{ padding: 12, color: 'var(--warn)', fontSize: 12, lineHeight: 1.6, marginBottom: 12 }}>{failedNote(data.failed)}</div>
       )}
       {data?.accounts && (['A', 'B'] as const).map(r => (
         <AccountCard key={r} rule={r} desc={data.rules[r]} a={data.accounts![r]} data={data} />
