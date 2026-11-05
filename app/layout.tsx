@@ -3,6 +3,7 @@ import './globals.css'
 import Sidebar from './components/Sidebar'
 import FetchLog from './components/FetchLog'
 import BottomNav from './components/BottomNav'
+import InstallSW from './InstallSW'
 
 export const metadata: Metadata = {
   title: 'Trading Hub',
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ko">
       <body>
         <FetchLog />
+        <InstallSW />
         <Sidebar />
         {/* 데스크톱: 사이드바 너비만큼 밀기 / 모바일: 하단 네비 높이만큼 여백 */}
         <main style={{
