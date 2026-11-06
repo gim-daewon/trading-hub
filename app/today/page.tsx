@@ -5,12 +5,12 @@ import RiskGauge from '../components/RiskGauge'
 import { MarketToggle, MicroToggle, useMarket } from '../components/MarketToggle'
 import { SymbolLabel } from '../components/SymbolLabel'
 import { ExitPrices } from '../components/ExitPrices'
-import { LevelsLine, useLevels } from '../components/LevelsLine'
+import { LevelsLine, useLevels, useLevelsStatus } from '../components/LevelsLine'
 import { tiersFor, fmtCap, type Market } from '@/lib/markets'
 import { fmtSector } from '@/lib/format'
 import { CATS, BREAKOUTS, REBOUNDS } from '@/lib/screener-shared'
 import {
-  gather, checksFor, earningsSoon, rank, withSignals, preselect, pickTop, EARNINGS_WARN_DAYS, PICK, MIN_SIGNALS,
+  gather, checksFor, earningsSoon, rank, withSignals, preselect, pickTop, levelsWait, EARNINGS_WARN_DAYS, PICK, MIN_SIGNALS,
   type ScreenerPayload, type TodayItem, type Check, type Pick,
 } from '@/lib/today'
 import { fmtLevel } from '../components/LevelsLine'
@@ -169,11 +169,12 @@ export default function TodayPage() {
   }, [data, cal, tierKey, singles])
 
   // 추천 예선과 아래 목록을 따로 받는다 — 합치면 /api/levels 한도(80)를 넘어 뒤쪽이 잘린다
-  const preLevels = useLevels(market, pre.map(i => i.row.symbol))
+  const { levels: preLevels, done: preDone } = useLevelsStatus(market, pre.map(i => i.row.symbol))
   const levels = useLevels(market, items.map(i => i.row.symbol))
   const picks = useMemo(() => pickTop(pre, preLevels), [pre, preLevels])
   const alerts = useRiskAlerts()
-  const levelsPending = pre.length > 0 && Object.keys(preLevels).length === 0
+  // 시장을 바꾼 직후엔 앞 시장 값이 남아 있어 지금 예선 종목에 맞는 것만 센다
+  const levelsNote = levelsWait(pre.length, { done: preDone, got: pre.filter(i => preLevels[i.row.symbol]).length })
 
   return (
     <div style={{ padding: 16, maxWidth: 760, margin: '0 auto' }}>
@@ -240,8 +241,8 @@ export default function TodayPage() {
               <b style={{ color: 'var(--down)' }}>시장 위험 신호 {alerts}개 경보.</b> 추세 종목도 시장과 같이 빠진다 — 오늘은 평소 크기의 절반 이하로.
             </div>
           )}
-          {levelsPending ? (
-            <div className="card" style={{ padding: 20, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>지지·저항 계산 중…</div>
+          {levelsNote ? (
+            <div className="card" style={{ padding: 20, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>{levelsNote}</div>
           ) : picks.length === 0 ? (
             <div className="card" style={{ padding: 20, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
               오늘은 조건(정배열 · 20일선 근처 · 위로 여유)을 맞는 종목이 없다

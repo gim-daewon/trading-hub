@@ -17,6 +17,10 @@ export const 크기기준 = {
 }
 
 export interface 크기입력 { 시드: number; 위험퍼: number; 진입: number; 손절: number; 수수료퍼: number; 목표R: number }
+/** 화면 칸 이름 — 오류 문구도 이 이름을 쓴다(속 이름 '위험퍼'가 화면에 나오지 않게) */
+export const 칸이름: Record<keyof 크기입력, string> = {
+  시드: '시드($)', 위험퍼: '1R = 시드의 %', 진입: '진입가', 손절: '손절가', 수수료퍼: '수수료(한쪽 %)', 목표R: '목표(R)',
+}
 export interface 크기결과 {
   방향: '롱' | '숏'
   위험금액: number; 손절폭: number; 수량: number; 포지션금액: number; 레버리지: number
@@ -26,7 +30,7 @@ export interface 크기결과 {
 }
 
 export function 포지션계산(x: 크기입력): 크기결과 {
-  for (const [k, v] of Object.entries(x)) if (!Number.isFinite(v)) throw new Error(`${k}가 숫자가 아니다`)
+  for (const [k, v] of Object.entries(x)) if (!Number.isFinite(v)) throw new Error(`${칸이름[k as keyof 크기입력] ?? k}에 숫자가 아닌 값이 있다 — 점(.)이 두 번 들어가지 않았는지 본다`)
   if (x.시드 <= 0 || x.진입 <= 0 || x.손절 <= 0) throw new Error('시드·진입가·손절가는 0보다 커야 한다')
   if (x.위험퍼 <= 0 || x.수수료퍼 < 0 || x.목표R <= 0) throw new Error('위험%·목표R은 0보다 크고 수수료는 0 이상')
   if (x.진입 === x.손절) throw new Error('진입가와 손절가가 같다')

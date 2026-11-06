@@ -154,6 +154,17 @@ interface Lv { price: number; pct: number }
 export interface LevelPair { support: Lv | null; resistance: Lv | null }
 export interface Pick { item: TodayItem; reasons: string[]; stop: number | null; target: number | null; rr: number | null }
 
+/**
+ * 본선 위에 띄울 지지·저항 대기 문구. 예전엔 '받은 값이 0개'를 '계산 중'으로 봐서
+ * /api/levels가 실패하거나 전부 못 받으면 '계산 중…'에 영영 멈췄다. 요청이 끝났는지(done)로 가른다.
+ */
+export function levelsWait(want: number, s: { done: boolean; got: number }): string | null {
+  if (want === 0) return null
+  if (!s.done) return '지지·저항 계산 중…'
+  if (s.got === 0) return '지지·저항을 못 받아 기법을 판정하지 못했다 — 새로고침해 다시 받아 보라.'
+  return null
+}
+
 const dist20 = (r: TodayRow) => r.price != null && r.vwma20 ? (r.price / r.vwma20 - 1) * 100 : null
 const f1 = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}`
 
