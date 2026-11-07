@@ -29,7 +29,7 @@ export function useLevelsStatus(market: Market, symbols: string[]) {
   return { levels, done: doneKey === reqKey }
 }
 
-/** 공용 fmtPrice는 1 이상을 정수로 반올림해 $16.20 지지와 $16.40 저항이 둘 다 "16"이 된다 */
+/** 공용 fmtPrice는 10 이상을 정수로 반올림해 $16.20 지지와 $16.40 저항이 둘 다 "16"이 된다 */
 const LEVEL_DECIMALS_BELOW = 100
 export const fmtLevel = (v: number, market: Market) =>
   v >= 1 && v < LEVEL_DECIMALS_BELOW ? v.toFixed(2) : fmtPrice(v, market)
