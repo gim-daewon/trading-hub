@@ -312,6 +312,25 @@ export function exitPrices(
 }
 
 /**
+ * exitPrices가 null일 때 화면에 띄울 이유. 띄울 이유가 없으면 null.
+ * ATR이 저장돼 있어도 가격의 절반 이상이면 손절가가 0 아래라 null이 된다 —
+ * 이걸 "ATR 미저장"으로 띄우면 다음 스캔을 기다려도 안 채워진다.
+ */
+export function exitMissingWhy(
+  price: number | null | undefined,
+  atr14: number | null | undefined,
+  market: Market,
+  dollarVol?: number | null,
+): string | null {
+  const r = MARKETS[market].rule
+  if (price == null) return null
+  if (dollarVol != null && dollarVol < r.minVol) return '유동성 부족 — 규칙 미검증 구간'
+  if (r.kind !== 'atr') return null
+  if (atr14 == null || !(atr14 > 0)) return 'ATR 미저장 — 다음 스캔에 채워진다'
+  return '변동성 과다 — ATR 손절가가 0 아래라 못 띄운다'
+}
+
+/**
  * 가격 표기 — 정수로 끊는다.
  *
  * 손절·익절가에 소수점이 붙으면 읽는 데 방해만 된다. 어차피 진입가가

@@ -1,5 +1,5 @@
 'use client'
-import { exitPrices, fmtPrice, MARKETS, type Market } from '@/lib/markets'
+import { exitMissingWhy, exitPrices, fmtPrice, MARKETS, type Market } from '@/lib/markets'
 
 /**
  * 손절가·익절가.
@@ -24,10 +24,7 @@ export function ExitPrices({ price, atr14, dollarVol, market, compact }: {
 
   if (!e) {
     // 왜 없는지를 구분해서 알린다. 그냥 비우면 버그처럼 보인다
-    const why = price == null ? null
-      : dollarVol != null && dollarVol < def.rule.minVol ? '유동성 부족 — 규칙 미검증 구간'
-      : def.rule.kind === 'atr' ? 'ATR 미저장 — 다음 스캔에 채워진다'
-      : null
+    const why = exitMissingWhy(price, atr14, market, dollarVol)
     return why ? (
       <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{why}</span>
     ) : null

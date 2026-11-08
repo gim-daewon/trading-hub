@@ -177,6 +177,19 @@ async function krLive(symbols: string[]): Promise<LiveResult> {
 
 // ---------------------------------------------------------------- 크립토
 
+interface UpbitTicker { market: string; trade_price?: number | null; signed_change_rate?: number | null }
+
+/**
+ * 업비트 응답 한 줄 → 시세. 등락률이 빠지면 0%로 채우지 않고 버린다 —
+ * 채우면 "변동 없음"과 "값 없음"이 구별되지 않는다. 다른 소스도 같은 기준이다.
+ */
+export function upbitQuote(t: UpbitTicker): LiveQuote | null {
+  const price = t.trade_price, rate = t.signed_change_rate
+  if (typeof price !== 'number' || !Number.isFinite(price)) return null
+  if (typeof rate !== 'number' || !Number.isFinite(rate)) return null
+  return { price, pct: rate * 100 }
+}
+
 /**
  * 바이낸스는 전 종목을 한 번에 준다 — 심볼 목록이 필요 없다.
  * 업비트 전용 코인만 따로 조회한다.
@@ -199,13 +212,13 @@ async function cryptoLive(symbols: string[]): Promise<LiveResult> {
   }
 
   for (const part of chunk(upbit, CHUNK_UPBIT)) {
-    const j = await fetchJson<{ market: string; trade_price: number; signed_change_rate: number }[]>(
+    const j = await fetchJson<UpbitTicker[]>(
       `https://api.upbit.com/v1/ticker?markets=${part.join(',')}`,
       { headers: { 'User-Agent': UA }, next: { revalidate: 30 } },
     )
     for (const t of j ?? []) {
-      if (!Number.isFinite(t.trade_price)) continue
-      quotes[t.market] = { price: t.trade_price, pct: (t.signed_change_rate ?? 0) * 100 }
+      const q = upbitQuote(t)
+      if (q) quotes[t.market] = q
     }
   }
   return { quotes, open: true, suggestedIntervalMs: 0, at: Date.now() }
