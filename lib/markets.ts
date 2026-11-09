@@ -345,7 +345,10 @@ export function fmtPrice(v: number | null | undefined, market: Market): string {
   if (v == null || !Number.isFinite(v)) return '—'
   if (Math.abs(v) >= PRICE_INT_FROM) return Math.round(v).toLocaleString()
   // 10 미만은 유효숫자 3자리. 2.634 -> 2.63, 0.09005 -> 0.0901
-  return v.toPrecision(3)
+  const s = v.toPrecision(3)
+  if (!s.includes('e')) return s
+  // 1e-6 미만은 toPrecision이 지수 표기(6.20e-7)를 낸다. BTTC가 이 구간이다
+  return v.toFixed(2 - Math.floor(Math.log10(Math.abs(v))))
 }
 
 /** 시총 표기 — 원화는 조/억, 달러는 B/M */
