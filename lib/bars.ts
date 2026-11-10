@@ -55,9 +55,9 @@ async function binanceBars(
       // row[6] = closeTime(ms). 미래면 아직 안 닫힌 봉이다
       if (Number(row[6]) > now) continue
       const t = Math.floor(Number(row[0]) / 1000)
-      const c = Number(row[4]), v = Number(row[5]), l = Number(row[3]), h = Number(row[2])
+      const c = Number(row[4]), v = Number(row[5]), l = Number(row[3]), h = Number(row[2]), o = Number(row[1])
       if (!Number.isFinite(t) || !Number.isFinite(c) || !Number.isFinite(v)) continue
-      page.push({ t, c, v, l: Number.isFinite(l) ? l : undefined, h: Number.isFinite(h) ? h : undefined })
+      page.push({ t, c, v, l: Number.isFinite(l) ? l : undefined, h: Number.isFinite(h) ? h : undefined, o: Number.isFinite(o) ? o : undefined })
     }
     if (!page.length) break
     out.unshift(...page)
@@ -80,7 +80,7 @@ async function upbitBars(market: string, want: number): Promise<DatedBar[] | nul
     const q = new URLSearchParams({ market, count: '200' })
     if (to) q.set('to', to)
     const j = await fetchJson<{
-      candle_date_time_utc: string; trade_price: number
+      candle_date_time_utc: string; trade_price: number; opening_price: number
       low_price: number; high_price: number; candle_acc_trade_volume: number
     }[]>(`https://api.upbit.com/v1/candles/days?${q}`, { headers: H })
     if (!j?.length) break
@@ -92,7 +92,7 @@ async function upbitBars(market: string, want: number): Promise<DatedBar[] | nul
       if (c.candle_date_time_utc.slice(0, 10) === today) continue
       const t = Math.floor(Date.parse(c.candle_date_time_utc + 'Z') / 1000)
       if (!Number.isFinite(t) || !Number.isFinite(c.trade_price)) continue
-      page.push({ t, c: c.trade_price, v: c.candle_acc_trade_volume ?? 0, l: c.low_price, h: c.high_price })
+      page.push({ t, c: c.trade_price, v: c.candle_acc_trade_volume ?? 0, l: c.low_price, h: c.high_price, o: c.opening_price })
     }
     if (!page.length) break
     // 응답이 최신순이므로 뒤집어 붙인다

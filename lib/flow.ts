@@ -14,6 +14,8 @@ export interface Bar {
    * 재게 되어 결과가 손실 쪽으로 치우친다. 같은 기준으로 재야 한다.
    */
   h?: number
+  /** 시가. 모의투자가 신호 다음 날 시가 진입·갭하락 손절에 쓴다(lib/paper.ts) */
+  o?: number
 }
 
 /** 일봉에 주 구분을 붙인 형태. 주봉 파생에 쓴다 */
@@ -181,7 +183,7 @@ export async function fetchDatedBars(symbol: string, range = '6mo'): Promise<Dat
       const bars: DatedBar[] = []
       for (let i = 0; i <= lastValid; i++) {
         if (q.close?.[i] == null || q.volume?.[i] == null) continue
-        bars.push({ t: ts[i], c: q.close[i], v: q.volume[i], l: q.low?.[i] ?? undefined, h: q.high?.[i] ?? undefined })
+        bars.push({ t: ts[i], c: q.close[i], v: q.volume[i], l: q.low?.[i] ?? undefined, h: q.high?.[i] ?? undefined, o: q.open?.[i] ?? undefined })
       }
       if (bars.length > 0) return bars
     } catch { /* 다음 호스트 */ }

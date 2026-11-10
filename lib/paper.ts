@@ -5,14 +5,18 @@
  * 실제 계좌처럼: 시드에서 시작, 한 매매 위험 = 지금 자산의 riskPct%, 현금이 모자라면 살 수 있는 만큼만,
  * 동시 보유 maxOpen개, 같은 종목 중복 매수 없음. 순수 함수 — DB·네트워크를 부르지 않는다.
  *
+ * 진입(2026-11-10): 신호(주문) 다음 봉의 시가에 산다 — 신호는 장 마감 뒤 스캔이 내므로 그날 종가에는 살 수 없다.
+ *   다음 날 시가가 이미 손절가 이하이거나 목표가 이상이면 사지 않는다. 산 날도 시가 뒤 고가·저가로 판정한다.
+ *   시가 자료가 없는 종목(봉에 o가 없음)은 예전처럼 신호 날 주문가(종가)에 사고 산 날은 판정하지 않는다.
  * 판정은 scripts/today-pick-backtest.mjs(lib/cup-fib.ts simulate)와 같다:
- *   산 날은 판정하지 않음(종가 진입) · 저가가 손절에 닿으면 손절(봉 전체가 아래면 그 봉 고가) ·
+ *   저가가 손절에 닿으면 손절(봉 전체가 아래면 그 봉 고가, 시가가 손절 아래로 갭하락했으면 시가) ·
  *   같은 날 손절과 목표가 둘 다 닿으면 손절(보수적) · maxHold 봉이 지나면 그날 종가.
  */
 
 import { gather, checksFor, preselect, pickTop, PICK, NOT_STOCK, type ScreenerPayload, type SignalLabels, type LevelPair } from './today'
 
-export interface DayBar { d: string; h: number; l: number; c: number }
+/** o = 시가. 없으면 그 종목은 종가 진입으로 계산한다 */
+export interface DayBar { d: string; o?: number; h: number; l: number; c: number }
 export interface PaperOrder { date: string; symbol: string; entry: number; stop: number; target: number; name?: string }
 export interface PaperConfig {
   seed: number
@@ -113,9 +117,24 @@ export function runAccount(orders: PaperOrder[], bars: Record<string, DayBar[]>,
     }
   }
   const dates = [...new Set([...byDay.keys(), ...orders.map(o => o.date)])].sort()
+  const hasOpen = new Set(Object.keys(bars).filter(s => bars[s].some(b => Number.isFinite(b.o))))
   let cash = cfg.seed
   const open: OpenPos[] = [], closed: ClosedTrade[] = [], equity: PaperResult['equity'] = []
+  // 시가 진입을 기다리는 주문 — 그 종목의 다음 봉이 오는 날 한 번만 시도한다
+  let pending: PaperOrder[] = []
   const worth = () => cash + open.reduce((s, p) => s + p.qty * p.last, 0)
+
+  const buy = (o: PaperOrder, price: number) => {
+    if (open.length >= cfg.maxOpen || open.some(p => p.symbol === o.symbol)) return
+    if (!(price > o.stop) || !(o.target > price)) return
+    const byRisk = worth() * cfg.riskPct / 100 / (price - o.stop)
+    const byCash = cash / (price * (1 + fee))
+    let qty = Math.min(byRisk, byCash)
+    if (!cfg.fractional) qty = Math.floor(qty)
+    if (!(qty > 0)) return
+    cash -= qty * price * (1 + fee)
+    open.push({ ...o, entry: price, qty, held: 0, last: price, pnl: 0 })
+  }
 
   const close = (p: OpenPos, date: string, price: number, exit: ClosedTrade['exit']) => {
     cash += p.qty * price * (1 - fee)
@@ -125,30 +144,28 @@ export function runAccount(orders: PaperOrder[], bars: Record<string, DayBar[]>,
 
   for (const date of dates) {
     const today = byDay.get(date)
-    // 1) 들고 있는 종목 판정 — 산 날은 건너뛴다
+    // 0) 어제까지의 신호 — 오늘 시가에 산다
+    const ready = pending.filter(o => today?.has(o.symbol))
+    pending = pending.filter(o => !today?.has(o.symbol))
+    for (const o of ready) buy(o, today!.get(o.symbol)!.o as number)
+    // 1) 들고 있는 종목 판정 — 종가 진입은 산 날을 건너뛴다(시가 진입은 신호 다음 날에 샀으니 그날도 판정한다)
     for (let i = open.length - 1; i >= 0; i--) {
       const p = open[i], b = today?.get(p.symbol)
       if (!b || date <= p.date) continue
       p.held++
       p.last = b.c
       let out: [number, ClosedTrade['exit']] | null = null
-      if (b.l <= p.stop) out = [Math.min(p.stop, b.h), 'stop']
+      if (b.o != null && b.o <= p.stop) out = [b.o, 'stop']
+      else if (b.l <= p.stop) out = [Math.min(p.stop, b.h), 'stop']
       else if (b.h >= p.target) out = [p.target, 'target']
       else if (p.held >= cfg.maxHold) out = [b.c, 'time']
       if (out) { close(p, date, out[0], out[1]); open.splice(i, 1) }
       else p.pnl = p.qty * (p.last - p.entry)
     }
-    // 2) 오늘 주문 — 그날 종가에 산다
+    // 2) 오늘 주문 — 시가 자료가 있으면 다음 날 시가를 기다리고, 없으면 그날 종가(주문가)에 산다
     for (const o of orders.filter(x => x.date === date)) {
-      if (open.length >= cfg.maxOpen || open.some(p => p.symbol === o.symbol)) continue
-      if (!(o.entry > o.stop) || !(o.target > o.entry)) continue
-      const byRisk = worth() * cfg.riskPct / 100 / (o.entry - o.stop)
-      const byCash = cash / (o.entry * (1 + fee))
-      let qty = Math.min(byRisk, byCash)
-      if (!cfg.fractional) qty = Math.floor(qty)
-      if (!(qty > 0)) continue
-      cash -= qty * o.entry * (1 + fee)
-      open.push({ ...o, qty, held: 0, last: o.entry, pnl: 0 })
+      if (hasOpen.has(o.symbol)) pending.push(o)
+      else buy(o, o.entry)
     }
     equity.push({ date, equity: worth() })
   }

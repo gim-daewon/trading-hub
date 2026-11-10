@@ -20,8 +20,11 @@ const day = (t: number) => new Date(t * 1000).toISOString().slice(0, 10)   // sc
 async function dayBars(market: Market, symbol: string, source = sourceOf(market, symbol)): Promise<DayBar[]> {
   const bars = await fetchBarsFor({ symbol, source }, '1y')
   return (bars ?? []).filter(b => b.h != null && b.l != null)
-    .map(b => ({ d: day(b.t), h: b.h as number, l: b.l as number, c: b.c }))
+    .map(b => ({ d: day(b.t), o: b.o, h: b.h as number, l: b.l as number, c: b.c }))
 }
+
+/** Supabase(PostgREST)는 한 번에 최대 1,000행만 준다(프로젝트 기본 max-rows) — limit=5000을 줘도 조용히 잘린다 */
+const PAGE = 1000
 
 export async function GET(req: Request) {
   const raw = new URL(req.url).searchParams.get('market') ?? 'us'
@@ -29,18 +32,24 @@ export async function GET(req: Request) {
   const U = process.env.NEXT_PUBLIC_SUPABASE_URL, K = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!U || !K) return NextResponse.json({ error: 'Supabase 설정이 없다' }, { status: 500 })
 
-  const res = await fetch(`${U}/rest/v1/paper_orders?select=rule,date,symbol,name,entry,stop,target&market=eq.${market}&order=date.asc&limit=5000`,
-    { headers: { apikey: K, Authorization: `Bearer ${K}` }, cache: 'no-store' })
-  if (!res.ok) {
-    const body = await res.text()
-    // 표가 없을 때 PostgREST는 404 또는 42P01/PGRST205를 준다
-    if (res.status === 404 || /42P01|PGRST205|does not exist|Could not find the table/.test(body)) {
-      return NextResponse.json({ market, needsTable: true, rules: PAPER_RULES })
+  const rows: (PaperOrder & { rule: 'A' | 'B' })[] = []
+  // 1,000행씩 나눠 읽는다. id를 순서에 넣어 같은 날짜 행이 페이지 경계에서 겹치거나 빠지지 않게 한다
+  for (let offset = 0; ; offset += PAGE) {
+    const res = await fetch(`${U}/rest/v1/paper_orders?select=rule,date,symbol,name,entry,stop,target&market=eq.${market}&order=date.asc,id.asc&limit=${PAGE}&offset=${offset}`,
+      { headers: { apikey: K, Authorization: `Bearer ${K}` }, cache: 'no-store' })
+    if (!res.ok) {
+      const body = await res.text()
+      // 표가 없을 때 PostgREST는 404 또는 42P01/PGRST205를 준다
+      if (res.status === 404 || /42P01|PGRST205|does not exist|Could not find the table/.test(body)) {
+        return NextResponse.json({ market, needsTable: true, rules: PAPER_RULES })
+      }
+      console.error('[paper] orders', res.status, body.slice(0, 200))
+      return NextResponse.json({ error: `주문을 못 읽었다(${res.status})` }, { status: 502 })
     }
-    console.error('[paper] orders', res.status, body.slice(0, 200))
-    return NextResponse.json({ error: `주문을 못 읽었다(${res.status})` }, { status: 502 })
+    const page = (await res.json()) as typeof rows
+    rows.push(...page)
+    if (page.length < PAGE) break
   }
-  const rows = (await res.json()) as (PaperOrder & { rule: 'A' | 'B' })[]
   const orders = rows.map(r => ({ ...r, entry: Number(r.entry), stop: Number(r.stop), target: Number(r.target) }))
   const cfg = PAPER_ACCOUNTS[market]
   if (!orders.length) return NextResponse.json({ market, rules: PAPER_RULES, seed: cfg.seed, accounts: null })
