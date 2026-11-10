@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { CSSProperties } from 'react'
 import type { EconEvent } from '@/app/api/econ-calendar/route'
+import { emptyDayText } from '@/lib/econ-calendar'
 
 const DAY_KO   = ['월', '화', '수', '목', '금']
 const MONTH_KO = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월']
@@ -73,7 +74,7 @@ function EventRow({ e }: { e: EconEvent }) {
 
 export default function CalendarPage() {
   const [weekOffset, setWeekOffset]   = useState(0)
-  const [data, setData]               = useState<{ days: string[]; events: EconEvent[] } | null>(null)
+  const [data, setData]               = useState<{ days: string[]; failed?: string[]; events: EconEvent[] } | null>(null)
   const [loading, setLoading]         = useState(true)
   const [selectedDay, setSelectedDay] = useState(0)
   const [filter, setFilter]           = useState<'all' | 'high'>('all')
@@ -170,7 +171,7 @@ export default function CalendarPage() {
                 color: active ? '#60a5fa' : isToday ? '#f59e0b' : 'var(--text-muted)',
               }}>
                 <div style={{ fontSize: 13, fontWeight: 700 }}>{DAY_KO[i]}</div>
-                <div style={{ fontSize: 10, marginTop: 2 }}>{dayEvs.length}건</div>
+                <div style={{ fontSize: 10, marginTop: 2 }}>{data?.failed?.includes(date) ? '못 받음' : `${dayEvs.length}건`}</div>
                 {highCnt > 0 && (
                   <div style={{ fontSize: 8, marginTop: 1, color: '#ef4444' }}>중요 {highCnt}</div>
                 )}
@@ -188,7 +189,7 @@ export default function CalendarPage() {
         <div style={{ background: 'var(--bg-card)', borderRadius: 10, height: 240, opacity: 0.4, border: '1px solid var(--border)' }} />
       ) : dayEvents.length === 0 ? (
         <div style={{ background: 'var(--bg-card)', borderRadius: 10, padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, border: '1px solid var(--border)' }}>
-          {filter === 'high' ? '이날 주요 이벤트 없음' : '예정된 이벤트 없음'}
+          {emptyDayText(days[selectedDay], data?.failed, filter)}
         </div>
       ) : (
         <div style={{ background: 'var(--bg-card)', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>

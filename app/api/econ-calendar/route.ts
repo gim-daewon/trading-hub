@@ -34,13 +34,14 @@ function getWeekDates(offset: number): string[] {
   })
 }
 
-async function fetchDay(date: string): Promise<EconEvent[]> {
+// 못 받으면 null — 빈 배열(그날 일정 없음)과 구분해야 화면이 "일정 없음"으로 속이지 않는다
+async function fetchDay(date: string): Promise<EconEvent[] | null> {
   try {
     const res = await fetch(
       `https://api.nasdaq.com/api/calendar/economicevents?date=${date}`,
       { headers: HEADERS, next: { revalidate: 1800 } }
     )
-    if (!res.ok) return []
+    if (!res.ok) return null
     const json = await res.json()
 
     type Row = {
@@ -72,7 +73,7 @@ async function fetchDay(date: string): Promise<EconEvent[]> {
         return (a.time || '99:99').localeCompare(b.time || '99:99')
       })
   } catch {
-    return []
+    return null
   }
 }
 
@@ -81,5 +82,6 @@ export async function GET(req: Request) {
   const offset = parseInt(searchParams.get('week') ?? '0', 10)
   const days = getWeekDates(offset)
   const results = await Promise.all(days.map(fetchDay))
-  return NextResponse.json({ days, events: results.flat() })
+  const failed = days.filter((_, i) => results[i] === null)
+  return NextResponse.json({ days, failed, events: results.flatMap(r => r ?? []) })
 }
