@@ -18,6 +18,13 @@ test('스냅샷 캐시 기간은 30일 이상', () => {
   assert.ok(SNAPSHOT_CACHE_SECONDS >= 30 * 86400)
 })
 
+// 2026-11-10 Pro 전환 뒤에도 추적 API가 매번 'Task timed out after 60 seconds'(vercel logs) — 빈 캐시에서 스냅샷 최대 90개를 받는다.
+// 한 번 끝까지 돌아야 30일 캐시가 채워진다. Pro 최대 800초, 300초면 넉넉하다
+test('추적 API 제한 시간은 300초 이상', () => {
+  const m = 읽기('app/api/tracking/route.ts').match(/export const maxDuration = (\d+)/)
+  assert.ok(m && Number(m[1]) >= 300, `maxDuration ${m?.[1]}`)
+})
+
 for (const [파일, 키] of [
   ['app/api/tracking/route.ts', 'tracking-rows'],
   ['app/api/tracking/route.ts', 'tracking-daily-pair-v2'],

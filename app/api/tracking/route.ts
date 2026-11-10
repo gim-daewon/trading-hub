@@ -38,8 +38,9 @@ export const dynamic = 'force-dynamic'
  *
  * 구간이 60일까지 차면 스냅샷 61개를 읽어야 해서 더 길어진다.
  * 예열(워크플로)과 함께 쓰는 안전장치다.
+ * 2026-11-10 60 → 300: Pro 전환 뒤에도 매번 60초에 끊겼다(vercel logs). 끝까지 한 번 돌아야 30일 캐시가 찬다. Pro 최대 800초
  */
-export const maxDuration = 60
+export const maxDuration = 300
 
 // 거래일. 20일은 백테스트 기준이라 필수, 60일은 섹터 검정에서 보유기간별로
 // 결과가 갈려서 추가했다. 60거래일치가 쌓이려면 약 3개월 걸린다.
