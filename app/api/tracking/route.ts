@@ -4,6 +4,7 @@ import {
   tiersFor, CATS, BREAKOUTS, tierOf, buildCategories, buildBreakouts, buildRebound, TIER_EVIDENCE, STOPPING_RULE, changesSince, type TierId, type CatKey, type Regime, type ScreenerRow,
 } from '@/lib/screener-shared'
 import { isMarket, exitPrices, MARKETS, type Market } from '@/lib/markets'
+import { SNAPSHOT_CACHE_SECONDS } from '@/lib/snapshot-cache'
 
 // 스크리너에 뜬 종목이 실제로 올랐는지 사후 확인.
 //
@@ -149,7 +150,7 @@ const readRows = unstable_cache(
   }))
   },
   ['tracking-rows'],
-  { revalidate: 86400 },
+  { revalidate: SNAPSHOT_CACHE_SECONDS },
 )
 
 interface Result {
@@ -572,7 +573,7 @@ const dailyPair = unstable_cache(
     return { date, dropped, keys }
   },
   ['tracking-daily-pair-v2'],  // v2: 낙폭 반등 추가
-  { revalidate: 86400 },
+  { revalidate: SNAPSHOT_CACHE_SECONDS },
 )
 
 /** 쌍 결과를 합친다. 쌍은 전부 캐시에서 오므로 여기는 계산만 한다 */

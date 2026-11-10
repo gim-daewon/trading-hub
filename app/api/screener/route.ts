@@ -5,6 +5,7 @@ import {
   tiersFor, tierOf, TIER_EVIDENCE, CAVEATS, buildCategories, buildBreakouts, BREAKOUT_EVIDENCE, type Regime, type TierId, type CatKey, type ScreenerRow, buildRebound, REBOUND_MARKETS,
 } from '@/lib/screener-shared'
 import { MARKETS, isMarket, type Market } from '@/lib/markets'
+import { SNAPSHOT_CACHE_SECONDS } from '@/lib/snapshot-cache'
 
 // 수급 스크리너.
 //
@@ -207,7 +208,7 @@ const loadRows = unstable_cache(
   },
   ['screener-rows'],
   // 스냅샷 id가 키에 있어 내용이 바뀔 일이 없다. 길게 잡는다
-  { revalidate: 86400 },
+  { revalidate: SNAPSHOT_CACHE_SECONDS },
 )
 
 /**
