@@ -6,6 +6,7 @@ import {
 } from '@/lib/screener-shared'
 import { MARKETS, isMarket, type Market } from '@/lib/markets'
 import { SNAPSHOT_CACHE_SECONDS } from '@/lib/snapshot-cache'
+import { fetchSnapshotRows } from '@/lib/snapshot-rows'
 
 // 수급 스크리너.
 //
@@ -137,29 +138,8 @@ async function fromSupabase(market: Market) {
 const loadRows = unstable_cache(
   async (url: string, key: string, market: Market, snapshotId: number) => {
     const headers = { apikey: key, Authorization: `Bearer ${key}` }
-    // PostgREST 페이징: offset+limit 쿼리 파라미터만 쓴다.
-    //
-    // Range 헤더는 쓰지 않는다. 두 가지 문제가 겹친다:
-    //  1) offset과 같이 주면 결과가 깨진다 (offset=1000 + Range 0-999 -> 4행)
-    //  2) Next의 fetch 캐시는 URL로만 중복 제거해서, 헤더만 다른 요청이
-    //     같은 응답으로 합쳐진다 -> 1페이지가 반복돼 중복 행이 쌓인다
-    // 실측: offset=0/1000/2000 + limit=1000 -> 1000 + 1000 + 124 = 2124행 (정확)
-    const PAGE = 1000
-    const raw: unknown[] = []
-    for (let from = 0; from < 10000; from += PAGE) {
-      const res = await fetch(
-        `${url}/rest/v1/screener_rows?select=*&snapshot_id=eq.${snapshotId}` +
-        `&order=id.asc&offset=${from}&limit=${PAGE}`,
-        // 바깥의 unstable_cache가 이미 결과를 잡고 있다.
-        // fetch 캐시를 이중으로 걸면 무효화 시점만 헷갈린다
-        { headers, cache: 'no-store' }
-      )
-      if (!res.ok) break
-      const page = await res.json()
-      if (!Array.isArray(page) || page.length === 0) break
-      raw.push(...page)
-      if (page.length < PAGE) break
-    }
+    // 다 못 읽으면 던진다 — 반쪽이 30일 캐시에 굳지 않게(lib/snapshot-rows.ts)
+    const raw = await fetchSnapshotRows<unknown>(url, headers, snapshotId, '*')
     if (raw.length === 0) return null
 
     type DbRow = {

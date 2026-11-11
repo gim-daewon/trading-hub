@@ -5,6 +5,7 @@ import {
 } from '@/lib/screener-shared'
 import { isMarket, exitPrices, MARKETS, type Market } from '@/lib/markets'
 import { SNAPSHOT_CACHE_SECONDS } from '@/lib/snapshot-cache'
+import { fetchSnapshotRows, skipUnreadableLatest } from '@/lib/snapshot-rows'
 
 // 스크리너에 뜬 종목이 실제로 올랐는지 사후 확인.
 //
@@ -105,28 +106,8 @@ const readRows = unstable_cache(
     url: string, key: string, snapshotId: number, market: Market,
   ): Promise<ScreenerRow[]> => {
   const headers = { apikey: key, Authorization: `Bearer ${key}` }
-  // PostgREST 페이징: offset+limit 쿼리 파라미터만 쓴다.
-  //
-  // Range 헤더는 쓰지 않는다. 두 가지 문제가 겹친다:
-  //  1) offset과 같이 주면 결과가 깨진다 (offset=1000 + Range 0-999 -> 4행)
-  //  2) Next의 fetch 캐시는 URL로만 중복 제거해서, 헤더만 다른 요청이
-  //   같은 응답으로 합쳐진다 -> 1페이지가 반복돼 중복 행이 쌓인다
-  // 실측: offset=0/1000/2000 + limit=1000 -> 1000 + 1000 + 124 = 2124행 (정확)
-  const PAGE = 1000
-  const raw: DbRow[] = []
-  for (let from = 0; from < 10000; from += PAGE) {
-    const res = await fetch(
-      `${url}/rest/v1/screener_rows?select=${ROW_COLS}&snapshot_id=eq.${snapshotId}` +
-      `&order=id.asc&offset=${from}&limit=${PAGE}`,
-      // 바깥의 unstable_cache가 이미 결과를 잡는다. 이중 캐시는 무효화만 헷갈린다
-      { headers, cache: 'no-store' }
-    )
-    if (!res.ok) break
-    const page = await res.json()
-    if (!Array.isArray(page) || page.length === 0) break
-    raw.push(...page)
-    if (page.length < PAGE) break
-  }
+  // 다 못 읽으면 던진다 — 반쪽이 30일 캐시에 굳지 않게(lib/snapshot-rows.ts)
+  const raw = await fetchSnapshotRows<DbRow>(url, headers, snapshotId, ROW_COLS)
   return raw.map(r => ({
     symbol: r.symbol,
     name: '',        // 이름·업종도 안 받는다. 추적은 심볼로만 조인한다
@@ -688,7 +669,12 @@ export async function GET(req: Request) {
     })
 
     // 최신순이므로 뒤쪽이 과거다. spy_price가 같으면 휴장으로 보고 과거 쪽을 버린다
-    const snaps = deduped.filter((s, i) => i === 0 || s.spy_price !== deduped[i - 1].spy_price)
+    const dated = deduped.filter((s, i) => i === 0 || s.spy_price !== deduped[i - 1].spy_price)
+    // 스캔이 행을 넣는 중이면 최신은 아직 못 읽는다 — 직전 스냅샷부터 쓰고 까닭을 note에 싣는다
+    const { snaps, skipped } = dated.length
+      ? await skipUnreadableLatest(dated, s => readRows(url, key, s.id, market))
+      : { snaps: dated, skipped: null }
+    if (skipped) console.error(`[tracking] ${market} 최신 스냅샷 건너뜀:`, skipped)
 
     if (snaps.length < 2) {
       return NextResponse.json({
@@ -735,7 +721,8 @@ export async function GET(req: Request) {
       // 중단 기준을 응답에 실어 화면에서 "언제 무엇을 근거로 접는지" 보이게 한다
       stoppingRule: STOPPING_RULE,
       limits: { shown: SHOWN_LIMIT, extended: EXTENDED_LIMIT },
-      note: out.length === 0
+      note: skipped ? `최신 스캔을 아직 다 못 읽어 직전 거래일까지만 보인다 (${skipped})`
+        : out.length === 0
         ? '아직 비교할 과거 스냅샷이 부족하다. 스캔이 쌓이면 5일치부터 보인다.'
         : null,
     })
