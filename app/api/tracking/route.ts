@@ -7,6 +7,7 @@ import { isMarket, exitPrices, MARKETS, type Market } from '@/lib/markets'
 import { SNAPSHOT_CACHE_SECONDS } from '@/lib/snapshot-cache'
 import { fetchSnapshotRows, skipUnreadableLatest } from '@/lib/snapshot-rows'
 import { snapDay, tradingDaySnaps } from '@/lib/trading-days'
+import { mean, median, rrOf } from '@/lib/stats'
 
 // 스크리너에 뜬 종목이 실제로 올랐는지 사후 확인.
 //
@@ -223,24 +224,9 @@ interface RuleResult {
   cost: number
 }
 
-/**
- * 손익비 = 오른 것 평균 / |내린 것 평균|.
- *
- * 분모가 0이 되는 경로를 전부 막고 **숫자가 아니면 0을 돌려준다.**
- * 여기서 새는 값이 JSON에서 null이 되고 화면을 통째로 죽인다.
- */
-function rrOf(wins: number[], losses: number[]): number {
-  if (!wins.length || !losses.length) return 0
-  const lossMean = Math.abs(losses.reduce((a, b) => a + b, 0) / losses.length)
-  if (!(lossMean > 0)) return 0
-  const v = (wins.reduce((a, b) => a + b, 0) / wins.length) / lossMean
-  return Number.isFinite(v) ? v : 0
-}
-
 function summarizeRule(outs: RuleOutcome[], hasHigh: boolean, cost: number): RuleResult | null {
   if (!outs.length) return null
   const rets = outs.map(o => o.ret)
-  const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length
   const wins = rets.filter(v => v > 0), losses = rets.filter(v => v <= 0)
   return {
     n: outs.length,
@@ -261,16 +247,11 @@ function summarizeRule(outs: RuleOutcome[], hasHigh: boolean, cost: number): Rul
 function summarize(pairs: { ret: number; ex: number }[]): Result | null {
   if (!pairs.length) return null
   const rets = pairs.map(p => p.ret), exs = pairs.map(p => p.ex)
-  const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length
-  const med = (a: number[]) => {
-    const s = [...a].sort((x, y) => x - y), h = s.length >> 1
-    return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2
-  }
   const wins = rets.filter(v => v > 0), losses = rets.filter(v => v <= 0)
   return {
     n: pairs.length,
-    avg: mean(rets), med: med(rets),
-    exAvg: mean(exs), exMed: med(exs),
+    avg: mean(rets), med: median(rets),
+    exAvg: mean(exs), exMed: median(exs),
     hit: (exs.filter(v => v > 0).length / exs.length) * 100,
     up: (wins.length / rets.length) * 100,
     // 손익비는 **분모가 0이 되는 경로가 둘**이다. 둘 다 막아야 한다.
@@ -472,8 +453,6 @@ interface DailyStat {
   t: number | null
   perDay: { date: string; n: number; ex: number; exR: number | null }[]
 }
-
-const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length
 
 /**
  * 하루 한 쌍(진입일 -> 다음 거래일)의 집계 — **쌍 단위로 캐시한다.**
