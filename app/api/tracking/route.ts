@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import {
-  tiersFor, CATS, BREAKOUTS, tierOf, buildCategories, buildBreakouts, buildRebound, TIER_EVIDENCE, STOPPING_RULE, changesSince, type TierId, type CatKey, type Regime, type ScreenerRow,
+  tiersFor, CATS, BREAKOUTS, buildCategories, buildBreakouts, buildRebound, TIER_EVIDENCE, STOPPING_RULE, changesSince, type TierId, type CatKey, type Regime, type ScreenerRow,
 } from '@/lib/screener-shared'
 import { isMarket, exitPrices, MARKETS, type Market } from '@/lib/markets'
 import { SNAPSHOT_CACHE_SECONDS } from '@/lib/snapshot-cache'
 import { fetchSnapshotRows, skipUnreadableLatest } from '@/lib/snapshot-rows'
 import { snapDay, tradingDaySnaps } from '@/lib/trading-days'
 import { mean, median, rrOf } from '@/lib/stats'
+import { mapScreenerRow } from '@/lib/screener-row'
 
 // 스크리너에 뜬 종목이 실제로 올랐는지 사후 확인.
 //
@@ -110,28 +111,8 @@ const readRows = unstable_cache(
   const headers = { apikey: key, Authorization: `Bearer ${key}` }
   // 다 못 읽으면 던진다 — 반쪽이 30일 캐시에 굳지 않게(lib/snapshot-rows.ts)
   const raw = await fetchSnapshotRows<DbRow>(url, headers, snapshotId, ROW_COLS)
-  return raw.map(r => ({
-    symbol: r.symbol,
-    name: '',        // 이름·업종도 안 받는다. 추적은 심볼로만 조인한다
-    sector: '',
-    marketCap: r.market_cap ?? 0,
-        // cap_known이 false면 시총 미상이다. 초소형으로 단정하면 통계가 오염된다.
-    // 컬럼 추가 전 스냅샷은 undefined라 시총으로 판정한다
-    tier: r.cap_known === false ? 'unknown' : tierOf(r.market_cap ?? 0, market),
-    // f5·f60·rvol은 ROW_COLS에서 뺐다 (추적 판정이 안 쓴다). null로 명시한다
-    f5: null, f20: r.f20, f60: null,
-    rvol: null, chg20: r.chg20, pctB: r.pct_b,
-    // VWMA 필드를 빠뜨려서 buildBreakouts가 전부 undefined를 보고
-    // 신호를 하나도 못 잡고 있었다. 화면엔 표가 있는데 값이 비었다
-    vwma20: r.vwma20, vwma60: r.vwma60, aboveRun: r.above_run,
-    wClose: r.w_close, wVwma20: r.w_vwma20, wVwma60: r.w_vwma60,
-    wAboveRun: r.w_above_run, prevRun: r.prev_run, wPrevRun: r.w_prev_run,
-    low: r.low, wLow: r.w_low,
-    high: r.high,
-    atr14: r.atr14,
-    dollarVol: r.dollar_vol,
-    price: r.price,
-  }))
+  // 이름·업종·f5·f60·rvol은 ROW_COLS에서 뺐다 — 매핑(lib/screener-row.ts)이 ''·null로 채운다
+  return raw.map(r => mapScreenerRow(r, market))
   },
   ['tracking-rows'],
   { revalidate: SNAPSHOT_CACHE_SECONDS },

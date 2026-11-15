@@ -7,6 +7,7 @@ import {
 import { MARKETS, isMarket, type Market } from '@/lib/markets'
 import { SNAPSHOT_CACHE_SECONDS } from '@/lib/snapshot-cache'
 import { fetchSnapshotRows } from '@/lib/snapshot-rows'
+import { mapScreenerRow, type DbScreenerRow } from '@/lib/screener-row'
 
 // 수급 스크리너.
 //
@@ -139,50 +140,11 @@ const loadRows = unstable_cache(
   async (url: string, key: string, market: Market, snapshotId: number) => {
     const headers = { apikey: key, Authorization: `Bearer ${key}` }
     // 다 못 읽으면 던진다 — 반쪽이 30일 캐시에 굳지 않게(lib/snapshot-rows.ts)
-    const raw = await fetchSnapshotRows<unknown>(url, headers, snapshotId, '*')
+    const raw = await fetchSnapshotRows<DbScreenerRow>(url, headers, snapshotId, '*')
     if (raw.length === 0) return null
 
-    type DbRow = {
-      symbol: string; name: string | null; sector: string | null; market_cap: number | null
-      f5: number | null; f20: number | null; f60: number | null
-      rvol: number | null; chg20: number | null; pct_b: number | null
-      vwma20: number | null; vwma60: number | null; above_run: number | null
-      w_close: number | null; w_vwma20: number | null; w_vwma60: number | null
-      w_above_run: number | null; prev_run: number | null; w_prev_run: number | null
-      low: number | null; w_low: number | null; atr14: number | null
-      price: number | null
-      display: string | null; dollar_vol: number | null
-      cap_known: boolean | null; premium: number | null
-    }
-    const rows: ScreenerRow[] = (raw as DbRow[]).map(r => ({
-      symbol: r.symbol,
-      name: r.name ?? '',
-      sector: r.sector ?? '',
-      marketCap: r.market_cap ?? 0,
-      // 시총을 못 알아낸 종목은 초소형이 아니라 '미상'이다.
-      // 모르는 걸 작다고 단정하면 구간 통계가 오염된다
-      tier: r.cap_known === false ? 'unknown' : tierOf(r.market_cap ?? 0, market),
-      display: r.display ?? r.symbol,
-      dollarVol: r.dollar_vol,
-      capKnown: r.cap_known ?? true,
-      premium: r.premium,
-      f5: r.f5, f20: r.f20, f60: r.f60,
-      rvol: r.rvol, chg20: r.chg20,
-      pctB: r.pct_b,
-      vwma20: r.vwma20,
-      vwma60: r.vwma60,
-      aboveRun: r.above_run,
-      wClose: r.w_close,
-      wVwma20: r.w_vwma20,
-      wVwma60: r.w_vwma60,
-      wAboveRun: r.w_above_run,
-      prevRun: r.prev_run,
-      wPrevRun: r.w_prev_run,
-      low: r.low,
-      wLow: r.w_low,
-      atr14: r.atr14,
-      price: r.price,
-    }))
+    // 매핑은 lib/screener-row.ts 하나 — 여기 복사본이 chg1을 빠뜨려 '1일 낙폭'이 늘 비었다
+    const rows: ScreenerRow[] = raw.map(r => mapScreenerRow(r, market))
 
     return { rows }
   },
