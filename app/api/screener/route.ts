@@ -8,6 +8,7 @@ import { MARKETS, isMarket, type Market } from '@/lib/markets'
 import { SNAPSHOT_CACHE_SECONDS } from '@/lib/snapshot-cache'
 import { fetchSnapshotRows } from '@/lib/snapshot-rows'
 import { mapScreenerRow, type DbScreenerRow } from '@/lib/screener-row'
+import { reboundColumns } from '@/lib/rebound-empty'
 
 // 수급 스크리너.
 //
@@ -236,6 +237,8 @@ function payload(market: Market, rows: ScreenerRow[], regime: Regime, spyChg20: 
     // "조건에 맞는 종목이 없다"와 "아직 지표가 안 채워졌다"를 구분한다.
     // 둘 다 목록이 비어 보이지만 사용자가 할 일이 완전히 다르다.
     hasVwma: rows.some(r => r.aboveRun != null),
+    // 낙폭 반등도 같은 구분 — 탭마다 low·chg1이 실렸나(lib/rebound-empty.ts)
+    reboundHas: reboundColumns(rows),
     evidence: TIER_EVIDENCE,
     caveats: CAVEATS,
     scannedAt,

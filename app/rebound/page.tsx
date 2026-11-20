@@ -9,6 +9,7 @@ import { SymbolLabel } from '../components/SymbolLabel'
 import { ExitPrices } from '../components/ExitPrices'
 import { fmtSector } from '@/lib/format'
 import SectorMix from '../components/SectorMix'
+import { reboundEmptyNote } from '@/lib/rebound-empty'
 import { REBOUND_MARKETS, REBOUNDS, type ReboundKey, type TierId, type Regime } from '@/lib/screener-shared'
 
 /**
@@ -30,6 +31,8 @@ interface Data {
   scanned: number
   source: 'snapshot' | 'live'
   rebound?: Record<ReboundKey, Record<TierId, Row[]>>
+  /** 탭마다 컬럼이 실렸나 — 비었을 때 '컬럼 없음'과 '조건 없음'을 가른다 */
+  reboundHas?: Record<ReboundKey, boolean>
   scannedAt?: number
   barDate?: string | null
   fetchedAt: number
@@ -183,9 +186,7 @@ export default function ReboundPage() {
 
       {supported && data && !loading && all.length === 0 && (
         <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
-          {tab === 'drop1'
-            ? '전일 대비(chg1) 컬럼이 아직 없다. SQL 실행 + 다음 스캔이면 채워진다.'
-            : '아직 스냅샷에 저가(low)가 없다. 다음 스캔에 채워진다.'}
+          {reboundEmptyNote(tab, data.reboundHas?.[tab])}
         </div>
       )}
 
